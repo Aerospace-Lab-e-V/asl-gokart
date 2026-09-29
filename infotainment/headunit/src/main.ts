@@ -3,7 +3,11 @@ import log from "electron-log/main";
 import registerListeners from "./helpers/ipc/listeners-register";
 import path from "path";
 import { stopSeroService } from "./helpers/ipc/sero/sero-service";
-import { getFullscreenOnStartup, getDevToolsEnabled } from "./helpers/ipc/application/system-config";
+import { stopTinybufService } from "./helpers/ipc/tinybuf/tinybuf-service";
+import {
+    getFullscreenOnStartup,
+    getDevToolsEnabled,
+} from "./helpers/ipc/application/system-config";
 
 // Initialize electron-log before anything else
 log.initialize();
@@ -51,7 +55,10 @@ function createWindow() {
 
 app.whenReady().then(createWindow);
 
-app.on("before-quit", stopSeroService);
+app.on("before-quit", () => {
+    stopSeroService();
+    stopTinybufService();
+});
 
 //osX only
 app.on("window-all-closed", () => {
