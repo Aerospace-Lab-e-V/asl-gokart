@@ -6,6 +6,7 @@ import { exposeSeroContext } from "./sero/sero-context";
 import { exposeHardwareContext } from "./hardware/hardware-context";
 import { exposeFirmwareContext } from "./firmware/firmware-context";
 import { exposeUpdaterContext } from "./updater/updater-context";
+import { exposeTinybufContext } from "./tinybuf/tinybuf-context";
 
 export default function exposeContexts() {
     exposeWindowContext();
@@ -16,4 +17,5 @@ export default function exposeContexts() {
     exposeHardwareContext();
     exposeFirmwareContext();
     exposeUpdaterContext();
+    exposeTinybufContext();
 }

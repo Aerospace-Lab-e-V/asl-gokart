@@ -8,6 +8,7 @@ import { OutgoingPacket } from "@/data/zonecontrollers/packets";
 import { Zones } from "@/data/zonecontrollers/zonecontrollers";
 import { addAppEventListeners } from "./application/app-listeners";
 import { registerSeroHandlers, startSeroService } from "./sero/sero-service";
+import { registerTinybufHandlers, startTinybufService } from "./tinybuf/tinybuf-service";
 import { registerHardwareListeners } from "./hardware/hardware-listeners";
 import { registerFirmwareListeners } from "./firmware/firmware-listeners";
 import { startFirmwareServer } from "./firmware/firmware-server";
@@ -18,6 +19,7 @@ export default function registerListeners(mainWindow: BrowserWindow) {
     addWindowEventListeners(mainWindow);
     addThemeEventListeners();
     registerSeroHandlers();
+    registerTinybufHandlers();
     addAppEventListeners(mainWindow);
     registerHardwareListeners();
     registerFirmwareListeners();
@@ -28,6 +30,7 @@ export default function registerListeners(mainWindow: BrowserWindow) {
         log.info("[listeners-register] Car network ready, starting network services...");
         startWebSocketServer(mainWindow);
         startSeroService(mainWindow);
+        startTinybufService(mainWindow);
         startFirmwareServer();
     });
 
