@@ -63,6 +63,7 @@
     },
     "dependencies": {
         "@asl-gokart/sero-node": "^0.2.3",
+        "@asl-gokart/tinybuf-node": "^0.1.1",
         "@mars3d/heatmap.js": "^2.0.7",
         "@radix-ui/react-checkbox": "^1.3.3",
         "@radix-ui/react-dialog": "^1.1.15",

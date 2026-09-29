@@ -1,10 +1,12 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "headunit",
       "dependencies": {
         "@asl-gokart/sero-node": "^0.2.3",
+        "@asl-gokart/tinybuf-node": "^0.1.1",
         "@mars3d/heatmap.js": "^2.0.7",
         "@radix-ui/react-checkbox": "^1.3.3",
         "@radix-ui/react-dialog": "^1.1.15",
@@ -103,6 +105,8 @@
     "@asamuzakjp/css-color": ["@asamuzakjp/css-color@3.2.0", "", { "dependencies": { "@csstools/css-calc": "^2.1.3", "@csstools/css-color-parser": "^3.0.9", "@csstools/css-parser-algorithms": "^3.0.4", "@csstools/css-tokenizer": "^3.0.3", "lru-cache": "^10.4.3" } }, "sha512-K1A6z8tS3XsmCMM86xoWdn7Fkdn9m6RSVtocUrJYIwZnFVkng/PvkEoWtOWmP+Scc6saYWHWZYbndEEXxl24jw=="],
 
     "@asl-gokart/sero-node": ["@asl-gokart/sero-node@0.2.3", "https://registry.leotm.de/@asl-gokart/sero-node/-/sero-node-0.2.3.tgz", { "peerDependencies": { "typescript": "^5" } }, "sha512-eUUuQJfOFz/B2jezpYvHItE06i/YL0DCL/XjCnhXUHYvxXDdqiDlKwQeq6A7GnTfpaqtUEUTqqKVSfL2w8uafg=="],
+
+    "@asl-gokart/tinybuf-node": ["@asl-gokart/tinybuf-node@0.1.1", "https://registry.leotm.de/@asl-gokart/tinybuf-node/-/tinybuf-node-0.1.1.tgz", { "peerDependencies": { "typescript": "^5" } }, "sha512-8lpq4JTtMI8KQpOG6r9oXRPpfzNeH8pHmd8IjhNTwWqNj3WiBXreJ5w/rDj2fNcyhW/kw3cxgRyYo14iEjwkPw=="],
 
     "@babel/code-frame": ["@babel/code-frame@7.29.0", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.28.5", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-9NhCeYjq9+3uxgdtp20LSiJXJvN0FeCtNGpJxuMFZ1Kv3cWUNb6DOhJwUvcVCzKGR66cw4njwM6hrJLqgOwbcw=="],
 
