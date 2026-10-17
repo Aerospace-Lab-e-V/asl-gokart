@@ -7,14 +7,10 @@ import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import {
-    RefreshCw,
-    Sliders,
-    Zap,
-} from "lucide-react";
+import { RefreshCw, Sliders, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { AdcStatusData, TinybufStatus } from "@/lib/types/ipc";
+import { AdcStatusData, TinybufStatus } from "@/data/tinybuf/tinybuf-types";
 
 const TinybufPage = () => {
     const navigate = useNavigate();
@@ -92,11 +88,8 @@ const TinybufPage = () => {
 
             {/* Sub-header navigation */}
             <div className="flex items-center justify-between border-b px-4 py-3">
-
                 <div className="flex items-center gap-2">
-                    <div>
-                        Tinybuf Proxy Connection Status:
-                    </div>
+                    <div>Tinybuf Proxy Connection Status:</div>
                     <Badge
                         variant={serviceStatus?.available ? "default" : "secondary"}
                         className="text-xs"

@@ -6,7 +6,7 @@ import {
     TINYBUF_SEND_LED_CHANNEL,
     TINYBUF_GET_STATUS_CHANNEL,
 } from "./tinybuf-channels";
-import { AdcStatusData, TinybufStatus } from "@/lib/types/ipc";
+import { AdcStatusData, TinybufStatus } from "@/data/tinybuf/tinybuf-types";
 import { getTinybufConfigPath } from "./tinybuf-config";
 
 export interface ITinybufProxy {
@@ -101,6 +101,7 @@ export function stopTinybufService(): void {
             log.info("[TINYBUF] Stopping Tinybuf service...");
             proxy.clearAdcStatus();
             proxy.close();
+            log.info("[TINYBUF] Tinybuf service stopped successfully");
         } catch (err) {
             log.error("[TINYBUF] Error closing TinybufProxy:", err);
         } finally {

@@ -3,7 +3,7 @@ import {
     TINYBUF_SEND_LED_CHANNEL,
     TINYBUF_GET_STATUS_CHANNEL,
 } from "./tinybuf-channels";
-import { AdcStatusData, TinybufStatus } from "@/lib/types/ipc";
+import { AdcStatusData, TinybufStatus } from "@/data/tinybuf/tinybuf-types";
 
 export function exposeTinybufContext() {
     const { contextBridge, ipcRenderer } = window.require("electron");

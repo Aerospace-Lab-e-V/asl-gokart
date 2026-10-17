@@ -1,6 +1,12 @@
 import { OutgoingPacket } from "../../data/zonecontrollers/packets";
-import { BatteryCommands, LightsCommands, MotorCommands, Zones } from "../../data/zonecontrollers/zonecontrollers";
+import {
+    BatteryCommands,
+    LightsCommands,
+    MotorCommands,
+    Zones,
+} from "../../data/zonecontrollers/zonecontrollers";
 import { ResolvedInterface } from "../../helpers/ipc/hardware/network-config";
+import { AdcStatusData, TinybufStatus } from "../../data/tinybuf/tinybuf-types";
 
 interface ThemeModeContext {
     toggle: () => Promise<boolean>;
@@ -70,7 +76,11 @@ interface FirmwareRelease {
 
 interface FirmwareContext {
     getReleases: (assetName: string) => Promise<FirmwareRelease[]>;
-    downloadFirmware: (ecuId: string, tag: string, downloadUrl: string) => Promise<{ localUrl: string }>;
+    downloadFirmware: (
+        ecuId: string,
+        tag: string,
+        downloadUrl: string
+    ) => Promise<{ localUrl: string }>;
     triggerOta: (ecuId: string, tag: string) => Promise<{ success: boolean; url: string }>;
     getServerBaseUrl: () => Promise<string>;
     getCachedVersions: () => Promise<Record<string, string[]>>;
@@ -99,6 +109,12 @@ interface UpdaterContext {
     relaunch: () => Promise<void>;
 }
 
+interface TinybufContext {
+    sendLedCommand: (on: boolean, sequence?: number) => Promise<boolean>;
+    onAdcStatus: (callback: (data: AdcStatusData) => void) => () => void;
+    getStatus: () => Promise<TinybufStatus>;
+}
+
 declare global {
     interface Window {
         themeMode: ThemeModeContext;
@@ -109,5 +125,6 @@ declare global {
         hardware: HardwareContext;
         firmware: FirmwareContext;
         updater: UpdaterContext;
+        tinybuf: TinybufContext;
     }
 }

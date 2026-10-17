@@ -60,6 +60,14 @@ app.on("before-quit", () => {
     stopTinybufService();
 });
 
+process.on("SIGINT", () => {
+    app.quit();
+});
+
+process.on("SIGTERM", () => {
+    app.quit();
+});
+
 //osX only
 app.on("window-all-closed", () => {
     if (process.platform !== "darwin") {
