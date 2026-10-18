@@ -969,13 +969,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "kart-mqtt"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "prost",
+ "rumqttc",
+ "telemetry-schema",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "kart-sim"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "kart-mqtt",
  "prost",
- "rumqttc",
  "telemetry-schema",
  "tokio",
  "tracing",

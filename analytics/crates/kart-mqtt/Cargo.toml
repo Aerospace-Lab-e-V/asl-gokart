@@ -1,0 +1,15 @@
+[package]
+name = "kart-mqtt"
+description = "The kart's MQTT uplink: live batches, retained status and last will"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+telemetry-schema.workspace = true
+
+anyhow.workspace = true
+prost.workspace = true
+rumqttc.workspace = true
+tokio.workspace = true
+tracing.workspace = true

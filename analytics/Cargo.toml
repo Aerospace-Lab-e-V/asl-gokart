@@ -4,6 +4,7 @@ members = [
     "crates/telemetry-schema",
     "crates/ecu-sero",
     "crates/sero-sys",
+    "crates/kart-mqtt",
     "crates/ingest",
     "crates/kart-sim",
     "crates/pit-api",
@@ -18,6 +19,7 @@ publish = false
 telemetry-schema = { path = "crates/telemetry-schema" }
 ecu-sero = { path = "crates/ecu-sero" }
 sero-sys = { path = "crates/sero-sys" }
+kart-mqtt = { path = "crates/kart-mqtt" }
 
 anyhow = "1"
 axum = "0.8"

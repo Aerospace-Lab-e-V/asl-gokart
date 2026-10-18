@@ -6,12 +6,12 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+kart-mqtt.workspace = true
 telemetry-schema.workspace = true
 
 anyhow.workspace = true
 clap.workspace = true
 prost.workspace = true
-rumqttc.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

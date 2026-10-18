@@ -5,12 +5,12 @@ mod physics;
 
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::Parser;
+use kart_mqtt::{Link, LinkOptions};
 use physics::{DriveMode, Kart, Track};
 use prost::Message;
-use rumqttc::{AsyncClient, Event, LastWill, MqttOptions, NetworkOptions, Outgoing, Packet, QoS};
-use telemetry_schema::v1::{Batch, Sample, Status};
+use telemetry_schema::v1::{Batch, Sample};
 use tokio::time::MissedTickBehavior;
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -80,62 +80,13 @@ async fn main() -> Result<()> {
     );
     let mut channels = channels(&mut kart);
 
-    let live_topic = telemetry_schema::live_topic(&args.kart_id);
-    let status_topic = telemetry_schema::status_topic(&args.kart_id);
-    let status = |online| {
-        Status {
-            online,
-            agent_version: AGENT_VERSION.into(),
-            schema_version: telemetry_schema::SCHEMA_VERSION.into(),
-            session_id: session_id.clone(),
-        }
-        .encode_to_vec()
-    };
-
-    let client_id = format!("kart-sim-{}", args.kart_id);
-    let mut opts = MqttOptions::parse_url(format!("{}?client_id={client_id}", args.broker))
-        .context("parsing broker URL")?;
-    opts.set_keep_alive(Duration::from_secs(5));
-    opts.set_last_will(LastWill::new(
-        &status_topic,
-        status(false),
-        QoS::AtLeastOnce,
-        true,
-    ));
-    let (client, mut eventloop) = AsyncClient::new(opts, 100);
-    // Live batches are small; without TCP_NODELAY, Nagle can hold each one back for
-    // tens of milliseconds, a large share of the 250 ms latency budget.
-    let mut net = NetworkOptions::new();
-    net.set_tcp_nodelay(true);
-    eventloop.set_network_options(net);
-
-    // Drive the connection; announce ourselves on every (re)connect.
-    let online = status(true);
-    let conn = {
-        let client = client.clone();
-        let status_topic = status_topic.clone();
-        tokio::spawn(async move {
-            loop {
-                match eventloop.poll().await {
-                    Ok(Event::Incoming(Packet::ConnAck(_))) => {
-                        info!("connected to broker");
-                        let _ = client.try_publish(
-                            &status_topic,
-                            QoS::AtLeastOnce,
-                            true,
-                            online.clone(),
-                        );
-                    }
-                    Ok(Event::Outgoing(Outgoing::Disconnect)) => break,
-                    Ok(_) => {}
-                    Err(e) => {
-                        warn!("MQTT connection error: {e}; retrying in 1s");
-                        tokio::time::sleep(Duration::from_secs(1)).await;
-                    }
-                }
-            }
-        })
-    };
+    let link = Link::start(LinkOptions::new(
+        &args.broker,
+        format!("kart-sim-{}", args.kart_id),
+        &args.kart_id,
+        AGENT_VERSION,
+        &session_id,
+    ))?;
 
     info!(
         kart_id = %args.kart_id,
@@ -150,7 +101,6 @@ async fn main() -> Result<()> {
     let deadline = args.duration.map(|d| start + Duration::from_secs(d));
     let mut sim_us: i64 = 0;
     let mut seq: u64 = 0;
-    let mut dropped: u64 = 0;
     let mut last_report = start;
 
     let mut tick = tokio::time::interval(Duration::from_millis(args.batch_ms));
@@ -195,19 +145,13 @@ async fn main() -> Result<()> {
             samples,
         };
         seq += 1;
-        // QoS 0 and best effort: if the link is down, drop instead of stalling.
-        if client
-            .try_publish(&live_topic, QoS::AtMostOnce, false, batch.encode_to_vec())
-            .is_err()
-        {
-            dropped += 1;
-        }
+        link.publish_live(batch.encode_to_vec());
 
         if last_report.elapsed() >= Duration::from_secs(10) {
             last_report = Instant::now();
             info!(
                 batches = seq,
-                dropped,
+                dropped = link.stats().dropped,
                 lap = kart.laps + 1,
                 speed_kmh = format!("{:.1}", kart.v_mps * 3.6),
                 "progress"
@@ -215,13 +159,13 @@ async fn main() -> Result<()> {
         }
     }
 
-    info!(batches = seq, dropped, laps = kart.laps, "stopping");
-    // A clean disconnect suppresses the last will, so report offline explicitly.
-    client
-        .publish(&status_topic, QoS::AtLeastOnce, true, status(false))
-        .await?;
-    client.disconnect().await?;
-    let _ = tokio::time::timeout(Duration::from_secs(2), conn).await;
+    info!(
+        batches = seq,
+        dropped = link.stats().dropped,
+        laps = kart.laps,
+        "stopping"
+    );
+    link.shutdown(Duration::from_secs(2)).await;
     Ok(())
 }
 
