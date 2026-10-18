@@ -2,11 +2,15 @@
 #
 #   docker compose -f compose.yml -f compose.dev.yml up -d                       # backend only
 #   docker compose -f compose.yml -f compose.dev.yml --profile sim up --build    # + ingest, fake kart, pit wall
+#   docker compose -f compose.yml -f compose.dev.yml --profile sero up --build   # same, but the real kart path:
+#       kart-sim plays the ECUs over Sero, kart-agent publishes (API on 127.0.0.1:7411)
 #
 # Dev credentials are not secrets. Never reuse them anywhere else.
 
 services:
   mosquitto:
+    # Also on the car network, so kart-agent (only there) reaches it.
+    networks: [default, carnet]
     ports:
       - "1883:1883"
       - "9001:9001" # MQTT over WebSocket for the pit wall
@@ -34,7 +38,7 @@ services:
       GRAFANA_DB_PASSWORD: grafana
 
   ingest:
-    profiles: [sim]
+    profiles: [sim, sero]
     build:
       context: ../..
       dockerfile: crates/ingest/Dockerfile
@@ -64,7 +68,7 @@ services:
       RUST_LOG: info
 
   pit-api:
-    profiles: [sim]
+    profiles: [sim, sero]
     build:
       context: ../..
       dockerfile: crates/pit-api/Dockerfile
@@ -79,7 +83,7 @@ services:
     restart: on-failure
 
   pit-wall:
-    profiles: [sim]
+    profiles: [sim, sero]
     build:
       context: ../..
       dockerfile: web/pit-wall/Dockerfile
@@ -90,3 +94,42 @@ services:
         condition: service_started
     ports:
       - "8080:8080" # http://localhost:8080
+
+  # --- Profile "sero": ECUs → kart-agent → broker, like on the kart ---------
+
+  kart-sim-sero:
+    profiles: [sero]
+    build:
+      context: ../..
+      dockerfile: crates/kart-sim/Dockerfile
+    networks: [carnet]
+    environment:
+      SIM_OUTPUT: sero
+      SIM_SERO_INTERFACE: eth0
+      SIM_DRIVE_MODE: sport
+      RUST_LOG: info
+
+  kart-agent:
+    profiles: [sero]
+    build:
+      context: ../..
+      dockerfile: crates/kart-agent/Dockerfile
+    # One interface only, so the Sero interface is always eth0.
+    networks: [carnet]
+    depends_on:
+      mosquitto:
+        condition: service_started
+    ports:
+      - "127.0.0.1:7411:7411" # status/config API, as the headunit uses it
+    volumes:
+      - ../../crates/kart-agent/dev/agent.dev.toml:/etc/kart-agent-dev.toml:ro
+    environment:
+      KART_AGENT_CONFIG: /etc/kart-agent-dev.toml
+      KART_AGENT_API_ALLOW_REMOTE: "true"
+      RUST_LOG: info
+    restart: on-failure
+
+networks:
+  # The kart's car network: Sero needs multicast between the ECUs and the agent.
+  carnet:
+    driver: bridge

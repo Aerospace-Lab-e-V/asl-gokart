@@ -1,0 +1,12 @@
+# kart-agent in the compose profile "sero": kart-sim plays the ECUs on the same
+# network (carnet), the broker is the compose mosquitto.
+[live]
+broker_url = "mqtt://mosquitto:1883"
+
+[sero]
+# The agent's only network in compose.
+interface = "eth0"
+
+[api]
+# Published as 127.0.0.1:7411 on the host; needs --api-allow-remote.
+listen = "0.0.0.0:7411"
