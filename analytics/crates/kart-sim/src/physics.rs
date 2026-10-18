@@ -15,8 +15,8 @@ const CDA_M2: f64 = 0.6;
 const AIR_DENSITY: f64 = 1.2;
 const ROLLING_RESISTANCE: f64 = 0.015;
 const G: f64 = 9.81;
-/// Direct drive: motor rpm is wheel rpm, as the headunit assumes (`motorSlice.ts`).
-const WHEEL_CIRCUMFERENCE_M: f64 = 1.415;
+/// Direct drive, as kart-agent assumes when it derives speed from rpm.
+const WHEEL_CIRCUMFERENCE_M: f64 = ecu_sero::WHEEL_CIRCUMFERENCE_M;
 const TRACK_WIDTH_M: f64 = 1.0;
 const DRIVETRAIN_EFFICIENCY: f64 = 0.85;
 const AUX_POWER_W: f64 = 150.0;

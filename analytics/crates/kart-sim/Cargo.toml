@@ -6,7 +6,9 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+ecu-sero.workspace = true
 kart-mqtt.workspace = true
+sero-sys.workspace = true
 telemetry-schema.workspace = true
 
 anyhow.workspace = true

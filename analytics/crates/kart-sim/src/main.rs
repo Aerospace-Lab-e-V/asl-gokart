@@ -1,12 +1,16 @@
-//! Fake kart: simulates a kart driving laps and publishes its telemetry over MQTT
-//! exactly like kart-agent will (Protobuf batches on kart/{id}/live, retained status).
+//! Fake kart: simulates a kart driving laps and either
+//! - publishes its telemetry over MQTT like kart-agent (`--output mqtt`, Protobuf batches
+//!   on kart/{id}/live, retained status), or
+//! - plays the zone controllers and sends their Sero events (`--output sero`), so
+//!   kart-agent and the headunit can run against it.
 
 mod physics;
+mod sero_out;
 
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use kart_mqtt::{Link, LinkOptions};
 use physics::{DriveMode, Kart, Track};
 use prost::Message;
@@ -15,9 +19,33 @@ use tokio::time::MissedTickBehavior;
 use tracing::{info, warn};
 use uuid::Uuid;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum Output {
+    /// Telemetry batches to the MQTT broker, as kart-agent sends them.
+    Mqtt,
+    /// Sero events on the car network, as the zone controllers send them.
+    Sero,
+}
+
 #[derive(Parser)]
 #[command(version, about)]
 struct Args {
+    #[arg(long, env = "SIM_OUTPUT", value_enum, default_value_t = Output::Mqtt)]
+    output: Output,
+
+    /// Network interface for `--output sero` (needs an IPv4 address and multicast).
+    #[arg(long, env = "SIM_SERO_INTERFACE")]
+    sero_interface: Option<String>,
+
+    /// Each simulated ECU listens on this port plus its service id.
+    #[arg(long, env = "SIM_SERO_BASE_PORT", default_value_t = 30500)]
+    sero_base_port: u16,
+
+    /// Pack temperature sensors the battery ECU reports (at most 10).
+    #[arg(long, env = "SIM_BATTERY_TEMP_SENSORS", default_value_t = 4,
+          value_parser = clap::value_parser!(u8).range(1..=10))]
+    battery_temp_sensors: u8,
+
     /// MQTT broker URL.
     #[arg(long, env = "MQTT_URL", default_value = "mqtt://localhost:1883")]
     broker: String,
@@ -78,6 +106,9 @@ async fn main() -> Result<()> {
         args.drive_mode,
         seed,
     );
+    if args.output == Output::Sero {
+        return sero_out::run(&args, kart).await;
+    }
     let mut channels = channels(&mut kart);
 
     let link = Link::start(LinkOptions::new(

@@ -986,8 +986,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "ecu-sero",
  "kart-mqtt",
  "prost",
+ "sero-sys",
  "telemetry-schema",
  "tokio",
  "tracing",
