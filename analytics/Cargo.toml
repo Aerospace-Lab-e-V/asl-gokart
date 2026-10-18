@@ -5,6 +5,7 @@ members = [
     "crates/ecu-sero",
     "crates/sero-sys",
     "crates/kart-mqtt",
+    "crates/kart-agent",
     "crates/ingest",
     "crates/kart-sim",
     "crates/pit-api",
@@ -27,12 +28,16 @@ cc = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 clap = { version = "4", features = ["derive", "env"] }
 libc = "0.2"
+# zstd only: lz4 would add a second C library to cross-compile.
+mcap = { version = "0.25", default-features = false, features = ["zstd"] }
 prost = "0.14"
 prost-build = "0.14"
 protox = "0.10"
 # No TLS yet: plain MQTT inside the WireGuard tunnel / dev network. mTLS comes with kart-agent.
+sd-notify = "0.5"
 rumqttc = { version = "0.25", default-features = false, features = ["url"] }
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 serde_norway = "0.9"
 sqlx = { version = "0.9", default-features = false, features = [
     "runtime-tokio",
@@ -43,6 +48,7 @@ sqlx = { version = "0.9", default-features = false, features = [
     "macros",
 ] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "time"] }
+toml = "1"
 tower-http = { version = "0.7", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
