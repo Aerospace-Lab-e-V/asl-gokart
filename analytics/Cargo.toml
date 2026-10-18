@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/telemetry-schema",
     "crates/ecu-sero",
+    "crates/sero-sys",
     "crates/ingest",
     "crates/kart-sim",
     "crates/pit-api",
@@ -16,11 +17,14 @@ publish = false
 [workspace.dependencies]
 telemetry-schema = { path = "crates/telemetry-schema" }
 ecu-sero = { path = "crates/ecu-sero" }
+sero-sys = { path = "crates/sero-sys" }
 
 anyhow = "1"
 axum = "0.8"
+cc = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 clap = { version = "4", features = ["derive", "env"] }
+libc = "0.2"
 prost = "0.14"
 prost-build = "0.14"
 protox = "0.10"
