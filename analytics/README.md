@@ -41,7 +41,7 @@ Proxmox VM (Docker Compose)
 | Transport | MQTT 5, Protobuf payloads, zstd-compressed batches |
 | Broker | Mosquitto (or NanoMQ) |
 | Time-series DB | TimescaleDB |
-| Live view (pit wall) | Browser app, MQTT over WebSocket straight from the broker (stack TBD) |
+| Live view (pit wall) | React + Vite SPA (Bun, TanStack Router/Query, Tailwind + daisyUI, Chart.js), MQTT over WebSocket straight from the broker; `pit-api` (Rust, axum) serves the recent past to seed the charts |
 | Dashboards | Grafana OSS on TimescaleDB (history, near-live overview) |
 | Session deep dive | Lichtblick / PlotJuggler (open MCAP files directly) |
 | Auth | Keycloak (OIDC to all services; upstream SAML brokered by Keycloak) |
@@ -64,11 +64,12 @@ analytics/
 │   ├── telemetry-schema/  # types generated from schema/
 │   ├── kart-agent/        # runs on the Pi
 │   ├── ingest/            # MQTT → TimescaleDB, idempotent by (session, seq)
+│   ├── pit-api/           # read-only HTTP: recent samples for the pit wall charts
 │   ├── command-api/       # audited parameter writes
 │   ├── lap-timing/        # GPS geofence → laps table
 │   └── kart-sim/          # fake kart; replays recorded sessions
 ├── web/
-│   ├── pit-wall/    # real-time live view (stack TBD)
+│   ├── pit-wall/    # real-time live view (Bun, React, Vite)
 │   └── param-app/   # TypeScript parameter UI
 ├── db/migrations/   # TimescaleDB schema, hypertables, continuous aggregates
 ├── grafana/
@@ -94,11 +95,11 @@ analytics/
 
 You don't need the kart to work on most of this. `kart-sim` simulates a kart driving laps on a placeholder track and publishes its telemetry through the real MQTT path. Replaying recorded sessions comes later.
 
-**Prerequisites:** Docker (with Compose). For working on the Rust code: Rust (stable). Later: Node.js with `pnpm`, `buf`, Git LFS.
+**Prerequisites:** Docker (with Compose). For working on the Rust code: Rust (stable). For the pit wall: [Bun](https://bun.sh) (`buf` comes with its npm dependencies). Later: Node.js with `pnpm` (param-app), Git LFS.
 
 ### One-command demo
 
-Runs the whole pipeline in containers: fake kart → Mosquitto → ingest → TimescaleDB → Grafana.
+Runs the whole pipeline in containers: fake kart → Mosquitto → ingest → TimescaleDB → Grafana, plus the pit wall.
 
 ```bash
 docker compose -f deploy/compose/compose.yml -f deploy/compose/compose.dev.yml --profile sim up --build
@@ -108,9 +109,20 @@ Open Grafana at http://localhost:3000 (anonymous viewer access; admin login is `
 - **Kart Live**: the home dashboard. It refreshes every second and shows the kart moving on the track map. This is a near-live overview only, about 1–2 s behind.
 - **Kart Session History**: click a session in the table to open its full time range.
 
-The real-time feed for the pit wall is at `ws://localhost:9001` (MQTT over WebSocket, anonymous in dev). See [Pit wall](#pit-wall-live-view).
+Open the **pit wall** at http://localhost:8080. It jumps to `kart-01` as soon as the sim is online. The raw real-time feed is at `ws://localhost:9001` (MQTT over WebSocket, anonymous in dev). See [Pit wall](#pit-wall-live-view).
 
 Stop the stack with `Ctrl-C`. Add `down -v` to wipe the database and Grafana volumes.
+
+> **Existing database volume?** The read-only roles (`grafana_ro`, `pit_api_ro`) are created only on an empty volume. If your volume predates `pit-api`, either `down -v` once or create the role by hand:
+> ```bash
+> docker compose -f deploy/compose/compose.yml -f deploy/compose/compose.dev.yml exec -T timescaledb psql -U kart -d telemetry <<'SQL'
+> CREATE ROLE pit_api_ro LOGIN PASSWORD 'pit_api';
+> GRANT CONNECT ON DATABASE telemetry TO pit_api_ro;
+> GRANT USAGE ON SCHEMA public TO pit_api_ro;
+> ALTER DEFAULT PRIVILEGES FOR ROLE kart IN SCHEMA public GRANT SELECT ON TABLES TO pit_api_ro;
+> GRANT SELECT ON ALL TABLES IN SCHEMA public TO pit_api_ro;
+> SQL
+> ```
 
 ### Developing ingest / kart-sim locally
 
@@ -141,6 +153,27 @@ docker compose -f deploy/compose/compose.yml -f deploy/compose/compose.dev.yml e
 
 New signals: add them to `schema/signals.yaml` (new id, never reuse one) and to the sim in `crates/kart-sim/src/physics.rs`. No proto or DB change is needed. The tests fail if a catalog signal is not simulated or leaves its `min`/`max` range.
 
+### Developing the pit wall
+
+```bash
+# Backend + fake kart + pit-api (port 8081), as in the one-command demo
+docker compose -f deploy/compose/compose.yml -f deploy/compose/compose.dev.yml --profile sim up -d --build
+
+cd web/pit-wall
+bun install
+bun run dev          # http://localhost:5173, proxies /api → :8081 and /mqtt → :9001
+```
+
+`bun run gen` (also run by `dev` and `build`) generates `src/gen/` from `schema/proto` and `schema/signals.yaml`, plus the TanStack Router route tree. Generated files are not committed.
+
+| Check | Command |
+|---|---|
+| Lint / format / types | `bun run lint`, `bun run format:check`, `bun run typecheck` |
+| Unit tests (store, decoding, views) | `bun run test` |
+| Browser smoke test (needs the sim stack) | `bun run test:e2e` (`PIT_WALL_URL=http://localhost:5173` for the dev server); first time: `bunx playwright install chromium` |
+
+To work on `pit-api` itself, stop its container and run `DATABASE_URL=postgres://pit_api_ro:pit_api@localhost:5432/telemetry cargo run -p pit-api`.
+
 Parameter app:
 
 ```bash
@@ -166,11 +199,23 @@ Subscribes to live and backfill topics and writes to TimescaleDB. Inserts are id
 ### `command-api` + `param-app`
 The only path for changing vehicle parameters. Every request is authenticated through Keycloak, authorized by role, logged (who, what, old/new value, when), published to the command topic, and only reported as successful after the kart's acknowledgment. Some parameters may only be changed while the kart is stationary.
 
+### `pit-api`
+Read-only HTTP for the pit wall, connected as the `pit_api_ro` role. `GET /api/karts/{kart}/sessions/{session}/samples?since_us=…&signals=101,204` returns the session's samples since `since_us` (at most 15 min back, default 5 min) as columns per signal: `{"signals": {"101": {"t_us": […], "v": […]}}}`. `GET /api/health` for probes.
+
 ### `lap-timing`
 Detects start/finish and sector crossings from GPS using track geofences and writes the `laps` table. All lap overlays and comparisons depend on it.
 
 ### Pit wall (live view)
-The real-time view for the pit area. The tech stack is not decided yet. This is the contract any implementation has to follow:
+The real-time view for the pit area (`web/pit-wall`). The crew watches one kart at a time and judges what they see. The pit wall shows data and link state only; it raises no automatic warnings.
+
+- **Views** (fixed, defined in `src/views/presets.ts`): Overview, Battery, Drivetrain, Thermal; Track is a placeholder for maps and heatmaps. Each view shows value tiles and rolling charts over the last 1, 5 or 10 min (`?window=`).
+- **Status line:** broker connection, kart online/offline (retained status, last will), session, data age, lost batches.
+- **Data path:** MQTT messages go straight into a store outside React (`src/live/store.ts`). One `requestAnimationFrame` loop redraws the charts when new data arrived; tiles refresh at 10 Hz.
+- **History seed:** on open, the charts are filled from `pit-api` with the session's recent past, then live data appends. Where both overlap, live data wins.
+- **Runtime config:** `/config.json` (`mqttUrl`, `mqttUsername`, `mqttPassword`, `apiBaseUrl`); all optional, defaults are the page's own origin (`/mqtt`, `/api`).
+- **Deployment:** one container (Caddy) serves the SPA and proxies `/api` → `pit-api` and `/mqtt` → Mosquitto, so the browser talks to one origin. TLS and Keycloak go in front of it later.
+
+This is the contract the implementation follows:
 
 - **Connect** to the broker over MQTT on WebSocket. Dev: `ws://localhost:9001`, anonymous. Prod: `wss://` behind the reverse proxy with read-only credentials (TBD together with Keycloak). The pit wall never publishes.
 - **Subscribe**
@@ -186,7 +231,7 @@ The real-time view for the pit area. The tech stack is not decided yet. This is 
   - A batch holds samples of several signals at their own rates: ~1 sample per 20 Hz signal, and a 1 Hz signal only every 20th batch.
   - `seq` increments by one per batch. A gap means a batch was lost on the link (QoS 0, expected on LTE). Don't interpolate across it. Backfill only repairs the database, not the live view.
 - **Rendering:** the display path has only tens of milliseconds of budget. Buffer incoming samples, draw once per animation frame instead of once per message, and keep a bounded window (for example the last 60 s).
-- **Compression:** payloads are uncompressed today. The tech stack plans zstd-compressed batches; if that lands, the browser has to decompress zstd. Factor this in when choosing the stack.
+- **Compression:** payloads are uncompressed today. The tech stack plans zstd-compressed batches; if that lands, the browser has to decompress zstd (a WASM decoder in `src/live/decode.ts`).
 
 For testing without the kart, the one-command demo runs `kart-sim`, which publishes `kart/kart-01/live` and `kart/kart-01/status` through the real path.
 
