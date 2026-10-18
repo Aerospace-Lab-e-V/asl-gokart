@@ -212,6 +212,16 @@ const SettingsPage = () => {
 
         <Separator />
 
+        {/* Telemetry (kart-agent) */}
+        <div className="flex flex-row items-center justify-between min-h-13">
+          <Label className="text-base">Telemetry</Label>
+          <Button variant="outline" onClick={() => navigate("/telemetry")}>
+            Open
+          </Button>
+        </div>
+
+        <Separator />
+
         {/* Network Interface */}
         <div className="flex flex-row items-center justify-between min-h-13">
           <Label className="text-base">Network Interface</Label>

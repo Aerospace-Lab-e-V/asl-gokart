@@ -1,0 +1,83 @@
+{
+  "agent": {
+    "version": "0.4.27",
+    "uptime_s": 3600,
+    "runs": 1,
+    "restart_pending": false
+  },
+  "session": {
+    "id": "01a1513e-1db3-776f-a5e3-e7869a318798",
+    "boot_id": "b8d9fb1a-468a-440e-8359-a8fa5674c63b",
+    "next_seq": 72000
+  },
+  "clock": {
+    "synced": true,
+    "max_error_us": 16000
+  },
+  "sero": {
+    "state": "running",
+    "error": null,
+    "interface": "eth0",
+    "address": "192.168.1.100:30492",
+    "client_id": 16,
+    "services": [
+      {
+        "id": 1,
+        "name": "lights",
+        "found": true,
+        "provider": "192.168.1.4:30491",
+        "events": [
+          {
+            "id": 32769,
+            "ack": 0,
+            "last_ack_us": 1792400000000000,
+            "last_rx_us": 1792400001000000,
+            "rx": 12,
+            "decode_errors": 0
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "name": "motor",
+        "found": false,
+        "provider": null,
+        "events": [
+          {
+            "id": 32769,
+            "ack": null,
+            "last_ack_us": null,
+            "last_rx_us": null,
+            "rx": 0,
+            "decode_errors": 0
+          }
+        ]
+      }
+    ],
+    "counters": {
+      "crc_errors": 0,
+      "stale_messages": 3
+    },
+    "rx_queue_full": 0
+  },
+  "live": {
+    "enabled": true,
+    "configured": true,
+    "broker_url": "mqtt://10.0.0.1:1883",
+    "connected": true,
+    "published": 71990,
+    "dropped": 10,
+    "last_connack_us": 1792396400000000
+  },
+  "log": {
+    "dir": "/var/lib/kart-agent/log",
+    "active_segment": "seg-000000071000-20261019T080000Z.mcap.active",
+    "total_bytes": 52428800,
+    "segments": 3,
+    "fs_free_bytes": 20000000000,
+    "last_sync_us": 1792400001500000,
+    "write_errors": 0,
+    "last_error": null,
+    "dropped": 0
+  }
+}
