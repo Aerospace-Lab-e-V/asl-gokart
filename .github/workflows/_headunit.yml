@@ -42,10 +42,76 @@ jobs:
             - name: Run unit tests
               run: bun run test:unit
 
+    # kart-agent ships inside the headunit package (analytics/docs/adr/0001-kart-agent-integration.md).
+    kart-agent:
+        name: kart-agent (${{ matrix.arch }})
+        runs-on: ubuntu-latest
+        if: inputs.is-pr || inputs.is-tag
+        strategy:
+            matrix:
+                include:
+                    - arch: x64
+                      target: x86_64-unknown-linux-gnu
+                    - arch: arm64
+                      target: aarch64-unknown-linux-gnu
+        defaults:
+            run:
+                working-directory: analytics
+        steps:
+            - uses: actions/checkout@v6
+
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: ${{ matrix.target }}
+                  components: clippy
+
+            - uses: Swatinem/rust-cache@v2
+              with:
+                  workspaces: analytics
+                  key: ${{ matrix.target }}
+
+            # zig cross-links against an old glibc (2.31: Raspberry Pi OS bullseye and later)
+            # and compiles sero-sys's C++ shim, with no target toolchain to install.
+            - uses: mlugg/setup-zig@v2
+              with:
+                  version: 0.13.0
+
+            - name: Install cargo-zigbuild
+              run: cargo install --locked cargo-zigbuild@0.23.4
+
+            - name: Lint and test
+              if: matrix.arch == 'x64'
+              run: |
+                  cargo clippy --locked --all-targets -p kart-agent -p sero-sys -p ecu-sero -p kart-mqtt -- -D warnings
+                  cargo test --locked -p kart-agent -p sero-sys -p ecu-sero -p kart-mqtt -p telemetry-schema
+
+            - name: Build
+              run: |
+                  version=$(jq -r .version ../infotainment/headunit/package.json)
+                  KART_AGENT_VERSION="$version" cargo zigbuild --locked --profile dist -p kart-agent --target ${{ matrix.target }}.2.31
+
+            - name: Check the binary
+              run: |
+                  bin=target/${{ matrix.target }}/dist/kart-agent
+                  file "$bin"
+                  if readelf -d "$bin" | grep -qE 'libstdc\+\+|libc\+\+'; then
+                      echo "::error::kart-agent links a C++ standard library"; exit 1
+                  fi
+                  if readelf -V "$bin" | grep -qE 'GLIBC_2\.(3[2-9]|[4-9][0-9])'; then
+                      echo "::error::kart-agent needs a glibc newer than 2.31"; exit 1
+                  fi
+
+            - name: Upload artifact
+              uses: actions/upload-artifact@v7
+              with:
+                  name: kart-agent-${{ matrix.arch }}
+                  path: analytics/target/${{ matrix.target }}/dist/kart-agent
+                  retention-days: 7
+
     build-x86:
         name: Build (x86_64)
         runs-on: ubuntu-latest
-        needs: test
+        needs: [test, kart-agent]
         if: inputs.is-pr || inputs.is-tag
         defaults:
             run:
@@ -67,8 +133,20 @@ jobs:
             - name: Install dependencies
               run: bun install
 
+            - name: Download kart-agent
+              uses: actions/download-artifact@v8
+              with:
+                  name: kart-agent-x64
+                  path: ${{ runner.temp }}/kart-agent
+
             - name: Build (x86_64)
+              env:
+                  KART_AGENT_BIN: ${{ runner.temp }}/kart-agent/kart-agent
               run: bun run make
+
+            # Installs the package on this disposable runner (real systemd, no containers).
+            - name: Test the kart-agent service lifecycle
+              run: packaging/test/deb-systemd-test.sh out/make/deb/x64/*.deb
 
             - name: Upload artifact
               uses: actions/upload-artifact@v7
@@ -80,7 +158,7 @@ jobs:
     build-arm64:
         name: Build (arm64)
         runs-on: ubuntu-latest
-        needs: test
+        needs: [test, kart-agent]
         if: inputs.is-tag
         defaults:
             run:
@@ -107,10 +185,17 @@ jobs:
             - name: Install dependencies
               run: bun install
 
+            - name: Download kart-agent
+              uses: actions/download-artifact@v8
+              with:
+                  name: kart-agent-arm64
+                  path: ${{ runner.temp }}/kart-agent
+
             - name: Build (arm64)
               env:
                   CC: aarch64-linux-gnu-gcc
                   CXX: aarch64-linux-gnu-g++
+                  KART_AGENT_BIN: ${{ runner.temp }}/kart-agent/kart-agent
               run: bun run make:pi4
 
             - name: Upload artifact

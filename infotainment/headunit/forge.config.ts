@@ -3,8 +3,13 @@ import { MakerDeb } from "@electron-forge/maker-deb";
 import { VitePlugin } from "@electron-forge/plugin-vite";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
+import { bundleKartAgent } from "./packaging/kart-agent";
 
 const config: ForgeConfig = {
+    hooks: {
+        packageAfterExtract: async (_config, buildPath, _electronVersion, _platform, arch) =>
+            bundleKartAgent(buildPath, arch),
+    },
     packagerConfig: {
         asar: {
             unpack: "**/*.node",
@@ -27,7 +32,16 @@ const config: ForgeConfig = {
     },
     rebuildConfig: {},
     makers: [
-        new MakerDeb({}),
+        new MakerDeb({
+            options: {
+                // Enable and restart the bundled kart-agent service.
+                scripts: {
+                    postinst: "packaging/deb/postinst",
+                    prerm: "packaging/deb/prerm",
+                    postrm: "packaging/deb/postrm",
+                },
+            },
+        }),
     ],
     plugins: [
         new VitePlugin({
