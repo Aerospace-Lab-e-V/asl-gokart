@@ -1,0 +1,9 @@
+[package]
+name = "ecu-sero"
+description = "Wire layouts of the zone controllers' Sero events, shared by kart-agent (decode) and kart-sim (encode)"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+telemetry-schema.workspace = true

@@ -1,6 +1,12 @@
 [workspace]
 resolver = "3"
-members = ["crates/telemetry-schema", "crates/ingest", "crates/kart-sim", "crates/pit-api"]
+members = [
+    "crates/telemetry-schema",
+    "crates/ecu-sero",
+    "crates/ingest",
+    "crates/kart-sim",
+    "crates/pit-api",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -9,6 +15,7 @@ publish = false
 
 [workspace.dependencies]
 telemetry-schema = { path = "crates/telemetry-schema" }
+ecu-sero = { path = "crates/ecu-sero" }
 
 anyhow = "1"
 axum = "0.8"
