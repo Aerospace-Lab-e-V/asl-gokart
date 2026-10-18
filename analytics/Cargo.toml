@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/telemetry-schema", "crates/ingest", "crates/kart-sim"]
+members = ["crates/telemetry-schema", "crates/ingest", "crates/kart-sim", "crates/pit-api"]
 
 [workspace.package]
 version = "0.1.0"
@@ -11,6 +11,7 @@ publish = false
 telemetry-schema = { path = "crates/telemetry-schema" }
 
 anyhow = "1"
+axum = "0.8"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 clap = { version = "4", features = ["derive", "env"] }
 prost = "0.14"
@@ -29,6 +30,7 @@ sqlx = { version = "0.9", default-features = false, features = [
     "macros",
 ] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "time"] }
+tower-http = { version = "0.7", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v7"] }
