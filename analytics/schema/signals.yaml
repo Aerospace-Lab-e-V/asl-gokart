@@ -1,0 +1,169 @@
+# Signal catalog: the source of truth for every telemetry signal.
+#
+# Rules:
+#   - `id` is what goes over the wire (Sample.signal_id) and into the DB. Never reuse
+#     or renumber an id; retire a signal by marking it `deprecated: true`.
+#   - Ids are grouped by ECU: 1xx battery, 2xx drivetrain, 3xx gps, 4xx temperatures.
+#   - `rate_hz` is the nominal sample rate; `min`/`max` are the plausible physical range.
+#   - Enums and booleans are sent as numbers; their meaning is given in `description`.
+
+signals:
+  # --- Battery -------------------------------------------------------------
+  - id: 101
+    name: battery.voltage
+    ecu: battery
+    unit: V
+    rate_hz: 10
+    min: 0
+    max: 60
+    description: Pack voltage
+  - id: 102
+    name: battery.current
+    ecu: battery
+    unit: A
+    rate_hz: 10
+    min: -100
+    max: 300
+    description: Pack current, positive = discharge, negative = regen
+  - id: 103
+    name: battery.temp
+    ecu: battery
+    unit: °C
+    rate_hz: 1
+    min: -20
+    max: 80
+    description: Hottest cell temperature
+  - id: 104
+    name: battery.soc
+    ecu: battery
+    unit: "%"
+    rate_hz: 1
+    min: 0
+    max: 100
+    description: State of charge
+  - id: 105
+    name: battery.power
+    ecu: battery
+    unit: kW
+    rate_hz: 10
+    min: -5
+    max: 15
+    description: Pack power, positive = discharge
+
+  # --- Drivetrain ----------------------------------------------------------
+  - id: 201
+    name: drive.throttle
+    ecu: throttle
+    unit: "%"
+    rate_hz: 20
+    min: 0
+    max: 100
+    description: Throttle pedal position
+  - id: 202
+    name: drive.rpm_left
+    ecu: motor
+    unit: rpm
+    rate_hz: 20
+    min: 0
+    max: 6000
+    description: Left motor speed
+  - id: 203
+    name: drive.rpm_right
+    ecu: motor
+    unit: rpm
+    rate_hz: 20
+    min: 0
+    max: 6000
+    description: Right motor speed
+  - id: 204
+    name: drive.speed
+    ecu: motor
+    unit: km/h
+    rate_hz: 20
+    min: 0
+    max: 80
+    description: Vehicle speed derived from motor rpm
+  - id: 205
+    name: drive.drive_mode
+    ecu: throttle
+    unit: enum
+    rate_hz: 1
+    min: 0
+    max: 3
+    description: 0 = eco, 1 = comfort, 2 = sport, 3 = ludicrous
+  - id: 206
+    name: drive.reverse
+    ecu: motor
+    unit: bool
+    rate_hz: 1
+    min: 0
+    max: 1
+    description: 1 = reverse gear engaged
+
+  # --- GPS -----------------------------------------------------------------
+  - id: 301
+    name: gps.lat
+    ecu: gps
+    unit: deg
+    rate_hz: 10
+    min: -90
+    max: 90
+    description: Latitude (WGS84)
+  - id: 302
+    name: gps.lon
+    ecu: gps
+    unit: deg
+    rate_hz: 10
+    min: -180
+    max: 180
+    description: Longitude (WGS84)
+  - id: 303
+    name: gps.heading
+    ecu: gps
+    unit: deg
+    rate_hz: 10
+    min: 0
+    max: 360
+    description: Course over ground, 0 = north, clockwise
+  - id: 304
+    name: gps.speed
+    ecu: gps
+    unit: km/h
+    rate_hz: 10
+    min: 0
+    max: 80
+    description: Speed over ground
+
+  # --- Temperatures --------------------------------------------------------
+  - id: 401
+    name: temp.motor_left
+    ecu: motor
+    unit: °C
+    rate_hz: 1
+    min: -20
+    max: 150
+    description: Left motor winding temperature
+  - id: 402
+    name: temp.motor_right
+    ecu: motor
+    unit: °C
+    rate_hz: 1
+    min: -20
+    max: 150
+    description: Right motor winding temperature
+  - id: 403
+    name: temp.esc_left
+    ecu: motor
+    unit: °C
+    rate_hz: 1
+    min: -20
+    max: 120
+    description: Left ESC temperature
+  - id: 404
+    name: temp.esc_right
+    ecu: motor
+    unit: °C
+    rate_hz: 1
+    min: -20
+    max: 120
+    description: Right ESC temperature

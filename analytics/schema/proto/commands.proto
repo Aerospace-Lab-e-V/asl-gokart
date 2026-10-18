@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package kart.commands.v1;
+
+// Parameter change requests (kart/{id}/cmd) and acknowledgments (kart/{id}/cmd/ack).
+// Not defined yet: arrives with command-api (roadmap step 4).
+// Safety-relevant: changes to this file need a second reviewer.

@@ -1,0 +1,18 @@
+[package]
+name = "kart-sim"
+description = "Fake kart: publishes simulated telemetry through the real MQTT path"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+telemetry-schema.workspace = true
+
+anyhow.workspace = true
+clap.workspace = true
+prost.workspace = true
+rumqttc.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true

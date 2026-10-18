@@ -1,0 +1,34 @@
+[workspace]
+resolver = "3"
+members = ["crates/telemetry-schema", "crates/ingest", "crates/kart-sim"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace.dependencies]
+telemetry-schema = { path = "crates/telemetry-schema" }
+
+anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+clap = { version = "4", features = ["derive", "env"] }
+prost = "0.14"
+prost-build = "0.14"
+protox = "0.10"
+# No TLS yet: plain MQTT inside the WireGuard tunnel / dev network. mTLS comes with kart-agent.
+rumqttc = { version = "0.25", default-features = false, features = ["url"] }
+serde = { version = "1", features = ["derive"] }
+serde_norway = "0.9"
+sqlx = { version = "0.9", default-features = false, features = [
+    "runtime-tokio",
+    "postgres",
+    "uuid",
+    "chrono",
+    "migrate",
+    "macros",
+] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v7"] }

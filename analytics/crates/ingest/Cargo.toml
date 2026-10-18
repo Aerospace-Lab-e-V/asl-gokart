@@ -1,0 +1,20 @@
+[package]
+name = "ingest"
+description = "MQTT → TimescaleDB, idempotent by (session, seq)"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+telemetry-schema.workspace = true
+
+anyhow.workspace = true
+chrono.workspace = true
+clap.workspace = true
+prost.workspace = true
+rumqttc.workspace = true
+sqlx.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true

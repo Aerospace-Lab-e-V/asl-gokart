@@ -1,0 +1,6 @@
+target/
+web/
+grafana/
+deploy/
+testdata/
+**/node_modules/

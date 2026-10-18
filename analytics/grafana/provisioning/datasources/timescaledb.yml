@@ -1,0 +1,18 @@
+apiVersion: 1
+
+datasources:
+  - name: TimescaleDB
+    uid: timescaledb
+    type: grafana-postgresql-datasource
+    url: timescaledb:5432
+    user: grafana_ro
+    isDefault: true
+    editable: false
+    jsonData:
+      database: $POSTGRES_DB
+      sslmode: disable
+      postgresVersion: 1700
+      timescaledb: true
+      timeInterval: 50ms
+    secureJsonData:
+      password: $GRAFANA_DB_PASSWORD

@@ -1,0 +1,63 @@
+# Local development: exposed ports, throwaway credentials, anonymous MQTT.
+#
+#   docker compose -f compose.yml -f compose.dev.yml up -d                       # backend only
+#   docker compose -f compose.yml -f compose.dev.yml --profile sim up --build    # + ingest + fake kart
+#
+# Dev credentials are not secrets. Never reuse them anywhere else.
+
+services:
+  mosquitto:
+    ports:
+      - "1883:1883"
+      - "9001:9001" # MQTT over WebSocket for the pit wall
+    volumes:
+      - ../mosquitto/mosquitto.dev.conf:/mosquitto/config/mosquitto.conf:ro
+
+  timescaledb:
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: kart
+      POSTGRES_PASSWORD: kart
+      GRAFANA_DB_PASSWORD: grafana
+
+  grafana:
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      # Open dashboards without logging in (viewer only).
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GRAFANA_DB_PASSWORD: grafana
+
+  ingest:
+    profiles: [sim]
+    build:
+      context: ../..
+      dockerfile: crates/ingest/Dockerfile
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgres://kart:kart@timescaledb:5432/telemetry
+      MQTT_URL: mqtt://mosquitto:1883
+      RUST_LOG: info
+    restart: on-failure
+
+  kart-sim:
+    profiles: [sim]
+    build:
+      context: ../..
+      dockerfile: crates/kart-sim/Dockerfile
+    depends_on:
+      ingest:
+        condition: service_started
+    environment:
+      MQTT_URL: mqtt://mosquitto:1883
+      KART_ID: kart-01
+      SIM_DRIVE_MODE: sport
+      RUST_LOG: info

@@ -1,0 +1,43 @@
+# Production overrides (Proxmox VM). Not tested yet: a stub to grow into.
+# Secrets come from an untracked .env next to this file (see .env.example).
+#
+#   docker compose -f compose.yml -f compose.prod.yml up -d
+
+services:
+  mosquitto:
+    restart: unless-stopped
+    ports:
+      - "1883:1883" # TODO: bind to the WireGuard interface only; mTLS for karts
+    volumes:
+      - ../mosquitto/mosquitto.prod.conf:/mosquitto/config/mosquitto.conf:ro
+
+  timescaledb:
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?set in .env}
+
+  grafana:
+    restart: unless-stopped
+    ports:
+      - "3000:3000" # TODO: behind reverse proxy + Keycloak OIDC
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:?set in .env}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:?set in .env}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?set in .env}
+
+  ingest:
+    build:
+      context: ../..
+      dockerfile: crates/ingest/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb:5432/telemetry
+      MQTT_URL: mqtt://mosquitto:1883
+      RUST_LOG: info

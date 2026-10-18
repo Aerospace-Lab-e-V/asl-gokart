@@ -18,16 +18,15 @@ ECUs ──GbE──► Raspberry Pi (kart-agent)
                                                                      ▼
                          WireGuard tunnel over LTE/5G hotspot
                                                                      ▼
-Proxmox (Kubernetes)
-  MQTT broker ──► ingest ──► TimescaleDB ──► Grafana (history)
-       │                          │
-       └──► Grafana MQTT data source (live, pushed via WebSocket)
-                                  └──► Parquet archive ──► JupyterHub / DuckDB / Polars
+Proxmox VM (Docker Compose)
+  MQTT broker ──► ingest ──► TimescaleDB ──► Grafana (history, near-live overview)
+       │
+       └──(MQTT over WebSocket)──► pit wall in the browser (real-time)
   command-api ◄── param-app
   Keycloak (OIDC, brokering SAML) in front of all user-facing services
 ```
 
-**Latency target:** 250–500 ms from ECU to dashboard. Typical budget: ~50 ms batching, 50–150 ms LTE uplink, ~20 ms broker, ~50 ms Grafana push and render. LTE spikes cause gaps in the live view only; backfill restores them.
+**Latency target:** aim for ≤ 250 ms from ECU to the pit wall screen; 500 ms is the hard limit. Budget: 25–50 ms batching, 50–150 ms LTE uplink, ~5 ms WireGuard and broker, leaving tens of milliseconds for the browser to decode and render. That is why the pit wall reads MQTT directly over WebSocket. Every path through Grafana adds a database poll or a fixed flush timer, which costs 100 ms to 1 s. LTE spikes cause gaps in the live view only; backfill restores them.
 
 ---
 
@@ -42,13 +41,12 @@ Proxmox (Kubernetes)
 | Transport | MQTT 5, Protobuf payloads, zstd-compressed batches |
 | Broker | Mosquitto (or NanoMQ) |
 | Time-series DB | TimescaleDB |
-| Archive | Parquet on S3-compatible object storage (Ceph RGW / SeaweedFS) |
-| Dashboards | Grafana OSS (MQTT data source for live, TimescaleDB for history) |
+| Live view (pit wall) | Browser app, MQTT over WebSocket straight from the broker (stack TBD) |
+| Dashboards | Grafana OSS on TimescaleDB (history, near-live overview) |
 | Session deep dive | Lichtblick / PlotJuggler (open MCAP files directly) |
-| Analysis & ML | JupyterHub, Polars, DuckDB, asammdf |
 | Auth | Keycloak (OIDC to all services; upstream SAML brokered by Keycloak) |
-| Platform | Kubernetes (k3s/Talos) on Proxmox, Helm/Kustomize |
-| Later | MediaMTX for video, LoRa fallback link (ChirpStack if LoRaWAN) |
+| Platform | Docker Compose on a Proxmox VM |
+| Later | Parquet archive on S3-compatible storage, analysis tooling, MediaMTX for video, LoRa fallback link (ChirpStack if LoRaWAN) |
 
 > Grafana OSS supports OIDC but not SAML (SAML is Enterprise-only). Connect Grafana to Keycloak via OIDC; Keycloak handles any SAML identity provider upstream.
 
@@ -62,30 +60,31 @@ analytics/
 │   ├── signals.yaml # name, ECU, unit, scale, rate, limits
 │   ├── proto/       # telemetry.proto, commands.proto
 │   └── buf.yaml     # lint + breaking-change checks
-├── crates/          # Rust workspace
+├── crates/          # Rust workspace (server crates carry their own Dockerfile)
 │   ├── telemetry-schema/  # types generated from schema/
 │   ├── kart-agent/        # runs on the Pi
 │   ├── ingest/            # MQTT → TimescaleDB, idempotent by (session, seq)
 │   ├── command-api/       # audited parameter writes
 │   ├── lap-timing/        # GPS geofence → laps table
 │   └── kart-sim/          # fake kart; replays recorded sessions
-├── python/          # uv workspace
-│   ├── kartlib/     # session loading, Parquet/MDF4 export, lap helpers
-│   ├── jobs/        # nightly archive + aggregates
-│   └── notebooks/   # exploratory analysis (outputs stripped)
 ├── web/
+│   ├── pit-wall/    # real-time live view (stack TBD)
 │   └── param-app/   # TypeScript parameter UI
 ├── db/migrations/   # TimescaleDB schema, hypertables, continuous aggregates
 ├── grafana/
 │   ├── dashboards/  # dashboard JSON (provisioned, read-only in prod)
 │   └── provisioning/
 ├── deploy/
-│   ├── k8s/         # Helm charts / Kustomize overlays (dev, prod)
+│   ├── compose/     # Docker Compose stacks
+│   │   ├── compose.yml       # shared: broker, TimescaleDB, Grafana, Keycloak
+│   │   ├── compose.dev.yml   # local overrides (exposed ports, dev credentials)
+│   │   ├── compose.prod.yml  # prod overrides (ingest, command-api, restart policies, volumes)
+│   │   ├── .env.example      # variable names only; the real .env is untracked
+│   │   └── timescaledb-init/ # first-start DB setup (read-only Grafana role)
+│   ├── mosquitto/   # broker config (dev: anonymous, prod: auth)
 │   ├── kart/        # systemd units, Ansible for the Pi, WireGuard templates
 │   ├── keycloak/    # realm export
-│   └── infra/       # Proxmox VMs via OpenTofu (optional)
-├── dev/
-│   └── docker-compose.yml  # local broker, TimescaleDB, Grafana, Keycloak
+│   └── infra/       # Proxmox VM for the Docker host via OpenTofu (optional)
 └── testdata/sessions/      # small recorded sessions (Git LFS)
 ```
 
@@ -93,36 +92,54 @@ analytics/
 
 ## Getting started (local development)
 
-You don't need the kart to work on most of this. `kart-sim` replays recorded sessions through the real MQTT path.
+You don't need the kart to work on most of this. `kart-sim` simulates a kart driving laps on a placeholder track and publishes its telemetry through the real MQTT path. Replaying recorded sessions comes later.
 
-**Prerequisites:** Rust (stable), Python 3.12+ with `uv`, Node.js with `pnpm`, Docker, `buf`, Git LFS.
+**Prerequisites:** Docker (with Compose). For working on the Rust code: Rust (stable). Later: Node.js with `pnpm`, `buf`, Git LFS.
 
-```bash
-# 1. Fetch recorded test sessions
-git lfs pull
+### One-command demo
 
-# 2. Start the local backend (broker, TimescaleDB, Grafana, Keycloak)
-docker compose -f dev/docker-compose.yml up -d
-
-# 3. Apply database migrations
-#    (tool TBD: sqlx-cli or dbmate)
-
-# 4. Start the ingest service
-cargo run -p ingest
-
-# 5. Replay a recorded session as if the kart were driving
-cargo run -p kart-sim -- --replay testdata/sessions/<session>.mcap
-
-# 6. Open Grafana at http://localhost:3000
-```
-
-Python tooling:
+Runs the whole pipeline in containers: fake kart → Mosquitto → ingest → TimescaleDB → Grafana.
 
 ```bash
-cd python
-uv sync
-uv run jupyter lab
+docker compose -f deploy/compose/compose.yml -f deploy/compose/compose.dev.yml --profile sim up --build
 ```
+
+Open Grafana at http://localhost:3000 (anonymous viewer access; admin login is `admin` / `admin`).
+- **Kart Live**: the home dashboard. It refreshes every second and shows the kart moving on the track map. This is a near-live overview only, about 1–2 s behind.
+- **Kart Session History**: click a session in the table to open its full time range.
+
+The real-time feed for the pit wall is at `ws://localhost:9001` (MQTT over WebSocket, anonymous in dev). See [Pit wall](#pit-wall-live-view).
+
+Stop the stack with `Ctrl-C`. Add `down -v` to wipe the database and Grafana volumes.
+
+### Developing ingest / kart-sim locally
+
+```bash
+# 1. Start the backend only (broker, TimescaleDB, Grafana)
+docker compose -f deploy/compose/compose.yml -f deploy/compose/compose.dev.yml up -d
+
+# 2. Start ingest. It applies db/migrations automatically (sqlx) and syncs the signal catalog.
+DATABASE_URL=postgres://kart:kart@localhost:5432/telemetry cargo run -p ingest
+
+# 3. Drive a fake kart (new session per run; see --help for drive mode, duration, track position)
+cargo run -p kart-sim -- --kart-id kart-01 --drive-mode sport
+
+# Tests: catalog consistency, protobuf round trip, sim values within signals.yaml limits
+cargo test --workspace
+```
+
+Useful checks:
+
+```bash
+# Raw MQTT traffic (payloads are Protobuf, so mostly binary)
+docker compose -f deploy/compose/compose.yml -f deploy/compose/compose.dev.yml exec mosquitto mosquitto_sub -t 'kart/#' -v
+
+# Rows per signal
+docker compose -f deploy/compose/compose.yml -f deploy/compose/compose.dev.yml exec timescaledb \
+  psql -U kart -d telemetry -c "SELECT s.name, count(*), max(time) FROM samples JOIN signals s ON s.id = signal_id GROUP BY 1 ORDER BY 1"
+```
+
+New signals: add them to `schema/signals.yaml` (new id, never reuse one) and to the sim in `crates/kart-sim/src/physics.rs`. No proto or DB change is needed. The tests fail if a catalog signal is not simulated or leaves its `min`/`max` range.
 
 Parameter app:
 
@@ -141,7 +158,7 @@ pnpm dev
 ### `kart-agent` (Raspberry Pi)
 Decodes ECU traffic, timestamps it, and writes **everything** to the local session log first. In parallel it publishes batched live data over MQTT and uploads log chunks for backfill. It receives parameter commands, checks them against its own allowlist and ranges (never trusting the cloud alone), applies them, and acknowledges. Critical threshold alerts are evaluated here.
 
-Built for `aarch64` with `cross` and deployed via Ansible as a systemd service (`deploy/kart/`). It is **not** a Kubernetes node.
+Built for `aarch64` with `cross` and deployed via Ansible as a systemd service (`deploy/kart/`).
 
 ### `ingest`
 Subscribes to live and backfill topics and writes to TimescaleDB. Inserts are idempotent on `(session_id, seq)`, so live data and backfill can overlap safely and gaps fill in automatically.
@@ -152,11 +169,29 @@ The only path for changing vehicle parameters. Every request is authenticated th
 ### `lap-timing`
 Detects start/finish and sector crossings from GPS using track geofences and writes the `laps` table. All lap overlays and comparisons depend on it.
 
-### Grafana
-Live panels via the MQTT data source; historical dashboards, track maps (Geomap) and speed-vs-distance overlays (XY chart) via TimescaleDB. Dashboards are code in `grafana/dashboards/`; export changes from the UI and commit them.
+### Pit wall (live view)
+The real-time view for the pit area. The tech stack is not decided yet. This is the contract any implementation has to follow:
 
-### Python (`kartlib`, `jobs`, notebooks)
-Nightly export of raw data to Parquet for long-term storage, MDF4/CSV export, and the basis for later ML work (battery degradation, lap time prediction).
+- **Connect** to the broker over MQTT on WebSocket. Dev: `ws://localhost:9001`, anonymous. Prod: `wss://` behind the reverse proxy with read-only credentials (TBD together with Keycloak). The pit wall never publishes.
+- **Subscribe**
+  - `kart/+/status`: retained, so you immediately learn every kart's online state, `session_id` and schema version.
+  - `kart/+/live`: QoS 0.
+- **Decode** with code generated from `schema/proto/telemetry.proto`, not hand-written:
+  - `live` payloads are `kart.telemetry.v1.Batch`;
+  - `status` payloads are `Status`.
+- **Signals:** map `Sample.signal_id` through `schema/signals.yaml` (name, unit, min/max, rate). Load the catalog at build time. Ignore unknown IDs, which come from a newer kart-agent.
+- **Time:** `Sample.t_us` is Unix time in microseconds from the kart clock (GPS/PPS-disciplined). Plot on that time, not on arrival time.
+- **Data age:** show `now − newest t_us`. This is the live latency measurement and the way to verify the 250 ms target. The browser machine's clock must be NTP-synced.
+- **Batches** arrive every ~50 ms.
+  - A batch holds samples of several signals at their own rates: ~1 sample per 20 Hz signal, and a 1 Hz signal only every 20th batch.
+  - `seq` increments by one per batch. A gap means a batch was lost on the link (QoS 0, expected on LTE). Don't interpolate across it. Backfill only repairs the database, not the live view.
+- **Rendering:** the display path has only tens of milliseconds of budget. Buffer incoming samples, draw once per animation frame instead of once per message, and keep a bounded window (for example the last 60 s).
+- **Compression:** payloads are uncompressed today. The tech stack plans zstd-compressed batches; if that lands, the browser has to decompress zstd. Factor this in when choosing the stack.
+
+For testing without the kart, the one-command demo runs `kart-sim`, which publishes `kart/kart-01/live` and `kart/kart-01/status` through the real path.
+
+### Grafana
+Historical dashboards, track maps (Geomap) and speed-vs-distance overlays (XY chart) via TimescaleDB, plus a near-live overview polled every second. It is not the real-time view; see the pit wall above. Dashboards are code in `grafana/dashboards/`; export changes from the UI and commit them.
 
 ---
 
@@ -171,7 +206,7 @@ Nightly export of raw data to Parquet for long-term storage, MDF4/CSV export, an
 | `kart/{id}/cmd` | cloud → kart | 1 | parameter change requests |
 | `kart/{id}/cmd/ack` | kart → cloud | 1 | accepted / rejected + reason |
 
-Only `command-api` may publish to `cmd`. The kart authenticates to the broker with an mTLS client certificate.
+Only `command-api` may publish to `cmd`. The kart authenticates to the broker with an mTLS client certificate. Browser clients (pit wall) connect through the WebSocket listener and may only subscribe to `live` and `status`.
 
 ---
 
@@ -181,25 +216,15 @@ Only `command-api` may publish to `cmd`. The kart authenticates to the broker wi
 - **Version everything together.** Each session records the `kart-agent` version and schema version used, so old logs stay decodable.
 - **CI uses path filters.** A change in `schema/` rebuilds and tests everything; other changes only rebuild what they touch.
 - **Dashboards, Keycloak realm and DB schema are code.** No changes made only in a UI.
-- **No secrets in Git.** Cluster secrets via SOPS or Sealed Secrets. WireGuard keys and kart certificates never enter the repo.
-- **Notebooks are committed with outputs stripped.** Reusable code moves into `kartlib`.
+- **No secrets in Git.** Server secrets live in an untracked `.env` on the host (only `.env.example` is committed). WireGuard keys and kart certificates never enter the repo.
 - **Safety-relevant code needs a second reviewer.** See `CODEOWNERS` for `command-api/`, `commands.proto` and the command handling in `kart-agent`.
 
 ---
 
 ## Roadmap
 
-1. **Live MVP:** kart-agent with local logging and time sync, WireGuard, MQTT, ingest, TimescaleDB, basic live Grafana dashboard.
+1. **Live MVP:** kart-agent with local logging and time sync, WireGuard, MQTT, ingest, TimescaleDB, pit wall live view, basic Grafana dashboards.
 2. **Complete data:** backfill with sequence numbers, lap timing, session and lap-overlay dashboards.
-3. **Team access:** Keycloak SSO for Grafana and JupyterHub, Parquet archive.
+3. **Team access:** Keycloak SSO for Grafana.
 4. **Remote parameters:** command-api, param-app, acknowledgments, audit log.
-5. **More data:** video (MediaMTX), LoRa fallback link, ML models.
-
----
-
-## Open questions
-
-- Where does the proprietary ECU protocol definition live in the monorepo, and should `telemetry-schema` depend on it directly?
-- Migration tool: `sqlx-cli` or `dbmate`?
-- Helm or Kustomize for `deploy/k8s/`?
-- Which parameters may change while driving, and which only when stationary?
+5. **More data:** video (MediaMTX), LoRa fallback link, Parquet archive and analysis tooling.

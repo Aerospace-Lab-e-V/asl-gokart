@@ -1,0 +1,12 @@
+version: v2
+modules:
+  - path: proto
+lint:
+  use:
+    - STANDARD
+  except:
+    # Files live flat in proto/ (see README) instead of proto/kart/telemetry/v1/.
+    - PACKAGE_DIRECTORY_MATCH
+breaking:
+  use:
+    - WIRE_JSON

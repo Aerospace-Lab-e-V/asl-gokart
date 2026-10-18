@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package kart.telemetry.v1;
+
+// One measurement of one signal. `signal_id` refers to schema/signals.yaml.
+message Sample {
+  uint32 signal_id = 1;
+  // Unix time in microseconds (kart clock, GPS/PPS-disciplined).
+  sint64 t_us = 2;
+  double value = 3;
+}
+
+// Published on kart/{id}/live roughly every 50 ms.
+// (session_id, seq) identifies a batch; ingest is idempotent on it.
+message Batch {
+  string kart_id = 1;
+  string session_id = 2;
+  uint64 seq = 3;
+  repeated Sample samples = 4;
+}
+
+// Published retained on kart/{id}/status. The broker sends an offline
+// Status as last will when the kart drops off.
+message Status {
+  bool online = 1;
+  string agent_version = 2;
+  string schema_version = 3;
+  string session_id = 4;
+}
