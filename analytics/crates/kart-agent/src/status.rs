@@ -104,6 +104,8 @@ pub struct LogStatus {
     pub last_sync_us: Option<i64>,
     pub write_errors: u64,
     pub last_error: Option<String>,
+    /// Batches or events the writer could not keep up with (should stay 0).
+    pub dropped: u64,
 }
 
 /// State shared between the components and the API.

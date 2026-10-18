@@ -10,13 +10,20 @@ use std::{
 };
 
 use anyhow::{Context as _, Result, bail};
-use tokio::{net::TcpListener, sync::mpsc};
+use serde_json::json;
+use tokio::{
+    net::TcpListener,
+    sync::{broadcast, mpsc, watch},
+};
 use tracing::info;
 
 use crate::{
     api::{self, ApiState, Control},
     clock,
     config::{Loaded, Sources},
+    log::{LogWriter, SessionInfo},
+    pipeline::Pipeline,
+    sero,
     session::Session,
     status::Shared,
     systemd,
@@ -84,9 +91,58 @@ pub async fn run(ctx: &Context, loaded: Loaded) -> Result<Exit> {
     );
     info!(%listen, kart_id = %cfg.kart_id, "API listening");
 
-    // Placeholders until the pipeline lands: keep the watchdog fed.
-    Shared::beat(&ctx.shared.pipeline_heartbeat_ms);
-    Shared::beat(&ctx.shared.log_heartbeat_ms);
+    // Log first: everything else reports into it.
+    let (session_info, first_seq) = {
+        let session = ctx.session.lock().expect("session lock");
+        let info = SessionInfo {
+            kart_id: cfg.kart_id.clone(),
+            session_id: session.id().into(),
+            boot_id: session.boot_id().into(),
+            agent_version: VERSION.into(),
+            run: session.runs(),
+        };
+        (info, session.next_seq())
+    };
+    let (writer, log) = LogWriter::spawn(
+        &ctx.state_dir,
+        session_info,
+        first_seq,
+        cfg.log.clone(),
+        cfg.retention.clone(),
+        ctx.shared.clone(),
+    )
+    .context("starting the log writer")?;
+    log.event(
+        "agent.started",
+        json!({ "version": VERSION, "config": &cfg }),
+    );
+
+    // ECUs → samples → pipeline. The pipeline ends when the provider closes the channel,
+    // so on shutdown everything received is still written.
+    let (stop_provider, provider_stop) = watch::channel(false);
+    let (live_tx, live_rx) = watch::channel(cfg.live.enabled);
+    let (samples_tx, samples_rx) = mpsc::channel(1024);
+    let provider = tokio::spawn(
+        sero::Provider::new(
+            cfg.sero.clone(),
+            &cfg.vehicle,
+            ctx.shared.clone(),
+            samples_tx,
+            log.clone(),
+        )
+        .run(provider_stop),
+    );
+    let (stream, _) = broadcast::channel(64);
+    let pipeline = tokio::spawn(
+        Pipeline {
+            cfg: cfg.clone(),
+            session: ctx.session.clone(),
+            shared: ctx.shared.clone(),
+            log: log.clone(),
+            stream,
+        }
+        .run(samples_rx, live_rx),
+    );
 
     systemd::ready();
     systemd::status(&format!("kart {}", cfg.kart_id));
@@ -99,20 +155,26 @@ pub async fn run(ctx: &Context, loaded: Loaded) -> Result<Exit> {
             _ = &mut shutdown => break Exit::Stop,
             Some(control) = control_rx.recv() => match control {
                 Control::Restart => break Exit::Restart,
-                Control::Live(enabled) => info!(enabled, "live uplink toggled"),
+                Control::Live(enabled) => {
+                    let _ = live_tx.send(enabled);
+                }
             },
             _ = status_tick.tick() => {
-                Shared::beat(&ctx.shared.pipeline_heartbeat_ms);
-                Shared::beat(&ctx.shared.log_heartbeat_ms);
-                let next_seq = ctx.session.lock().expect("session lock").next_seq();
                 ctx.shared.update(|s| {
                     s.agent.uptime_s = ctx.started.elapsed().as_secs();
-                    s.session.next_seq = next_seq;
                     s.clock = clock::status();
                 });
             }
         }
     };
+
+    info!(?exit, "stopping the pipeline");
+    let _ = stop_provider.send(true);
+    let _ = provider.await;
+    let _ = pipeline.await;
+    log.event("agent.stopped", json!({ "exit": format!("{exit:?}") }));
+    drop(log);
+    let _ = tokio::task::spawn_blocking(move || writer.stop()).await;
 
     let _ = stop_api.send(());
     let _ = api.await;
