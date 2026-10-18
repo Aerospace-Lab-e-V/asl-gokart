@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { LiveBatch } from "./decode";
 import { TelemetryStore } from "./store";
 
-const SPEED = 204; // drive.speed, 20 Hz → 50 ms period, break after 150 ms
+const SPEED = 204; // drive.speed, 10 Hz → 100 ms period, break after 300 ms
 const SOC = 104; // battery.soc, 1 Hz
 const T0 = 1_700_000_000_000;
 
@@ -73,7 +73,7 @@ describe("TelemetryStore", () => {
         const s = new TelemetryStore();
         s.ingest(batch(1, [[SPEED, T0, 1]]));
         s.ingest(batch(2, [[SPEED, T0 + 100, 2]]));
-        s.ingest(batch(3, [[SPEED, T0 + 400, 3]]));
+        s.ingest(batch(3, [[SPEED, T0 + 500, 3]]));
         expect(ys(s, SPEED)).toEqual([1, 2, NaN, 3]);
     });
 

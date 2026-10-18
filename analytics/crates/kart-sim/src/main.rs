@@ -49,7 +49,7 @@ struct Args {
     seed: Option<u64>,
 }
 
-/// Physics step: 100 Hz is a multiple of every catalog rate (1, 10, 20 Hz).
+/// Physics step: 100 Hz is a multiple of every catalog rate (0.5, 1, 10 Hz).
 const STEP_US: i64 = 10_000;
 
 const AGENT_VERSION: &str = concat!("kart-sim/", env!("CARGO_PKG_VERSION"));

@@ -1,7 +1,7 @@
 //! Shared telemetry types, generated from `analytics/schema/`.
 //!
 //! - [`v1`]: protobuf messages from `schema/proto/telemetry.proto`
-//! - [`signals`]: the signal catalog from `schema/signals.yaml`
+//! - [`signals`]: the signal catalog from `schema/signals.yaml`, [`ids`]: its ids as constants
 //! - topic helpers for the MQTT layout described in the analytics README
 
 use std::sync::OnceLock;
@@ -12,10 +12,20 @@ pub mod v1 {
     include!(concat!(env!("OUT_DIR"), "/kart.telemetry.v1.rs"));
 }
 
+/// Signal ids from `schema/signals.yaml`, named after the signal (`battery.voltage` → `BATTERY_VOLTAGE`).
+pub mod ids {
+    include!(concat!(env!("OUT_DIR"), "/ids.rs"));
+}
+
+/// Encoded `FileDescriptorSet` of `telemetry.proto`, for self-describing logs.
+pub const FILE_DESCRIPTOR_SET: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/telemetry.fds.bin"));
+
+/// The catalog file itself, for embedding next to recorded data.
+pub const SIGNALS_YAML: &str = include_str!("../../../schema/signals.yaml");
+
 /// Recorded with every session so old logs stay decodable.
 pub const SCHEMA_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-const SIGNALS_YAML: &str = include_str!("../../../schema/signals.yaml");
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Signal {
@@ -105,6 +115,16 @@ mod tests {
         };
         let decoded = v1::Batch::decode(batch.encode_to_vec().as_slice()).unwrap();
         assert_eq!(decoded, batch);
+    }
+
+    #[test]
+    fn generated_ids_match_catalog() {
+        assert_eq!(
+            ids::BATTERY_VOLTAGE,
+            signal_by_name("battery.voltage").unwrap().id
+        );
+        assert_eq!(ids::LIGHTS_TAIL, signal_by_name("lights.tail").unwrap().id);
+        assert!(!FILE_DESCRIPTOR_SET.is_empty());
     }
 
     #[test]

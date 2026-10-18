@@ -11,5 +11,8 @@ serde.workspace = true
 serde_norway.workspace = true
 
 [build-dependencies]
+prost.workspace = true
 prost-build.workspace = true
 protox.workspace = true
+serde.workspace = true
+serde_norway.workspace = true

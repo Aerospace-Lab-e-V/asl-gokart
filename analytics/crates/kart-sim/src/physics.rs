@@ -3,7 +3,8 @@
 //! The kart drives counter-clockwise laps on a stadium-shaped track. A driver model
 //! follows a target speed (limited by drive mode and curve grip, braking before curves).
 //! Throttle drives acceleration, which gives motor power, pack current, SoC drain and
-//! temperatures via first-order lags.
+//! temperatures via first-order lags. The controller- and lights-level signals (raw
+//! pedal readings, switches, relays, lamps) are derived from the same state.
 
 use std::f64::consts::PI;
 
@@ -14,8 +15,8 @@ const CDA_M2: f64 = 0.6;
 const AIR_DENSITY: f64 = 1.2;
 const ROLLING_RESISTANCE: f64 = 0.015;
 const G: f64 = 9.81;
-const WHEEL_RADIUS_M: f64 = 0.13;
-const GEAR_RATIO: f64 = 4.0;
+/// Direct drive: motor rpm is wheel rpm, as the headunit assumes (`motorSlice.ts`).
+const WHEEL_CIRCUMFERENCE_M: f64 = 1.415;
 const TRACK_WIDTH_M: f64 = 1.0;
 const DRIVETRAIN_EFFICIENCY: f64 = 0.85;
 const AUX_POWER_W: f64 = 150.0;
@@ -28,6 +29,11 @@ const PACK_CAPACITY_J: f64 = 2.5 * 3.6e6; // 2.5 kWh
 const PACK_INTERNAL_RESISTANCE: f64 = 0.04;
 const AMBIENT_C: f64 = 20.0;
 const EARTH_M_PER_DEG: f64 = 111_320.0;
+/// Pack temperature sensors (DS18B20) and how much warmer each runs than the pack average.
+const TEMP_SENSOR_OFFSETS_C: [f64; 10] = [0.0, 0.4, 0.8, 1.2, 0.2, 0.6, 1.0, 1.4, 0.3, 0.7];
+/// The driver indicates this far before each curve (both curves are left turns).
+const INDICATE_BEFORE_CURVE_M: f64 = 40.0;
+const BLINK_PERIOD_S: f64 = 0.7;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum DriveMode {
@@ -170,6 +176,7 @@ pub struct Kart {
     rng: Rng,
 
     // State
+    t_s: f64,
     pub s_m: f64,
     pub v_mps: f64,
     pub laps: u32,
@@ -182,6 +189,7 @@ pub struct Kart {
 
     // Outputs of the last step
     throttle_pct: f64,
+    brake_pct: f64,
     power_w: f64,
     current_a: f64,
     voltage_v: f64,
@@ -196,6 +204,7 @@ impl Kart {
             track,
             mode,
             rng,
+            t_s: 0.0,
             s_m: 0.0,
             v_mps: 0.0,
             laps: 0,
@@ -206,6 +215,7 @@ impl Kart {
             temp_motor: [AMBIENT_C; 2],
             temp_esc: [AMBIENT_C; 2],
             throttle_pct: 0.0,
+            brake_pct: 0.0,
             power_w: AUX_POWER_W,
             current_a: 0.0,
             voltage_v: open_circuit_voltage(100.0),
@@ -251,6 +261,7 @@ impl Kart {
         };
 
         let accel = drive_accel - resistance - brake_accel;
+        self.t_s += dt;
         self.v_mps = (v + accel * dt).max(0.0);
         self.s_m += self.v_mps * dt;
         if self.s_m >= self.track.length() {
@@ -271,9 +282,10 @@ impl Kart {
             self.soc_pct = 100.0;
         }
         self.throttle_pct = throttle;
+        self.brake_pct = brake_accel / BRAKE_DECEL * 100.0;
 
         // Motors: inner wheel turns slower in curves (both curves are left turns).
-        let wheel_rpm = |v: f64| v / (2.0 * PI * WHEEL_RADIUS_M) * 60.0 * GEAR_RATIO;
+        let wheel_rpm = |v: f64| v / WHEEL_CIRCUMFERENCE_M * 60.0;
         let k = if pose.in_curve {
             TRACK_WIDTH_M / 2.0 / self.track.radius_m
         } else {
@@ -298,18 +310,52 @@ impl Kart {
     /// doesn't produce this signal.
     pub fn measure(&mut self, signal: &str) -> Option<f64> {
         let speed_kmh = self.v_mps * 3.6;
+        let bool = |b: bool| if b { 1.0 } else { 0.0 };
         let value = match signal {
             "battery.voltage" => self.voltage_v + self.rng.gauss(0.05),
             "battery.current" => self.current_a + self.rng.gauss(0.5),
-            "battery.temp" => self.temp_battery + self.rng.gauss(0.1),
+            "battery.temp" => {
+                let hottest = TEMP_SENSOR_OFFSETS_C.iter().copied().fold(0.0, f64::max);
+                self.temp_battery + hottest + self.rng.gauss(0.1)
+            }
             "battery.soc" => (self.soc_pct * 10.0).round() / 10.0,
             "battery.power" => self.power_w / 1000.0 + self.rng.gauss(0.01),
+            "battery.voltage_ctrl_left" | "battery.voltage_ctrl_right" => self.voltage_v.round(),
+            name if name.starts_with("battery.temp_") => {
+                let n: usize = name["battery.temp_".len()..].parse().ok()?;
+                let offset = TEMP_SENSOR_OFFSETS_C.get(n.checked_sub(1)?)?;
+                self.temp_battery + offset + self.rng.gauss(0.1)
+            }
             "drive.throttle" => self.throttle_pct,
-            "drive.rpm_left" => (self.rpm[0] + self.rng.gauss(5.0)).max(0.0),
-            "drive.rpm_right" => (self.rpm[1] + self.rng.gauss(5.0)).max(0.0),
+            "drive.rpm_left" => (self.rpm[0] + self.rng.gauss(2.0)).max(0.0),
+            "drive.rpm_right" => (self.rpm[1] + self.rng.gauss(2.0)).max(0.0),
             "drive.speed" => speed_kmh,
             "drive.drive_mode" => self.mode as u8 as f64,
             "drive.reverse" => 0.0,
+            "drive.throttle_raw_left" | "drive.throttle_raw_right" => {
+                (self.throttle_pct * 2.55).round()
+            }
+            "drive.brake_raw_left" | "drive.brake_raw_right" => (self.brake_pct * 2.55).round(),
+            "drive.brake_switch_left" | "drive.brake_switch_right" => bool(self.brake_pct > 0.0),
+            "drive.foot_switch_left" | "drive.foot_switch_right" => bool(self.throttle_pct > 1.0),
+            "drive.forward_switch_left" | "drive.forward_switch_right" => 1.0,
+            "drive.reverse_switch_left" | "drive.reverse_switch_right" => 0.0,
+            "drive.setting_dir_left" | "drive.setting_dir_right" => 1.0,
+            "drive.actual_dir_left" | "drive.actual_dir_right" => 1.0,
+            "drive.relay_1" => 1.0,
+            "drive.relay_2" => 0.0,
+            "drive.phase_current_raw_left" | "drive.phase_current_raw_right" => {
+                (self.current_a.max(0.0) / 2.0 * 10.0).round()
+            }
+            "lights.turn_left" => {
+                let pose = self.track.pose(self.s_m);
+                let indicating = !pose.in_curve && pose.straight_left_m < INDICATE_BEFORE_CURVE_M;
+                bool(indicating && self.t_s % BLINK_PERIOD_S < BLINK_PERIOD_S / 2.0)
+            }
+            "lights.turn_right" | "lights.high_beam_left" | "lights.high_beam_right" => 0.0,
+            "lights.brake" => bool(self.brake_pct > 0.0),
+            "lights.reverse" => 0.0,
+            "lights.drl" | "lights.tail" => 1.0,
             "gps.lat" | "gps.lon" => {
                 let pose = self.track.pose(self.s_m);
                 let (lat, lon) = self
@@ -331,9 +377,9 @@ impl Kart {
     }
 }
 
-/// 13s Li-ion pack: 3.0 V (empty) … 4.2 V (full) per cell.
+/// 16s Li-ion pack: 51.2 V (empty) … 67.2 V (full), as configured on the headunit.
 fn open_circuit_voltage(soc_pct: f64) -> f64 {
-    13.0 * (3.0 + 1.2 * soc_pct / 100.0)
+    16.0 * (3.2 + 1.0 * soc_pct / 100.0)
 }
 
 fn lag(current: f64, target: f64, tau_s: f64, dt: f64) -> f64 {
