@@ -17,6 +17,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:?set in .env}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
       GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?set in .env}
+      PIT_API_DB_PASSWORD: ${PIT_API_DB_PASSWORD:?set in .env}
 
   grafana:
     restart: unless-stopped
@@ -41,3 +42,29 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb:5432/telemetry
       MQTT_URL: mqtt://mosquitto:1883
       RUST_LOG: info
+
+  pit-api:
+    build:
+      context: ../..
+      dockerfile: crates/pit-api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://pit_api_ro:${PIT_API_DB_PASSWORD}@timescaledb:5432/telemetry
+      RUST_LOG: info
+
+  pit-wall:
+    build:
+      context: ../..
+      dockerfile: web/pit-wall/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - pit-api
+      - mosquitto
+    ports:
+      - "8080:8080" # TODO: behind the TLS reverse proxy (wss://) + Keycloak
+    volumes:
+      # Read-only broker credentials for browsers; copy from pit-wall.config.example.json.
+      - ./pit-wall.config.json:/srv/config.json:ro

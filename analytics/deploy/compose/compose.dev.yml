@@ -1,7 +1,7 @@
 # Local development: exposed ports, throwaway credentials, anonymous MQTT.
 #
 #   docker compose -f compose.yml -f compose.dev.yml up -d                       # backend only
-#   docker compose -f compose.yml -f compose.dev.yml --profile sim up --build    # + ingest + fake kart
+#   docker compose -f compose.yml -f compose.dev.yml --profile sim up --build    # + ingest, fake kart, pit wall
 #
 # Dev credentials are not secrets. Never reuse them anywhere else.
 
@@ -20,6 +20,7 @@ services:
       POSTGRES_USER: kart
       POSTGRES_PASSWORD: kart
       GRAFANA_DB_PASSWORD: grafana
+      PIT_API_DB_PASSWORD: pit_api
 
   grafana:
     ports:
@@ -61,3 +62,31 @@ services:
       KART_ID: kart-01
       SIM_DRIVE_MODE: sport
       RUST_LOG: info
+
+  pit-api:
+    profiles: [sim]
+    build:
+      context: ../..
+      dockerfile: crates/pit-api/Dockerfile
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    ports:
+      - "8081:8081" # also used by the Vite dev server proxy (bun run dev)
+    environment:
+      DATABASE_URL: postgres://pit_api_ro:pit_api@timescaledb:5432/telemetry
+      RUST_LOG: info
+    restart: on-failure
+
+  pit-wall:
+    profiles: [sim]
+    build:
+      context: ../..
+      dockerfile: web/pit-wall/Dockerfile
+    depends_on:
+      pit-api:
+        condition: service_started
+      mosquitto:
+        condition: service_started
+    ports:
+      - "8080:8080" # http://localhost:8080
