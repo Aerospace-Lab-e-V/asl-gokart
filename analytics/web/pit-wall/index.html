@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <title>Pit wall</title>
+        <script>
+            // Set the theme before first paint (no light flash on a dark pit wall).
+            try {
+                const t = localStorage.getItem("pit-wall.theme");
+                document.documentElement.dataset.theme =
+                    t === "light" || t === "dark"
+                        ? t
+                        : matchMedia("(prefers-color-scheme: dark)").matches
+                          ? "dark"
+                          : "light";
+            } catch {}
+        </script>
+    </head>
+    <body>
+        <div id="root"></div>
+        <script type="module" src="/src/main.tsx"></script>
+    </body>
+</html>
