@@ -1,5 +1,5 @@
 # Reusable workflow — Analytics build & check
-# Called by ci-analytics.yml (currently disabled)
+# Called by ci-analytics.yml (currently manual trigger only)
 
 name: Analytics
 
@@ -7,8 +7,8 @@ on:
     workflow_call:
 
 jobs:
-    build-and-check:
-        name: Build & Check
+    rust:
+        name: Rust workspace
         runs-on: ubuntu-latest
         defaults:
             run:
@@ -16,29 +16,54 @@ jobs:
         steps:
             - uses: actions/checkout@v6
 
-            - uses: actions/setup-node@v6.2.0
+            - uses: dtolnay/rust-toolchain@stable
               with:
-                  node-version: 22
+                  components: rustfmt, clippy
 
-            # Cache node_modules — keyed by package.json since there is no lockfile
-            - name: Cache node_modules
-              uses: actions/cache@v5
+            - uses: Swatinem/rust-cache@v2
               with:
-                  path: analytics/node_modules
-                  key: analytics-node-modules-${{ hashFiles('analytics/package.json') }}
-                  restore-keys: analytics-node-modules-
+                  workspaces: analytics
+
+            - name: Format
+              run: cargo fmt --all --check
+
+            - name: Clippy
+              run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+            - name: Test
+              run: cargo test --workspace --locked
+
+    pit-wall:
+        name: Pit wall
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: analytics/web/pit-wall
+        steps:
+            - uses: actions/checkout@v6
+
+            - uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: latest
 
             - name: Install dependencies
-              run: npm install
+              run: bun install --frozen-lockfile
 
-            # SKIP_ENV_VALIDATION bypasses t3-oss/env-nextjs runtime validation
-            # so the build does not require live secrets (InfluxDB, Auth, etc.)
+            # Protobuf types, signal catalog and route tree (also runs before build)
+            - name: Generate code
+              run: bun run gen
+
+            - name: Lint
+              run: bun run lint
+
+            - name: Format
+              run: bun run format:check
+
+            - name: Typecheck
+              run: bun run typecheck
+
+            - name: Unit tests
+              run: bun run test
+
             - name: Build
-              run: npm run build
-              env:
-                  SKIP_ENV_VALIDATION: '1'
-
-            - name: Lint & typecheck
-              run: npm run check
-              env:
-                  SKIP_ENV_VALIDATION: '1'
+              run: bun run build
