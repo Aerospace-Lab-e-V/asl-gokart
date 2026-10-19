@@ -1,14 +1,14 @@
 import { Link } from "@tanstack/react-router";
 // Links keep the current search (`?window=`) when switching views.
 import type { ReactNode } from "react";
-import { BatteryIcon, GaugeIcon, OverviewIcon, ThermometerIcon, TrackIcon } from "./icons";
+import { BatteryMedium, Gauge, LayoutGrid, MapPin, Thermometer } from "lucide-react";
 
 const ITEMS = [
-    { to: "/kart/$kartId", label: "Overview", icon: <OverviewIcon /> },
-    { to: "/kart/$kartId/battery", label: "Battery", icon: <BatteryIcon /> },
-    { to: "/kart/$kartId/drivetrain", label: "Drivetrain", icon: <GaugeIcon /> },
-    { to: "/kart/$kartId/thermal", label: "Thermal", icon: <ThermometerIcon /> },
-    { to: "/kart/$kartId/track", label: "Track", icon: <TrackIcon /> },
+    { to: "/kart/$kartId", label: "Overview", icon: <LayoutGrid className="size-5" /> },
+    { to: "/kart/$kartId/battery", label: "Battery", icon: <BatteryMedium className="size-5" /> },
+    { to: "/kart/$kartId/drivetrain", label: "Drivetrain", icon: <Gauge className="size-5" /> },
+    { to: "/kart/$kartId/thermal", label: "Thermal", icon: <Thermometer className="size-5" /> },
+    { to: "/kart/$kartId/track", label: "Track", icon: <MapPin className="size-5" /> },
 ] as const satisfies readonly { to: string; label: string; icon: ReactNode }[];
 
 /** Tabs from tablet width up. */
