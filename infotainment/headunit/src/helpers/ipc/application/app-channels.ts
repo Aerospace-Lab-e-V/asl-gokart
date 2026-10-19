@@ -1,12 +1,6 @@
 export const APP_VERSION_CHANNEL = "app-version";
-export const APP_TOGGLE_ANALYTICS_CHANNEL = "app-toggle-analytics";
-export const APP_GET_ANALYTICS_URL_CHANNEL = "app-get-analytics-url";
-export const APP_SET_ANALYTICS_URL_CHANNEL = "app-set-analytics-url";
-export const APP_CHECK_ANALYTICS_CONNECTION_CHANNEL = "app-check-analytics-connection";
 export const APP_SET_LOG_LEVEL_CHANNEL = "app-set-log-level";
 export const APP_GET_LOG_LEVEL_CHANNEL = "app-get-log-level";
-export const APP_GET_ANALYTICS_INTERFACE_CHANNEL = "app-get-analytics-interface";
-export const APP_SET_ANALYTICS_INTERFACE_CHANNEL = "app-set-analytics-interface";
 export const APP_GET_AUTO_START_CHANNEL = "app-get-auto-start";
 export const APP_SET_AUTO_START_CHANNEL = "app-set-auto-start";
 export const APP_GET_FULLSCREEN_STARTUP_CHANNEL = "app-get-fullscreen-startup";

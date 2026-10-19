@@ -22,6 +22,7 @@ import { useThrottleData } from "./hooks/useThrottleData";
 import { useBatteryData } from "./hooks/useBatteryData";
 import { useLightsData } from "./hooks/useLightsData";
 import { useConnectionData } from "./hooks/useConnectionData";
+import { useKartAgentData } from "./hooks/useKartAgentData";
 import { initHardwareCommandSubscriber } from "./services/hardware-command-subscriber";
 import NetworkGateScreen from "./components/shared/network-gate-screen";
 
@@ -33,6 +34,7 @@ function MainAppContent() {
     useBatteryData();
     useLightsData();
     useConnectionData();
+    useKartAgentData();
 
     useEffect(() => {
         syncThemeWithLocal();

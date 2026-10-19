@@ -1,11 +1,9 @@
-// The page module imports react-router, which needs browser APIs jsdom lacks.
-jest.mock("react-router-dom", () => ({ useNavigate: () => jest.fn() }));
-
 import fs from "fs";
 import path from "path";
 import { AgentStatusSchema } from "@/services/kart-agent/schema";
 import { getStatus, KartAgentError, putConfig } from "@/services/kart-agent/client";
-import { formPatch } from "@/pages/telemetry";
+import { formPatch } from "@/components/telemetry/telemetry-config-dialog";
+import { carNetwork, overall, recording, uplink } from "@/services/kart-agent/health";
 
 // Written by analytics/crates/kart-agent/tests/status_fixture.rs from the agent's Status type.
 const FIXTURE = path.resolve(
@@ -44,20 +42,46 @@ test("putConfig sends a JSON merge patch and reports agent errors", async () => 
     expect(JSON.parse(init.body)).toEqual({ live: { batch_ms: 5 } });
 });
 
-test("formPatch only sends changed fields and rejects bad numbers", () => {
-    const saved = {
-        kart_id: "kart-01",
-        broker_url: "",
-        batch_ms: "50",
-        interface: "eth0",
-        client_id: "0x0010",
-        port: "30492",
-    };
-    expect(formPatch(saved, { ...saved, broker_url: "mqtt://pit:1883" })).toEqual({
+test("formPatch only sends changed, trimmed fields", () => {
+    const saved = { kart_id: "kart-01", broker_url: "", interface: "eth0" };
+    expect(formPatch(saved, saved)).toEqual({});
+    expect(formPatch(saved, { ...saved, broker_url: " mqtt://pit:1883 " })).toEqual({
         live: { broker_url: "mqtt://pit:1883" },
     });
-    expect(formPatch(saved, { ...saved, client_id: "0x0011" })).toEqual({
-        sero: { client_id: 17 },
+    expect(formPatch(saved, { ...saved, kart_id: "kart-01 ", interface: "eth1" })).toEqual({
+        sero: { interface: "eth1" },
     });
-    expect(formPatch(saved, { ...saved, port: "abc" })).toBeNull();
+});
+
+const fixture = () => AgentStatusSchema.parse(JSON.parse(fs.readFileSync(FIXTURE, "utf8")));
+
+test("a recording, connected kart is green with the broker host as detail", () => {
+    const status = fixture();
+    expect(recording(status)).toEqual({ tone: "ok", state: "Recording", detail: "20.0 GB free" });
+    expect(uplink(status)).toEqual({ tone: "ok", state: "Connected", detail: "10.0.0.1:1883" });
+    expect(overall(status, null)).toBe("ok");
+});
+
+test("the header turns red when nothing is recorded, whatever the uplink does", () => {
+    const status = fixture();
+    status.log.active_segment = null;
+    status.log.last_error = "opening a log segment: Permission denied";
+    expect(recording(status)).toMatchObject({ tone: "fault", state: "Not recording" });
+    expect(overall(status, null)).toBe("fault");
+    expect(overall(fixture(), "kart-agent is not reachable")).toBe("fault");
+    expect(overall(null, null)).toBe("unknown");
+});
+
+test("a switched-off uplink is neutral, not a warning", () => {
+    const status = fixture();
+    status.live.enabled = false;
+    expect(uplink(status)).toEqual({ tone: "off", state: "Off" });
+    expect(overall(status, null)).toBe("off");
+});
+
+test("car network counts ECUs that are found and subscribed", () => {
+    const status = fixture();
+    expect(carNetwork(status)).toEqual({ tone: "warn", state: "1 / 2 ECUs" });
+    status.sero.state = "waiting_for_interface";
+    expect(carNetwork(status)).toEqual({ tone: "warn", state: "No network", detail: "eth0 is down" });
 });
