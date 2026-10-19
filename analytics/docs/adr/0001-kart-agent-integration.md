@@ -50,7 +50,7 @@ The first idea was a Rust napi-rs module inside Electron for multithreaded batch
 | headunit (`sero-node`) | `0x0002` | 30491 |
 | zone controllers (the firmware passes its port as client ID) | `0x771B` | 30491 |
 | kart-agent | `0x0010` | 30492 |
-| kart-sim `--output sero` (providers) | `0x0F01` | 30500 + service ID |
+| kart-sim `--output sero` (providers) | `0x0F00` + service ID | 30500 + service ID |
 
 ECU firmware allows 4 subscribers per event and tracks 4 peers (`zc/*/src/config.hpp`). Today's subscribers are the
 headunit, the agent and optionally `zc_logging`.

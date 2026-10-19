@@ -9,12 +9,13 @@ Real-time telemetry and long-term analytics for our electric go-kart. Data from 
 ## Architecture
 
 ```
-ECUs ──GbE──► Raspberry Pi (kart-agent)
-                 ├─ decode proprietary ECU protocol → signals
+ECUs ──Sero/UDP──► Raspberry Pi: kart-agent (systemd service, ships with the headunit)
+                 ├─ subscribe to the zone controllers' Sero events → signals
                  ├─ write everything to local session log (always)
                  ├─ live: batch every ~50 ms → MQTT (QoS 0) ─────────┐
                  ├─ backfill: upload log chunks when the link allows ┤
-                 └─ commands: subscribe, validate, apply, ack        │
+                 ├─ commands: subscribe, validate, apply, ack        │
+                 └─ local API for the headunit (status, config)      │
                                                                      ▼
                          WireGuard tunnel over LTE/5G hotspot
                                                                      ▼
@@ -34,8 +35,8 @@ Proxmox VM (Docker Compose)
 
 | Layer | Choice |
 |---|---|
-| Onboard agent | Rust (Tokio, rumqttc) on Raspberry Pi |
-| Local log | MCAP session files + SQLite upload index |
+| Onboard agent | Rust (Tokio, rumqttc) on Raspberry Pi, systemd service in the headunit `.deb`; Sero via the C++ sero library (`sero-sys`) |
+| Local log | MCAP session segments (zstd); an upload index comes with backfill |
 | Time sync | chrony with GPS + PPS; Pi is time source for ECUs |
 | Network | WireGuard (kart dials out; no open ports on the kart) |
 | Transport | MQTT 5, Protobuf payloads, zstd-compressed batches |
@@ -60,9 +61,13 @@ analytics/
 │   ├── signals.yaml # name, ECU, unit, scale, rate, limits
 │   ├── proto/       # telemetry.proto, commands.proto
 │   └── buf.yaml     # lint + breaking-change checks
+├── docs/adr/        # architecture decisions
 ├── crates/          # Rust workspace (server crates carry their own Dockerfile)
 │   ├── telemetry-schema/  # types generated from schema/
-│   ├── kart-agent/        # runs on the Pi
+│   ├── ecu-sero/          # Sero wire layouts of the zone controllers (decode + encode)
+│   ├── sero-sys/          # bindings for the sero C++ runtime (vendored) + C shim
+│   ├── kart-mqtt/         # MQTT uplink shared by kart-agent and kart-sim
+│   ├── kart-agent/        # runs on the Pi (dist/: systemd unit, example config)
 │   ├── ingest/            # MQTT → TimescaleDB, idempotent by (session, seq)
 │   ├── pit-api/           # read-only HTTP: recent samples for the pit wall charts
 │   ├── command-api/       # audited parameter writes
@@ -83,7 +88,7 @@ analytics/
 │   │   ├── .env.example      # variable names only; the real .env is untracked
 │   │   └── timescaledb-init/ # first-start DB setup (read-only Grafana role)
 │   ├── mosquitto/   # broker config (dev: anonymous, prod: auth)
-│   ├── kart/        # systemd units, Ansible for the Pi, WireGuard templates
+│   ├── kart/        # WireGuard templates (planned); the agent itself ships with the headunit
 │   ├── keycloak/    # realm export
 │   └── infra/       # Proxmox VM for the Docker host via OpenTofu (optional)
 └── testdata/sessions/      # small recorded sessions (Git LFS)
@@ -123,6 +128,26 @@ Stop the stack with `Ctrl-C`. Add `down -v` to wipe the database and Grafana vol
 > GRANT SELECT ON ALL TABLES IN SCHEMA public TO pit_api_ro;
 > SQL
 > ```
+
+### The real kart path, without a kart
+
+The `sero` profile runs what the kart runs: `kart-sim --output sero` plays the zone controllers (lights, battery, motor) over Sero, `kart-agent` consumes them and publishes to the broker, and ingest, pit-api and the pit wall work as in the demo.
+
+```bash
+docker compose -f deploy/compose/compose.yml -f deploy/compose/compose.dev.yml --profile sero up --build
+curl -s 127.0.0.1:7411/v1/status   # the agent's status, as the headunit sees it
+```
+
+Natively, both need an interface with IPv4 and multicast; any local Docker bridge that is up works (`ip -br addr`):
+
+```bash
+cargo run -p kart-sim -- --output sero --sero-interface <iface>
+cargo run -p kart-agent -- --state-dir /tmp/ka/state --runtime-dir /tmp/ka/run --config-dir /tmp/ka/etc \
+    --config my-agent.toml      # e.g. [sero] interface = "<iface>", [live] broker_url = "mqtt://localhost:1883"
+cargo run -p sero-sys --example sniff -- <iface> 0x0004:0x8001   # raw Sero events
+```
+
+Run the headunit (`bun start` in `infotainment/headunit`) next to them to see its Telemetry page.
 
 ### Developing ingest / kart-sim locally
 
@@ -189,9 +214,26 @@ pnpm dev
 ## Components
 
 ### `kart-agent` (Raspberry Pi)
-Decodes ECU traffic, timestamps it, and writes **everything** to the local session log first. In parallel it publishes batched live data over MQTT and uploads log chunks for backfill. It receives parameter commands, checks them against its own allowlist and ranges (never trusting the cloud alone), applies them, and acknowledges. Critical threshold alerts are evaluated here.
+The vehicle-data gateway on the Pi. It subscribes to the zone controllers' Sero events, decodes them into catalog signals (stamped when received), and writes **everything** to the local session log first. In parallel it publishes batched live data over MQTT; backfill and parameter commands (checked against its own allowlist and ranges, never trusting the cloud alone) come later. Why it is a separate service rather than part of the Electron app: [ADR-0001](docs/adr/0001-kart-agent-integration.md).
 
-Built for `aarch64` with `cross` and deployed via Ansible as a systemd service (`deploy/kart/`).
+- **Deployment.** The agent ships inside the headunit `.deb` (`/usr/lib/headunit/resources/kart-agent/`) and runs as the systemd service `kart-agent`, independent of the app: it keeps logging when the app is closed, crashed or updating. The package's maintainer scripts link, enable and restart the unit; the in-app updater updates both. CI cross-builds it with `cargo zigbuild` for x86_64 and aarch64 (glibc ≥ 2.31, no C++ runtime) and tests the package lifecycle on the runner (`infotainment/headunit/packaging/test/`).
+- **Configuration.** Built-in defaults, then `/etc/kart-agent/agent.toml` (optional, see `crates/kart-agent/dist/agent.toml.example`), then what the headunit's Telemetry page set (`/var/lib/kart-agent/config.override.json`). `live.enabled` switches the uplink only; local logging is always on.
+- **Local API** (loopback only): `GET /v1/status`, `GET /v1/health`, `GET`/`PUT /v1/config` (JSON merge patch) on `127.0.0.1:7411`. The headunit's Telemetry page (Settings → Telemetry) uses it; editing needs admin mode. `tests/fixtures/status.json` is the contract both sides test against.
+- **Sessions.** One session per power cycle of the Pi (kernel boot id). Agent restarts and updates continue the session and its `seq`.
+- **Log.** `/var/lib/kart-agent/log/<session>/seg-<first_seq>-<utc>.mcap`: the same `Batch` bytes as published, plus the schema, session metadata, `signals.yaml` and agent events. Chunks are synced every second; an unfinished `.mcap.active` file after a power cut is readable up to the last sync (`mcap recover`). The oldest segments are deleted above 4 GiB or below 1 GiB free.
+- **Clock.** The Pi has no RTC; the status reports whether the clock is synchronised. GPS/PPS time sync comes later.
+- On the Pi: `systemctl status kart-agent`, `journalctl -u kart-agent`.
+
+Sero client registry (subscriptions are keyed by client id, so each consumer needs its own):
+
+| Client | Client id | Unicast port |
+|---|---|---|
+| headunit (`sero-node`) | `0x0002` | 30491 |
+| zone controllers | `0x771B` | 30491 |
+| kart-agent | `0x0010` | 30492 |
+| kart-sim `--output sero` | `0x0F00` + service id | 30500 + service id |
+
+The ECU firmware accepts 4 subscribers per event.
 
 ### `ingest`
 Subscribes to live and backfill topics and writes to TimescaleDB. Inserts are idempotent on `(session_id, seq)`, so live data and backfill can overlap safely and gaps fill in automatically.
@@ -227,8 +269,8 @@ This is the contract the implementation follows:
 - **Signals:** map `Sample.signal_id` through `schema/signals.yaml` (name, unit, min/max, rate). Load the catalog at build time. Ignore unknown IDs, which come from a newer kart-agent.
 - **Time:** `Sample.t_us` is Unix time in microseconds from the kart clock (GPS/PPS-disciplined). Plot on that time, not on arrival time.
 - **Data age:** show `now − newest t_us`. This is the live latency measurement and the way to verify the 250 ms target. The browser machine's clock must be NTP-synced.
-- **Batches** arrive every ~50 ms.
-  - A batch holds samples of several signals at their own rates: ~1 sample per 20 Hz signal, and a 1 Hz signal only every 20th batch.
+- **Batches** arrive at most every ~50 ms.
+  - A batch holds the samples that arrived since the last one. The ECUs send at most 10 Hz (motor every 100 ms, battery and lights only when a value changes), so a signal appears in about every other batch, and intervals without data produce no batch at all.
   - `seq` increments by one per batch. A gap means a batch was lost on the link (QoS 0, expected on LTE). Don't interpolate across it. Backfill only repairs the database, not the live view.
 - **Rendering:** the display path has only tens of milliseconds of budget. Buffer incoming samples, draw once per animation frame instead of once per message, and keep a bounded window (for example the last 60 s).
 - **Compression:** payloads are uncompressed today. The tech stack plans zstd-compressed batches; if that lands, the browser has to decompress zstd (a WASM decoder in `src/live/decode.ts`).
@@ -268,7 +310,7 @@ Only `command-api` may publish to `cmd`. The kart authenticates to the broker wi
 
 ## Roadmap
 
-1. **Live MVP:** kart-agent with local logging and time sync, WireGuard, MQTT, ingest, TimescaleDB, pit wall live view, basic Grafana dashboards.
+1. **Live MVP:** kart-agent with local logging (done: Sero, MCAP, live MQTT, packaged with the headunit), time sync, WireGuard, MQTT, ingest, TimescaleDB, pit wall live view, basic Grafana dashboards.
 2. **Complete data:** backfill with sequence numbers, lap timing, session and lap-overlay dashboards.
 3. **Team access:** Keycloak SSO for Grafana.
 4. **Remote parameters:** command-api, param-app, acknowledgments, audit log.
