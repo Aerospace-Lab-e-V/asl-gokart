@@ -65,7 +65,7 @@ analytics/
 ├── crates/          # Rust workspace (server crates carry their own Dockerfile)
 │   ├── telemetry-schema/  # types generated from schema/
 │   ├── ecu-sero/          # Sero wire layouts of the zone controllers (decode + encode)
-│   ├── sero-sys/          # bindings for the sero C++ runtime (vendored) + C shim
+│   ├── sero-sys/          # bindings for the sero C++ runtime (git submodule) + C shim
 │   ├── kart-mqtt/         # MQTT uplink shared by kart-agent and kart-sim
 │   ├── kart-agent/        # runs on the Pi (dist/: systemd unit, example config)
 │   ├── ingest/            # MQTT → TimescaleDB, idempotent by (session, seq)
@@ -100,7 +100,7 @@ analytics/
 
 You don't need the kart to work on most of this. `kart-sim` simulates a kart driving laps on a placeholder track and publishes its telemetry through the real MQTT path. Replaying recorded sessions comes later.
 
-**Prerequisites:** Docker (with Compose). For working on the Rust code: Rust (stable). For the pit wall: [Bun](https://bun.sh) (`buf` comes with its npm dependencies). Later: Node.js with `pnpm` (param-app), Git LFS.
+**Prerequisites:** Docker (with Compose). For working on the Rust code: Rust (stable) and the sero submodule (`git submodule update --init`, or clone with `--recursive`). For the pit wall: [Bun](https://bun.sh) (`buf` comes with its npm dependencies). Later: Node.js with `pnpm` (param-app), Git LFS.
 
 ### One-command demo
 

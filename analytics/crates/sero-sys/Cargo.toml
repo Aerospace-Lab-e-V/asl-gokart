@@ -1,6 +1,6 @@
 [package]
 name = "sero-sys"
-description = "Rust bindings for the sero C++ runtime (vendored) through a small C shim with a Linux UDP transport"
+description = "Rust bindings for the sero C++ runtime (git submodule) through a small C shim with a Linux UDP transport"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true

@@ -32,7 +32,7 @@ The first idea was a Rust napi-rs module inside Electron for multithreaded batch
 - **Build.** `cargo zigbuild` targets glibc 2.31 for x86_64 and aarch64 and runs on the existing x86 GitHub runners.
   There is no Node ABI and no npm package.
 - **Sero.** The agent is its own Sero client (client ID `0x0010`, unicast port 30492) and talks to the C++ sero library
-  through a thin C shim (`crates/sero-sys`, vendored sero sources pinned to a tag). Wire layouts live once in
+  through a thin C shim (`crates/sero-sys`, sero headers as a git submodule pinned to a tag). Wire layouts live once in
   `crates/ecu-sero`, shared by the agent (decode) and `kart-sim --output sero` (encode).
 - **Sessions.** One session per Pi boot (`/proc/sys/kernel/random/boot_id`). The session ID and the next `seq` are kept in
   the systemd runtime directory, so restarts and updates continue the session.

@@ -1,4 +1,4 @@
-// Compiles the C shim over the vendored, header-only sero library.
+// Compiles the C shim over the header-only sero library (git submodule at vendor/sero).
 //
 // The shim uses no exceptions, RTTI, heap operators or thread-safe statics, so it
 // links without a C++ standard library. That keeps cross-compiled binaries free of
@@ -6,6 +6,11 @@
 fn main() {
     println!("cargo:rerun-if-changed=shim");
     println!("cargo:rerun-if-changed=vendor/sero");
+
+    assert!(
+        std::path::Path::new("vendor/sero/include/sero.hpp").exists(),
+        "sero headers missing: run `git submodule update --init`"
+    );
 
     cc::Build::new()
         .cpp(true)

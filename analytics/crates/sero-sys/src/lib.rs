@@ -1,8 +1,8 @@
 //! Rust bindings for [sero](https://github.com/mad201802/sero), the zone controllers'
 //! service-oriented UDP protocol.
 //!
-//! The C++ library is vendored (`vendor/sero`, see `VERSION`) and wrapped by a small C
-//! shim (`shim/`) that adds a Linux UDP transport. On top of that:
+//! The C++ library is a git submodule (`vendor/sero`, pinned to a release tag) and is
+//! wrapped by a small C shim (`shim/`) that adds a Linux UDP transport. On top of that:
 //!
 //! - [`Runtime`]: one sero runtime, single-threaded, driven by [`Runtime::process`]
 //! - [`spawn`]: runs a runtime on its own thread and accepts [`Command`]s from anywhere

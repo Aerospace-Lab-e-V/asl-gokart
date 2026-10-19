@@ -59,6 +59,8 @@ jobs:
                 working-directory: analytics
         steps:
             - uses: actions/checkout@v6
+              with:
+                  submodules: true # sero headers for sero-sys
 
             - uses: dtolnay/rust-toolchain@stable
               with:
