@@ -1,0 +1,496 @@
+# Signal catalog: the source of truth for every telemetry signal.
+#
+# Rules:
+#   - `id` is what goes over the wire (Sample.signal_id) and into the DB. Never reuse
+#     or renumber an id; retire a signal by marking it `deprecated: true`.
+#   - Ids are grouped by subject: 1xx battery, 2xx drivetrain, 3xx gps, 4xx temperatures,
+#     5xx lights. `ecu` names the zone controller that measures the signal.
+#   - `rate_hz` is the nominal (maximum) sample rate; `min`/`max` are the plausible physical range.
+#     Signals described as "sent on change" only arrive when their value changes.
+#   - Enums and booleans are sent as numbers; their meaning is given in `description`.
+#   - `_raw` signals carry the ECU's unscaled value. They stay raw forever; a scaled
+#     version gets a new id once its scaling is verified.
+#   - Sero wire layouts and derived signals live in crates/ecu-sero.
+
+signals:
+  # --- Battery -------------------------------------------------------------
+  - id: 101
+    name: battery.voltage
+    ecu: battery
+    unit: V
+    rate_hz: 10
+    min: 0
+    max: 80
+    description: Pack voltage from the BMS, polled at 10 Hz and sent on change
+  - id: 102
+    name: battery.current
+    ecu: battery
+    unit: A
+    rate_hz: 10
+    min: -100
+    max: 300
+    description: Pack current from the BMS, positive = discharge, negative = regen; polled at 10 Hz and sent on change
+  - id: 103
+    name: battery.temp
+    ecu: battery
+    unit: °C
+    rate_hz: 0.5
+    min: -20
+    max: 80
+    description: Hottest valid pack temperature sensor (max of battery.temp_N)
+  - id: 104
+    name: battery.soc
+    ecu: battery
+    unit: "%"
+    rate_hz: 1
+    min: 0
+    max: 100
+    description: State of charge (no ECU sends this yet)
+  - id: 105
+    name: battery.power
+    ecu: battery
+    unit: kW
+    rate_hz: 10
+    min: -5
+    max: 15
+    description: Pack power, positive = discharge; derived on the kart from voltage × current
+  - id: 106
+    name: battery.voltage_ctrl_left
+    ecu: motor
+    unit: V
+    rate_hz: 10
+    min: 0
+    max: 255
+    description: Battery voltage as measured by the left Kelly controller (whole volts, scaling unverified)
+  - id: 107
+    name: battery.voltage_ctrl_right
+    ecu: motor
+    unit: V
+    rate_hz: 10
+    min: 0
+    max: 255
+    description: Battery voltage as measured by the right Kelly controller (whole volts, scaling unverified)
+  - id: 111
+    name: battery.temp_1
+    ecu: battery
+    unit: °C
+    rate_hz: 0.5
+    min: -20
+    max: 80
+    description: Pack temperature sensor 1 (DS18B20); invalid readings are not sent
+  - id: 112
+    name: battery.temp_2
+    ecu: battery
+    unit: °C
+    rate_hz: 0.5
+    min: -20
+    max: 80
+    description: Pack temperature sensor 2 (DS18B20); invalid readings are not sent
+  - id: 113
+    name: battery.temp_3
+    ecu: battery
+    unit: °C
+    rate_hz: 0.5
+    min: -20
+    max: 80
+    description: Pack temperature sensor 3 (DS18B20); invalid readings are not sent
+  - id: 114
+    name: battery.temp_4
+    ecu: battery
+    unit: °C
+    rate_hz: 0.5
+    min: -20
+    max: 80
+    description: Pack temperature sensor 4 (DS18B20); invalid readings are not sent
+  - id: 115
+    name: battery.temp_5
+    ecu: battery
+    unit: °C
+    rate_hz: 0.5
+    min: -20
+    max: 80
+    description: Pack temperature sensor 5 (DS18B20); invalid readings are not sent
+  - id: 116
+    name: battery.temp_6
+    ecu: battery
+    unit: °C
+    rate_hz: 0.5
+    min: -20
+    max: 80
+    description: Pack temperature sensor 6 (DS18B20); invalid readings are not sent
+  - id: 117
+    name: battery.temp_7
+    ecu: battery
+    unit: °C
+    rate_hz: 0.5
+    min: -20
+    max: 80
+    description: Pack temperature sensor 7 (DS18B20); invalid readings are not sent
+  - id: 118
+    name: battery.temp_8
+    ecu: battery
+    unit: °C
+    rate_hz: 0.5
+    min: -20
+    max: 80
+    description: Pack temperature sensor 8 (DS18B20); invalid readings are not sent
+  - id: 119
+    name: battery.temp_9
+    ecu: battery
+    unit: °C
+    rate_hz: 0.5
+    min: -20
+    max: 80
+    description: Pack temperature sensor 9 (DS18B20); invalid readings are not sent
+  - id: 120
+    name: battery.temp_10
+    ecu: battery
+    unit: °C
+    rate_hz: 0.5
+    min: -20
+    max: 80
+    description: Pack temperature sensor 10 (DS18B20); invalid readings are not sent
+
+  # --- Drivetrain ----------------------------------------------------------
+  - id: 201
+    name: drive.throttle
+    ecu: motor
+    unit: "%"
+    rate_hz: 10
+    min: 0
+    max: 100
+    description: Throttle pedal position, max of the two Kelly throttle readings scaled 0–255 → 0–100 % (approximate)
+  - id: 202
+    name: drive.rpm_left
+    ecu: motor
+    unit: rpm
+    rate_hz: 10
+    min: 0
+    max: 6000
+    description: Left motor speed
+  - id: 203
+    name: drive.rpm_right
+    ecu: motor
+    unit: rpm
+    rate_hz: 10
+    min: 0
+    max: 6000
+    description: Right motor speed
+  - id: 204
+    name: drive.speed
+    ecu: motor
+    unit: km/h
+    rate_hz: 10
+    min: 0
+    max: 80
+    description: Vehicle speed derived from the mean motor rpm and the wheel circumference
+  - id: 205
+    name: drive.drive_mode
+    ecu: throttle
+    unit: enum
+    rate_hz: 1
+    min: 0
+    max: 3
+    description: 0 = eco, 1 = comfort, 2 = sport, 3 = ludicrous (no Sero ECU sends this yet)
+  - id: 206
+    name: drive.reverse
+    ecu: motor
+    unit: bool
+    rate_hz: 10
+    min: 0
+    max: 1
+    description: 1 = reverse gear engaged on both controllers
+  - id: 207
+    name: drive.throttle_raw_left
+    ecu: motor
+    unit: raw
+    rate_hz: 10
+    min: 0
+    max: 255
+    description: Throttle reading of the left Kelly controller (0–255)
+  - id: 208
+    name: drive.throttle_raw_right
+    ecu: motor
+    unit: raw
+    rate_hz: 10
+    min: 0
+    max: 255
+    description: Throttle reading of the right Kelly controller (0–255)
+  - id: 209
+    name: drive.brake_raw_left
+    ecu: motor
+    unit: raw
+    rate_hz: 10
+    min: 0
+    max: 255
+    description: Brake pedal reading of the left Kelly controller (0–255)
+  - id: 210
+    name: drive.brake_raw_right
+    ecu: motor
+    unit: raw
+    rate_hz: 10
+    min: 0
+    max: 255
+    description: Brake pedal reading of the right Kelly controller (0–255)
+  - id: 211
+    name: drive.brake_switch_left
+    ecu: motor
+    unit: bool
+    rate_hz: 10
+    min: 0
+    max: 1
+    description: Brake switch input of the left Kelly controller
+  - id: 212
+    name: drive.foot_switch_left
+    ecu: motor
+    unit: bool
+    rate_hz: 10
+    min: 0
+    max: 1
+    description: Foot switch input of the left Kelly controller
+  - id: 213
+    name: drive.forward_switch_left
+    ecu: motor
+    unit: bool
+    rate_hz: 10
+    min: 0
+    max: 1
+    description: Forward switch input of the left Kelly controller
+  - id: 214
+    name: drive.reverse_switch_left
+    ecu: motor
+    unit: bool
+    rate_hz: 10
+    min: 0
+    max: 1
+    description: Reverse switch input of the left Kelly controller
+  - id: 215
+    name: drive.setting_dir_left
+    ecu: motor
+    unit: bool
+    rate_hz: 10
+    min: 0
+    max: 1
+    description: Commanded direction flag of the left Kelly controller
+  - id: 216
+    name: drive.actual_dir_left
+    ecu: motor
+    unit: bool
+    rate_hz: 10
+    min: 0
+    max: 1
+    description: Actual direction flag of the left Kelly controller
+  - id: 221
+    name: drive.brake_switch_right
+    ecu: motor
+    unit: bool
+    rate_hz: 10
+    min: 0
+    max: 1
+    description: Brake switch input of the right Kelly controller
+  - id: 222
+    name: drive.foot_switch_right
+    ecu: motor
+    unit: bool
+    rate_hz: 10
+    min: 0
+    max: 1
+    description: Foot switch input of the right Kelly controller
+  - id: 223
+    name: drive.forward_switch_right
+    ecu: motor
+    unit: bool
+    rate_hz: 10
+    min: 0
+    max: 1
+    description: Forward switch input of the right Kelly controller
+  - id: 224
+    name: drive.reverse_switch_right
+    ecu: motor
+    unit: bool
+    rate_hz: 10
+    min: 0
+    max: 1
+    description: Reverse switch input of the right Kelly controller
+  - id: 225
+    name: drive.setting_dir_right
+    ecu: motor
+    unit: bool
+    rate_hz: 10
+    min: 0
+    max: 1
+    description: Commanded direction flag of the right Kelly controller
+  - id: 226
+    name: drive.actual_dir_right
+    ecu: motor
+    unit: bool
+    rate_hz: 10
+    min: 0
+    max: 1
+    description: Actual direction flag of the right Kelly controller
+  - id: 231
+    name: drive.relay_1
+    ecu: motor
+    unit: bool
+    rate_hz: 10
+    min: 0
+    max: 1
+    description: State of relay 1 on the motor zone controller
+  - id: 232
+    name: drive.relay_2
+    ecu: motor
+    unit: bool
+    rate_hz: 10
+    min: 0
+    max: 1
+    description: State of relay 2 on the motor zone controller
+  - id: 233
+    name: drive.phase_current_raw_left
+    ecu: motor
+    unit: raw
+    rate_hz: 10
+    min: 0
+    max: 65535
+    description: Phase current of the left Kelly controller (unscaled; only sent by firmware with the 23-byte motor event)
+  - id: 234
+    name: drive.phase_current_raw_right
+    ecu: motor
+    unit: raw
+    rate_hz: 10
+    min: 0
+    max: 65535
+    description: Phase current of the right Kelly controller (unscaled; only sent by firmware with the 23-byte motor event)
+
+  # --- GPS -----------------------------------------------------------------
+  - id: 301
+    name: gps.lat
+    ecu: gps
+    unit: deg
+    rate_hz: 10
+    min: -90
+    max: 90
+    description: Latitude (WGS84)
+  - id: 302
+    name: gps.lon
+    ecu: gps
+    unit: deg
+    rate_hz: 10
+    min: -180
+    max: 180
+    description: Longitude (WGS84)
+  - id: 303
+    name: gps.heading
+    ecu: gps
+    unit: deg
+    rate_hz: 10
+    min: 0
+    max: 360
+    description: Course over ground, 0 = north, clockwise
+  - id: 304
+    name: gps.speed
+    ecu: gps
+    unit: km/h
+    rate_hz: 10
+    min: 0
+    max: 80
+    description: Speed over ground
+
+  # --- Temperatures --------------------------------------------------------
+  - id: 401
+    name: temp.motor_left
+    ecu: motor
+    unit: °C
+    rate_hz: 10
+    min: -20
+    max: 150
+    description: Left motor winding temperature as reported by the Kelly controller
+  - id: 402
+    name: temp.motor_right
+    ecu: motor
+    unit: °C
+    rate_hz: 10
+    min: -20
+    max: 150
+    description: Right motor winding temperature as reported by the Kelly controller
+  - id: 403
+    name: temp.esc_left
+    ecu: motor
+    unit: °C
+    rate_hz: 10
+    min: -20
+    max: 120
+    description: Left Kelly controller temperature
+  - id: 404
+    name: temp.esc_right
+    ecu: motor
+    unit: °C
+    rate_hz: 10
+    min: -20
+    max: 120
+    description: Right Kelly controller temperature
+
+  # --- Lights (all sent on change) -----------------------------------------
+  - id: 501
+    name: lights.turn_left
+    ecu: lights
+    unit: bool
+    rate_hz: 1
+    min: 0
+    max: 1
+    description: Left turn signal lamp currently lit (follows the blink cycle); sent on change
+  - id: 502
+    name: lights.turn_right
+    ecu: lights
+    unit: bool
+    rate_hz: 1
+    min: 0
+    max: 1
+    description: Right turn signal lamp currently lit (follows the blink cycle); sent on change
+  - id: 503
+    name: lights.high_beam_left
+    ecu: lights
+    unit: bool
+    rate_hz: 1
+    min: 0
+    max: 1
+    description: Left high beam on; sent on change
+  - id: 504
+    name: lights.high_beam_right
+    ecu: lights
+    unit: bool
+    rate_hz: 1
+    min: 0
+    max: 1
+    description: Right high beam on; sent on change
+  - id: 505
+    name: lights.brake
+    ecu: lights
+    unit: bool
+    rate_hz: 1
+    min: 0
+    max: 1
+    description: Brake light on; sent on change
+  - id: 506
+    name: lights.reverse
+    ecu: lights
+    unit: bool
+    rate_hz: 1
+    min: 0
+    max: 1
+    description: Reverse light on; sent on change
+  - id: 507
+    name: lights.drl
+    ecu: lights
+    unit: bool
+    rate_hz: 1
+    min: 0
+    max: 1
+    description: Daytime running lights on; sent on change
+  - id: 508
+    name: lights.tail
+    ecu: lights
+    unit: bool
+    rate_hz: 1
+    min: 0
+    max: 1
+    description: Tail light on; sent on change

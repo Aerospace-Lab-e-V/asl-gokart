@@ -5,7 +5,6 @@ import { WEBSOCKET_BATTERY_MESSAGE_CHANNEL, WEBSOCKET_THROTTLE_MESSAGE_CHANNEL, 
 import * as http from 'http';
 import { ButtonHandler } from './handlers/button-handler';
 import { defaultButtonMappings } from './handlers/default-mapping';
-import { processAnalytics } from '@/helpers/analytics-helpers';
 import { getBindAddress } from '@/helpers/ipc/hardware/network-config';
 import { z } from 'zod';
 import { WEBSOCKET_PORT } from '@/data/config';
@@ -98,13 +97,11 @@ export function startWebSocketServer(mainWindow: BrowserWindow) {
                   log.debug("Forwarding message to ipcRenderer's ThrottleListener:");
                   log.debug(message.toString());
                   mainWindow.webContents.send(WEBSOCKET_THROTTLE_MESSAGE_CHANNEL, message.toString());
-                  processAnalytics(message.toString());
                   break;
                 case Zones.BATTERY:
                   log.debug("Forwarding message to ipcRenderer's BatteryListener:");
                   log.debug(message.toString());
                   mainWindow.webContents.send(WEBSOCKET_BATTERY_MESSAGE_CHANNEL, message.toString());
-                  processAnalytics(message.toString());
                   break;
                 case Zones.BUTTONS:
                   log.debug("Forwarding message to ipcRenderer's ButtonsListener:");

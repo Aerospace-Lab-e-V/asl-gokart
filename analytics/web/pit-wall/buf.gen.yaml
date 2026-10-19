@@ -1,0 +1,9 @@
+# TypeScript types for schema/proto, used to decode kart/{id}/live and kart/{id}/status.
+#   bun run gen
+version: v2
+inputs:
+    - directory: ../../schema/proto
+plugins:
+    - local: protoc-gen-es
+      out: src/gen
+      opt: target=ts

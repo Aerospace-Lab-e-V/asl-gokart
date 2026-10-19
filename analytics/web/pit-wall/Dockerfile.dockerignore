@@ -1,0 +1,11 @@
+# Context is analytics/; only send what the pit-wall image needs.
+**
+!schema/proto/**
+!schema/signals.yaml
+!web/pit-wall/**
+web/pit-wall/node_modules
+web/pit-wall/dist
+web/pit-wall/src/gen
+web/pit-wall/src/routeTree.gen.ts
+web/pit-wall/test-results
+web/pit-wall/playwright-report

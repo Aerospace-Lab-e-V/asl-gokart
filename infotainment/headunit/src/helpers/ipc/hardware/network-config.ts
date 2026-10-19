@@ -6,8 +6,6 @@ import log from "electron-log/main";
 
 interface NetworkConfigData {
     selectedMac: string | null;
-    analyticsInterfaceMac: string | null;
-    analyticsBackendUrl: string | null;
 }
 
 const CONFIG_FILE = path.join(app.getPath("userData"), "network-config.json");
@@ -18,11 +16,9 @@ function readConfig(): NetworkConfigData {
         const parsed = JSON.parse(raw);
         return {
             selectedMac: parsed.selectedMac ?? null,
-            analyticsInterfaceMac: parsed.analyticsInterfaceMac ?? null,
-            analyticsBackendUrl: parsed.analyticsBackendUrl ?? null,
         };
     } catch {
-        return { selectedMac: null, analyticsInterfaceMac: null, analyticsBackendUrl: null };
+        return { selectedMac: null };
     }
 }
 
@@ -97,50 +93,4 @@ export function getCurrentInterface(): ResolvedInterface | null {
     const mac = getStoredMac();
     if (!mac) return null;
     return resolveInterfaceByMac(mac);
-}
-
-// --- Analytics interface ---
-
-export function getStoredAnalyticsMac(): string | null {
-    return readConfig().analyticsInterfaceMac;
-}
-
-export function setStoredAnalyticsMac(mac: string | null): void {
-    const config = readConfig();
-    config.analyticsInterfaceMac = mac;
-    writeConfig(config);
-}
-
-/**
- * Returns the bind IP for analytics HTTP requests, or undefined if none is
- * configured (in which case callers should omit localAddress entirely so the
- * OS uses its default routing table).
- */
-export function getAnalyticsBindAddress(): string | undefined {
-    const mac = getStoredAnalyticsMac();
-    if (!mac) return undefined;
-    const resolved = resolveInterfaceByMac(mac);
-    if (!resolved) {
-        log.warn(`[network-config] Analytics MAC ${mac} not found, falling back to OS default routing`);
-        return undefined;
-    }
-    return resolved.address;
-}
-
-export function getCurrentAnalyticsInterface(): ResolvedInterface | null {
-    const mac = getStoredAnalyticsMac();
-    if (!mac) return null;
-    return resolveInterfaceByMac(mac);
-}
-
-// --- Analytics URL persistence ---
-
-export function getStoredAnalyticsUrl(): string | null {
-    return readConfig().analyticsBackendUrl;
-}
-
-export function setStoredAnalyticsUrl(url: string): void {
-    const config = readConfig();
-    config.analyticsBackendUrl = url;
-    writeConfig(config);
 }

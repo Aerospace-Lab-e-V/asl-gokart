@@ -1,0 +1,24 @@
+#!/bin/sh
+# Cleans up after kart-agent. Purge removes its configuration and runtime state but
+# keeps the recorded telemetry in /var/lib/private/kart-agent: the logs are the
+# source of truth and may not have been uploaded yet. Delete them by hand if needed.
+set -e
+
+U=kart-agent.service
+
+case "$1" in
+    remove | purge)
+        rm -f "/etc/systemd/system/$U"
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload || true
+            systemctl reset-failed "$U" >/dev/null 2>&1 || true
+        fi
+        ;;
+esac
+
+if [ "$1" = purge ]; then
+    rm -rf /etc/kart-agent /run/kart-agent /run/private/kart-agent
+    rm -f /var/lib/kart-agent/config.override.json /var/lib/private/kart-agent/config.override.json
+fi
+
+exit 0

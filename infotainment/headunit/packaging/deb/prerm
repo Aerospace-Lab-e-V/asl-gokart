@@ -1,0 +1,18 @@
+#!/bin/sh
+# On removal, stop kart-agent gracefully (final batch, finished log segment, offline
+# status). On upgrade, keep it logging; the new postinst restarts it.
+set -e
+
+U=kart-agent.service
+
+case "$1" in
+    remove | deconfigure)
+        if [ -d /run/systemd/system ]; then
+            systemctl stop "$U" >/dev/null 2>&1 || true
+        fi
+        # Also removes the link created by `systemctl link`.
+        systemctl disable "$U" >/dev/null 2>&1 || true
+        ;;
+esac
+
+exit 0

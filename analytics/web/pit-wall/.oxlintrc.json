@@ -1,0 +1,15 @@
+{
+    "$schema": "./node_modules/oxlint/configuration_schema.json",
+    "plugins": ["typescript", "react", "react-perf", "import", "vitest"],
+    "categories": {
+        "correctness": "error",
+        "suspicious": "warn"
+    },
+    "rules": {
+        "react/react-in-jsx-scope": "off",
+        "import/no-unassigned-import": ["warn", { "allow": ["**/*.css", "./views/theme"] }],
+        "react-hooks/exhaustive-deps": "error",
+        "react-hooks/rules-of-hooks": "error"
+    },
+    "ignorePatterns": ["src/gen/**", "src/routeTree.gen.ts", "dist/**"]
+}

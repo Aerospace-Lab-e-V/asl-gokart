@@ -1,0 +1,45 @@
+# Shared services. Always combine with an override:
+#   dev:  docker compose -f compose.yml -f compose.dev.yml up -d
+#   prod: docker compose -f compose.yml -f compose.prod.yml up -d
+# Credentials are set in the overrides (dev: literals, prod: from .env).
+name: kart-analytics
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0.22
+
+  timescaledb:
+    image: timescale/timescaledb:2.30.2-pg17
+    environment:
+      POSTGRES_DB: telemetry
+      TS_TUNE_MAX_CONNS: "50"
+    volumes:
+      - tsdb-data:/var/lib/postgresql/data
+      # Creates the read-only role Grafana uses. Runs once, on an empty volume.
+      - ./timescaledb-init/grafana-ro.sh:/docker-entrypoint-initdb.d/100_grafana_ro.sh:ro
+      # Same for pit-api (pit wall history).
+      - ./timescaledb-init/pit-api-ro.sh:/docker-entrypoint-initdb.d/110_pit_api_ro.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  grafana:
+    image: grafana/grafana-oss:12.4.3
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    environment:
+      GF_DASHBOARDS_MIN_REFRESH_INTERVAL: 1s
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/kart-live.json
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      POSTGRES_DB: telemetry
+    volumes:
+      - ../../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../../grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+
+volumes:
+  tsdb-data:
+  grafana-data:

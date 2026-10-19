@@ -1,0 +1,40 @@
+# kart-agent configuration. Copy to /etc/kart-agent/agent.toml to change defaults;
+# every key is optional. Settings changed on the headunit's Telemetry page are stored
+# separately (/var/lib/kart-agent/config.override.json) and take precedence.
+
+# MQTT topics are kart/<kart_id>/...
+kart_id = "kart-01"
+
+[live]
+# Live uplink on/off. Local logging is always on.
+enabled = true
+# mqtt://host:port; empty disables the uplink.
+broker_url = ""
+batch_ms = 50
+max_samples_per_batch = 400
+
+[sero]
+# Car network interface; the agent waits until it has an IPv4 address.
+interface = "eth0"
+client_id = 0x0010
+# Must differ from the headunit's 30491.
+port = 30492
+subscribe_ttl_s = 15
+
+[log]
+segment_minutes = 30
+# Data at risk on a power cut is at most this old.
+sync_interval_ms = 1000
+
+[retention]
+# Oldest finished segments are deleted while the log is larger than max_bytes
+# or the disk has less than min_free_bytes free.
+max_bytes = 4294967296
+min_free_bytes = 1073741824
+
+[vehicle]
+wheel_circumference_m = 1.415
+
+[api]
+# Loopback only. Not changeable through the API.
+listen = "127.0.0.1:7411"

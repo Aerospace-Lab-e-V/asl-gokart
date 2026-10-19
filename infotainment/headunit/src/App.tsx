@@ -13,6 +13,7 @@ import SettingsPage from "./pages/settings";
 import CarPage from "./pages/car";
 import BatteryPage from "./pages/battery";
 import EcuManagerPage from "./pages/ecu-manager";
+import TelemetryPage from "./pages/telemetry";
 import { Toaster } from "@/components/ui/sonner"
 import MotorPage from "./pages/motor";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
@@ -21,6 +22,7 @@ import { useThrottleData } from "./hooks/useThrottleData";
 import { useBatteryData } from "./hooks/useBatteryData";
 import { useLightsData } from "./hooks/useLightsData";
 import { useConnectionData } from "./hooks/useConnectionData";
+import { useKartAgentData } from "./hooks/useKartAgentData";
 import { initHardwareCommandSubscriber } from "./services/hardware-command-subscriber";
 import NetworkGateScreen from "./components/shared/network-gate-screen";
 
@@ -32,6 +34,7 @@ function MainAppContent() {
     useBatteryData();
     useLightsData();
     useConnectionData();
+    useKartAgentData();
 
     useEffect(() => {
         syncThemeWithLocal();
@@ -79,6 +82,7 @@ function MainAppContent() {
                             <Route path="/settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
                             <Route path="/battery" element={<ErrorBoundary><BatteryPage /></ErrorBoundary>} />
                             <Route path="/ecu-manager" element={<ErrorBoundary><EcuManagerPage /></ErrorBoundary>} />
+                            <Route path="/telemetry" element={<ErrorBoundary><TelemetryPage /></ErrorBoundary>} />
                         </Routes>
                     </>
                 </div>

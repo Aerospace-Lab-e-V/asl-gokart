@@ -1,0 +1,31 @@
+#!/bin/sh
+# Enables and (re)starts the bundled kart-agent service. Never fails the package
+# because of the agent: the headunit must install even if systemd is unavailable
+# or the unit is masked.
+set -e
+
+D=/usr/lib/headunit/resources/kart-agent
+U=kart-agent.service
+
+if [ "$1" = configure ] && [ -x "$D/kart-agent" ]; then
+    # Replace a stale link from a different install location.
+    if [ -L "/etc/systemd/system/$U" ] && [ "$(readlink -f "/etc/systemd/system/$U")" != "$D/$U" ]; then
+        rm -f "/etc/systemd/system/$U"
+    fi
+    if [ ! -e "/etc/systemd/system/$U" ]; then
+        systemctl link "$D/$U" >/dev/null 2>&1 || echo "kart-agent: systemctl link failed" >&2
+    fi
+    install -d -m 0755 /etc/kart-agent
+    cp "$D/agent.toml.example" /etc/kart-agent/agent.toml.example
+
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+        systemctl enable "$U" >/dev/null 2>&1 || echo "kart-agent: enable failed (masked?)" >&2
+        # On upgrade this replaces the running agent; it resumes the same session.
+        systemctl restart "$U" || echo "kart-agent: start failed, see journalctl -u kart-agent" >&2
+    else
+        systemctl enable "$U" >/dev/null 2>&1 || true
+    fi
+fi
+
+exit 0

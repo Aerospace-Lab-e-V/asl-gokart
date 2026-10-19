@@ -1,0 +1,27 @@
+# Pit wall: one origin for the SPA, pit-api and the MQTT WebSocket.
+# TLS (wss://) and Keycloak go in front of this later (reverse proxy on the host).
+{
+	admin off
+	auto_https off
+}
+
+:8080 {
+	handle /api/* {
+		encode zstd gzip
+		reverse_proxy {$PIT_API_UPSTREAM:pit-api:8081}
+	}
+
+	# MQTT over WebSocket; Caddy passes the upgrade through.
+	handle /mqtt* {
+		reverse_proxy {$MQTT_WS_UPSTREAM:mosquitto:9001}
+	}
+
+	handle {
+		root * /srv
+		encode zstd gzip
+		header /config.json Cache-Control no-store
+		header /assets/* Cache-Control "public, max-age=31536000, immutable"
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -1,23 +1,25 @@
-import { Lock, Unlock, CloudCheck, CloudAlert, CloudOff, EthernetPort, Unplug } from "lucide-react";
+import { Lock, Unlock, Cloud, CloudCheck, CloudAlert, CloudOff, EthernetPort, Unplug } from "lucide-react";
 import DigitalClock from "./clock";
 import DriveModeIndicator from "./drive-mode-indicator";
 import BatteryIndicator from "./battery-indicator";
 import { useStore } from "@/stores/useStore";
 import { useShallow } from "zustand/react/shallow";
 import React, { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { overall } from "@/services/kart-agent/health";
 import { IncomingPacket } from "@/data/zonecontrollers/packets";
 import { BatteryCommands } from "@/data/zonecontrollers/zonecontrollers";
 import log from "@/lib/logger";
 
 export const HeaderBar = () => {
 
-    const { adminMode, batteryPercentage, setBatteryVoltage, analyticsEnabled, analyticsConnected, gokartLanConnected } = useStore(
+    const navigate = useNavigate();
+    const telemetry = useStore((state) => overall(state.kartAgentStatus, state.kartAgentError));
+    const { adminMode, batteryPercentage, setBatteryVoltage, gokartLanConnected } = useStore(
         useShallow((state) => ({
             adminMode: state.adminMode,
             batteryPercentage: state.batteryPercentage,
             setBatteryVoltage: state.setBatteryVoltage,
-            analyticsEnabled: state.analyticsEnabled,
-            analyticsConnected: state.analyticsConnected,
             gokartLanConnected: state.gokartLanConnected,
         }))
     );
@@ -41,11 +43,14 @@ export const HeaderBar = () => {
                 <DriveModeIndicator />
                 <div className="flex flex-row items-center gap-2 text-muted-foreground">
                     {gokartLanConnected ? <EthernetPort className="w-6 h-6 text-green-500" /> : <Unplug className="w-6 h-6 text-red-500" />}
-                    {analyticsEnabled ? (
-                        analyticsConnected ? <CloudCheck className="w-6 h-6 text-green-500" /> : <CloudAlert className="w-6 h-6 text-yellow-500" />
-                    ) : (
-                        <CloudOff className="w-6 h-6" />
-                    )}
+                    {/* Telemetry: red when nothing is recorded, otherwise the pit wall uplink. */}
+                    <button type="button" aria-label="Telemetry" className="-m-2 p-2" onClick={() => navigate("/telemetry")}>
+                        {telemetry === "ok" && <CloudCheck className="w-6 h-6 text-green-500" />}
+                        {telemetry === "warn" && <CloudAlert className="w-6 h-6 text-yellow-500" />}
+                        {telemetry === "fault" && <CloudAlert className="w-6 h-6 text-red-500" />}
+                        {telemetry === "off" && <CloudOff className="w-6 h-6" />}
+                        {telemetry === "unknown" && <Cloud className="w-6 h-6" />}
+                    </button>
                 </div>
             </div>
             <DigitalClock />

@@ -1,0 +1,55 @@
+# Installed with the headunit package (/usr/lib/headunit/resources/kart-agent/) and
+# enabled by its postinst via `systemctl link`. See analytics/README.md (kart-agent).
+[Unit]
+Description=Kart telemetry agent (ECU logging and live uplink)
+Documentation=https://github.com/mad201802/asl-gokart/tree/main/analytics
+After=network.target
+ConditionFileIsExecutable=/usr/lib/headunit/resources/kart-agent/kart-agent
+# Keep retrying forever: the agent should run whenever the kart is on.
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+NotifyAccess=main
+ExecStart=/usr/lib/headunit/resources/kart-agent/kart-agent
+Restart=always
+RestartSec=1s
+WatchdogSec=10s
+TimeoutStartSec=30s
+TimeoutStopSec=15s
+Environment=RUST_LOG=info
+
+DynamicUser=yes
+# /var/lib/kart-agent: MCAP logs and API-written config
+StateDirectory=kart-agent
+StateDirectoryMode=0750
+# /run/kart-agent: the session; kept across restarts, gone after a reboot
+RuntimeDirectory=kart-agent
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=yes
+# /etc/kart-agent: optional admin agent.toml
+ConfigurationDirectory=kart-agent
+ConfigurationDirectoryMode=0755
+
+ProtectHome=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+# Read-only clock-sync check (modes = 0; glibc's adjtimex() issues clock_adjtime).
+# Setting the clock still fails without CAP_SYS_TIME. Not ProtectClock=, which denies both.
+SystemCallFilter=adjtimex clock_adjtime
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

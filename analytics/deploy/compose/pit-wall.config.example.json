@@ -1,0 +1,4 @@
+{
+    "mqttUsername": "pit-wall",
+    "mqttPassword": "read-only password from the broker passwd file"
+}

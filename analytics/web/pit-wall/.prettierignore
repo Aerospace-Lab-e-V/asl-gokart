@@ -1,0 +1,7 @@
+node_modules/
+dist/
+src/gen/
+src/routeTree.gen.ts
+bun.lock
+test-results/
+playwright-report/

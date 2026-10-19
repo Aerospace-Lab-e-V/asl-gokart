@@ -4,12 +4,28 @@ on:
     pull_request:
         paths:
             - 'infotainment/headunit/**'
+            - 'analytics/crates/kart-agent/**'
+            - 'analytics/crates/sero-sys/**'
+            - 'analytics/crates/ecu-sero/**'
+            - 'analytics/crates/kart-mqtt/**'
+            - 'analytics/crates/telemetry-schema/**'
+            - 'analytics/schema/**'
+            - 'analytics/Cargo.toml'
+            - 'analytics/Cargo.lock'
             - '.github/workflows/_headunit.yml'
             - '.github/workflows/ci-headunit.yml'
     push:
         branches: [main]
         paths:
             - 'infotainment/headunit/**'
+            - 'analytics/crates/kart-agent/**'
+            - 'analytics/crates/sero-sys/**'
+            - 'analytics/crates/ecu-sero/**'
+            - 'analytics/crates/kart-mqtt/**'
+            - 'analytics/crates/telemetry-schema/**'
+            - 'analytics/schema/**'
+            - 'analytics/Cargo.toml'
+            - 'analytics/Cargo.lock'
             - '.github/workflows/_headunit.yml'
             - '.github/workflows/ci-headunit.yml'
 

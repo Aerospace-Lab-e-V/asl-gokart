@@ -1,15 +1,17 @@
 import { StateCreator } from "zustand"
 import type { LogLevel } from "@/lib/logger"
+import type { AgentStatus } from "@/services/kart-agent/schema"
 
 export interface SystemSlice {
     screenBrightness: number
     adminPin: string,
     adminMode: boolean,
     appVersion: string,
-    analyticsEnabled: boolean,
-    analyticsBackendUrl: string,
-    analyticsConnected: boolean,
     gokartLanConnected: boolean,
+    /** Last status read from kart-agent; kept while it is unreachable. */
+    kartAgentStatus: AgentStatus | null,
+    /** Why the last poll of kart-agent failed; null while it answers. */
+    kartAgentError: string | null,
     showParticleEffects: boolean,
     logLevel: LogLevel,
     autoStart: boolean,
@@ -18,10 +20,9 @@ export interface SystemSlice {
     setScreenBrightness: (screenBrightness: number) => void,
     setAdminPin: (adminPin: string) => void,
     setAppVersion: (appVersion: string) => void,
-    setAnalyticsEnabled: (analyticsEnabled: boolean) => void,
-    setAnalyticsBackendUrl: (url: string) => void,
-    setAnalyticsConnected: (connected: boolean) => void,
     setGokartLanConnected: (connected: boolean) => void,
+    setKartAgentStatus: (status: AgentStatus) => void,
+    setKartAgentError: (error: string) => void,
     setShowParticleEffects: (showParticleEffects: boolean) => void,
     setLogLevel: (logLevel: LogLevel) => void,
     setAutoStart: (autoStart: boolean) => void,
@@ -39,10 +40,9 @@ export const createSystemSlice: StateCreator<
     adminPin: "",
     adminMode: false,
     appVersion: "unknown",
-    analyticsEnabled: false,
-    analyticsBackendUrl: "http://localhost:3000/api/gokart",
-    analyticsConnected: false,
     gokartLanConnected: false,
+    kartAgentStatus: null,
+    kartAgentError: null,
     showParticleEffects: true,
     logLevel: "info",
     autoStart: false,
@@ -51,10 +51,9 @@ export const createSystemSlice: StateCreator<
     setScreenBrightness: (screenBrightness: number) => set({ screenBrightness }),
     setAdminPin: (adminPin: string) => set({ adminPin }),
     setAppVersion: (appVersion: string) => set({ appVersion }),
-    setAnalyticsEnabled: (analyticsEnabled: boolean) => set({ analyticsEnabled }),
-    setAnalyticsBackendUrl: (analyticsBackendUrl: string) => set({ analyticsBackendUrl }),
-    setAnalyticsConnected: (analyticsConnected: boolean) => set({ analyticsConnected }),
     setGokartLanConnected: (gokartLanConnected: boolean) => set({ gokartLanConnected }),
+    setKartAgentStatus: (kartAgentStatus: AgentStatus) => set({ kartAgentStatus, kartAgentError: null }),
+    setKartAgentError: (kartAgentError: string) => set({ kartAgentError }),
     setShowParticleEffects: (showParticleEffects: boolean) => set({ showParticleEffects }),
     setLogLevel: (logLevel: LogLevel) => set({ logLevel }),
     setAutoStart: (autoStart: boolean) => set({ autoStart }),

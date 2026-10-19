@@ -1,7 +1,6 @@
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -16,12 +15,13 @@ import AdminSettingsDialog from "@/components/admin-mode/admin-settings-dialog";
 import React, { useEffect, useState } from "react";
 import PowerMenu from "@/components/power-menu/power-menu";
 import log, { setRendererLogLevel, type LogLevel } from "@/lib/logger";
-import { AnalyticsBackendDialog } from "@/components/settings/analytics-backend-dialog";
 import { AppUpdateDialog } from "@/components/settings/app-update-dialog";
 import { AdminAuthDialog } from "@/components/admin-mode/admin-auth-dialog";
 import { NetworkInterfaceDialog } from "@/components/settings/network-interface-dialog";
 import { useNavigate } from "react-router-dom";
-import { Lock, RefreshCw, Unlock } from "lucide-react";
+import { ChevronRight, Lock, RefreshCw, Unlock } from "lucide-react";
+import { UplinkSwitch } from "@/components/telemetry/uplink-switch";
+import { uplink } from "@/services/kart-agent/health";
 
 const SettingsPage = () => {
   const {
@@ -30,7 +30,6 @@ const SettingsPage = () => {
     minSettableSpeed,
     maxSettableSpeed,
     appVersion,
-    analyticsEnabled,
     logLevel,
     adminMode,
     autoStart,
@@ -39,7 +38,6 @@ const SettingsPage = () => {
     setDriveMode,
     setSpeedLimit,
     setAppVersion,
-    setAnalyticsEnabled,
     setLogLevel,
     setAdminMode,
     setAdminPin,
@@ -53,7 +51,6 @@ const SettingsPage = () => {
       minSettableSpeed: state.minSettableSpeed,
       maxSettableSpeed: state.maxSettableSpeed,
       appVersion: state.appVersion,
-      analyticsEnabled: state.analyticsEnabled,
       logLevel: state.logLevel,
       adminMode: state.adminMode,
       autoStart: state.autoStart,
@@ -62,7 +59,6 @@ const SettingsPage = () => {
       setDriveMode: state.setDriveMode,
       setSpeedLimit: state.setSpeedLimit,
       setAppVersion: state.setAppVersion,
-      setAnalyticsEnabled: state.setAnalyticsEnabled,
       setLogLevel: state.setLogLevel,
       setAdminMode: state.setAdminMode,
       setAdminPin: state.setAdminPin,
@@ -73,6 +69,9 @@ const SettingsPage = () => {
   );
 
   const navigate = useNavigate();
+  const uplinkState = useStore((state) =>
+    state.kartAgentError ? "Not running" : state.kartAgentStatus ? uplink(state.kartAgentStatus).state : ""
+  );
   const [liveSpeed, setLiveSpeed] = useState(speedLimit);
 
   useEffect(() => {
@@ -127,13 +126,6 @@ const SettingsPage = () => {
     fetchFullscreenOnStartup();
     fetchDevToolsEnabled();
   }, [setAppVersion, setLogLevel, setAutoStart, setFullscreenOnStartup, setDevToolsEnabled]);
-
-  const handleToggleAnalytics = (enabled: boolean) => {
-    window.app.toggleAnalytics(enabled).then((result) => {
-      setAnalyticsEnabled(result);
-      toast(`Cloud Analytics ${result ? "enabled" : "disabled"}!`);
-    });
-  };
 
 
   const handleLogLevelChange = async (level: LogLevel) => {
@@ -200,14 +192,21 @@ const SettingsPage = () => {
 
         <Separator />
 
-        {/* Cloud Analytics */}
-        <div className="flex flex-row items-center justify-between min-h-13">
-          <Label htmlFor="analytics-enabled" className="text-base">Cloud Analytics</Label>
-          <Switch
-            id="analytics-enabled"
-            checked={analyticsEnabled}
-            onCheckedChange={handleToggleAnalytics}
-          />
+        {/* Telemetry (kart-agent): the row opens the details, the switch sends to the pit wall */}
+        <div className="flex flex-row items-center min-h-13">
+          <button
+            type="button"
+            className="flex flex-1 flex-row items-center gap-2 self-stretch text-left"
+            onClick={() => navigate("/telemetry")}
+          >
+            <span className="text-base">Telemetry</span>
+            <span className="ml-auto text-base text-muted-foreground">{uplinkState}</span>
+            <ChevronRight className="w-5 h-5 text-muted-foreground" />
+          </button>
+          <Separator orientation="vertical" className="h-8 mx-4" />
+          <label className="-my-3 -mr-3 p-3">
+            <UplinkSwitch />
+          </label>
         </div>
 
         <Separator />
@@ -275,14 +274,6 @@ const SettingsPage = () => {
                   <TabsTrigger value="debug">Debug</TabsTrigger>
                 </TabsList>
               </Tabs>
-            </div>
-
-            <Separator />
-
-            {/* Analytics Backend */}
-            <div className="flex flex-row items-center justify-between min-h-13">
-              <Label className="text-base">Analytics Backend</Label>
-              <AnalyticsBackendDialog trigger={<Button variant="outline">Configure</Button>} />
             </div>
 
             <Separator />

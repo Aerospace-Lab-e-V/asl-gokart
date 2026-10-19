@@ -1,0 +1,135 @@
+# Local development: exposed ports, throwaway credentials, anonymous MQTT.
+#
+#   docker compose -f compose.yml -f compose.dev.yml up -d                       # backend only
+#   docker compose -f compose.yml -f compose.dev.yml --profile sim up --build    # + ingest, fake kart, pit wall
+#   docker compose -f compose.yml -f compose.dev.yml --profile sero up --build   # same, but the real kart path:
+#       kart-sim plays the ECUs over Sero, kart-agent publishes (API on 127.0.0.1:7411)
+#
+# Dev credentials are not secrets. Never reuse them anywhere else.
+
+services:
+  mosquitto:
+    # Also on the car network, so kart-agent (only there) reaches it.
+    networks: [default, carnet]
+    ports:
+      - "1883:1883"
+      - "9001:9001" # MQTT over WebSocket for the pit wall
+    volumes:
+      - ../mosquitto/mosquitto.dev.conf:/mosquitto/config/mosquitto.conf:ro
+
+  timescaledb:
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: kart
+      POSTGRES_PASSWORD: kart
+      GRAFANA_DB_PASSWORD: grafana
+      PIT_API_DB_PASSWORD: pit_api
+
+  grafana:
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      # Open dashboards without logging in (viewer only).
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GRAFANA_DB_PASSWORD: grafana
+
+  ingest:
+    profiles: [sim, sero]
+    build:
+      context: ../..
+      dockerfile: crates/ingest/Dockerfile
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgres://kart:kart@timescaledb:5432/telemetry
+      MQTT_URL: mqtt://mosquitto:1883
+      RUST_LOG: info
+    restart: on-failure
+
+  kart-sim:
+    profiles: [sim]
+    build:
+      context: ../..
+      dockerfile: crates/kart-sim/Dockerfile
+    depends_on:
+      ingest:
+        condition: service_started
+    environment:
+      MQTT_URL: mqtt://mosquitto:1883
+      KART_ID: kart-01
+      SIM_DRIVE_MODE: sport
+      RUST_LOG: info
+
+  pit-api:
+    profiles: [sim, sero]
+    build:
+      context: ../..
+      dockerfile: crates/pit-api/Dockerfile
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    ports:
+      - "8081:8081" # also used by the Vite dev server proxy (bun run dev)
+    environment:
+      DATABASE_URL: postgres://pit_api_ro:pit_api@timescaledb:5432/telemetry
+      RUST_LOG: info
+    restart: on-failure
+
+  pit-wall:
+    profiles: [sim, sero]
+    build:
+      context: ../..
+      dockerfile: web/pit-wall/Dockerfile
+    depends_on:
+      pit-api:
+        condition: service_started
+      mosquitto:
+        condition: service_started
+    ports:
+      - "8080:8080" # http://localhost:8080
+
+  # --- Profile "sero": ECUs → kart-agent → broker, like on the kart ---------
+
+  kart-sim-sero:
+    profiles: [sero]
+    build:
+      context: ../..
+      dockerfile: crates/kart-sim/Dockerfile
+    networks: [carnet]
+    environment:
+      SIM_OUTPUT: sero
+      SIM_SERO_INTERFACE: eth0
+      SIM_DRIVE_MODE: sport
+      RUST_LOG: info
+
+  kart-agent:
+    profiles: [sero]
+    build:
+      context: ../..
+      dockerfile: crates/kart-agent/Dockerfile
+    # One interface only, so the Sero interface is always eth0.
+    networks: [carnet]
+    depends_on:
+      mosquitto:
+        condition: service_started
+    ports:
+      - "127.0.0.1:7411:7411" # status/config API, as the headunit uses it
+    volumes:
+      - ../../crates/kart-agent/dev/agent.dev.toml:/etc/kart-agent-dev.toml:ro
+    environment:
+      KART_AGENT_CONFIG: /etc/kart-agent-dev.toml
+      KART_AGENT_API_ALLOW_REMOTE: "true"
+      RUST_LOG: info
+    restart: on-failure
+
+networks:
+  # The kart's car network: Sero needs multicast between the ECUs and the agent.
+  carnet:
+    driver: bridge

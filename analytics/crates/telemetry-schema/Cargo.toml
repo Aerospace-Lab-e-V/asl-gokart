@@ -1,0 +1,18 @@
+[package]
+name = "telemetry-schema"
+description = "Types generated from analytics/schema: protobuf messages and the signal catalog"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+prost.workspace = true
+serde.workspace = true
+serde_norway.workspace = true
+
+[build-dependencies]
+prost.workspace = true
+prost-build.workspace = true
+protox.workspace = true
+serde.workspace = true
+serde_norway.workspace = true
