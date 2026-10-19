@@ -4,7 +4,7 @@ import { syncThemeWithLocal } from "./helpers/theme-helpers";
 import { useTranslation } from "react-i18next";
 import "./localization/i18n";
 import { updateAppLanguage } from "./helpers/language-helpers";
-import { Routes, Route, HashRouter } from "react-router-dom";
+import { Routes, Route, HashRouter, Navigate } from "react-router-dom";
 import { Battery, Car, Gauge, LifeBuoy, Settings } from "lucide-react";
 import { NavBarItemData } from "./data/models";
 import NavBar from "./components/navbar/navbar";
@@ -14,6 +14,13 @@ import CarPage from "./pages/car";
 import BatteryPage from "./pages/battery";
 import EcuManagerPage from "./pages/ecu-manager";
 import TelemetryPage from "./pages/telemetry";
+import NetworkInterfacePage from "./pages/settings/network";
+import PowerPage from "./pages/settings/power";
+import AdminUnlockPage from "./pages/settings/admin-unlock";
+import DrivetrainPage from "./pages/settings/drivetrain";
+import SystemPage from "./pages/settings/system";
+import AppUpdatePage from "./pages/settings/app-update";
+import { useStore } from "@/stores/useStore";
 import { Toaster } from "@/components/ui/sonner"
 import MotorPage from "./pages/motor";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
@@ -25,6 +32,12 @@ import { useConnectionData } from "./hooks/useConnectionData";
 import { useKartAgentData } from "./hooks/useKartAgentData";
 import { initHardwareCommandSubscriber } from "./services/hardware-command-subscriber";
 import NetworkGateScreen from "./components/shared/network-gate-screen";
+
+/** Sends back to Settings when admin mode is locked. */
+function AdminOnly({ children }: { children: React.ReactNode }) {
+    const adminMode = useStore((state) => state.adminMode);
+    return adminMode ? <>{children}</> : <Navigate to="/settings" replace />;
+}
 
 function MainAppContent() {
     const { i18n } = useTranslation();
@@ -81,7 +94,13 @@ function MainAppContent() {
                             <Route path="/car" element={<ErrorBoundary><CarPage /></ErrorBoundary>} />
                             <Route path="/settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
                             <Route path="/battery" element={<ErrorBoundary><BatteryPage /></ErrorBoundary>} />
-                            <Route path="/ecu-manager" element={<ErrorBoundary><EcuManagerPage /></ErrorBoundary>} />
+                            <Route path="/settings/network" element={<ErrorBoundary><NetworkInterfacePage /></ErrorBoundary>} />
+                            <Route path="/settings/power" element={<ErrorBoundary><PowerPage /></ErrorBoundary>} />
+                            <Route path="/settings/unlock" element={<ErrorBoundary><AdminUnlockPage /></ErrorBoundary>} />
+                            <Route path="/settings/drivetrain" element={<ErrorBoundary><AdminOnly><DrivetrainPage /></AdminOnly></ErrorBoundary>} />
+                            <Route path="/settings/system" element={<ErrorBoundary><AdminOnly><SystemPage /></AdminOnly></ErrorBoundary>} />
+                            <Route path="/settings/update" element={<ErrorBoundary><AdminOnly><AppUpdatePage /></AdminOnly></ErrorBoundary>} />
+                            <Route path="/ecu-manager" element={<ErrorBoundary><AdminOnly><EcuManagerPage /></AdminOnly></ErrorBoundary>} />
                             <Route path="/telemetry" element={<ErrorBoundary><TelemetryPage /></ErrorBoundary>} />
                         </Routes>
                     </>
