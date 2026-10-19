@@ -3,7 +3,6 @@ import type { LogLevel } from "@/lib/logger"
 import type { AgentStatus } from "@/services/kart-agent/schema"
 
 export interface SystemSlice {
-    screenBrightness: number
     adminPin: string,
     adminMode: boolean,
     appVersion: string,
@@ -17,7 +16,6 @@ export interface SystemSlice {
     autoStart: boolean,
     fullscreenOnStartup: boolean,
     devToolsEnabled: boolean,
-    setScreenBrightness: (screenBrightness: number) => void,
     setAdminPin: (adminPin: string) => void,
     setAppVersion: (appVersion: string) => void,
     setGokartLanConnected: (connected: boolean) => void,
@@ -36,7 +34,6 @@ export const createSystemSlice: StateCreator<
     [],
     SystemSlice
     > = (set) => ({
-    screenBrightness: 33,
     adminPin: "",
     adminMode: false,
     appVersion: "unknown",
@@ -48,7 +45,6 @@ export const createSystemSlice: StateCreator<
     autoStart: false,
     fullscreenOnStartup: false,
     devToolsEnabled: true,
-    setScreenBrightness: (screenBrightness: number) => set({ screenBrightness }),
     setAdminPin: (adminPin: string) => set({ adminPin }),
     setAppVersion: (appVersion: string) => set({ appVersion }),
     setGokartLanConnected: (gokartLanConnected: boolean) => set({ gokartLanConnected }),

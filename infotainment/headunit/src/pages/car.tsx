@@ -64,7 +64,7 @@ const CarPage = () => {
     return (
         <div className="flex flex-col h-screen overflow-hidden bg-background">
             <HeaderBar />
-            <div className="flex-1 flex flex-col items-center justify-start p-8 overflow-y-auto">
+            <div className="flex-1 flex flex-col items-center justify-start p-8 overflow-hidden">
                 <div className="flex flex-col items-center justify-center gap-2 w-full max-w-5xl">
                     <div className="flex flex-col md:flex-row w-full gap-8">
                     
@@ -168,7 +168,6 @@ const CarPage = () => {
                     <Card className="w-full">
                         <CardHeader>
                             <CardTitle>Lights Tester</CardTitle>
-                            <CardDescription>Manually trigger lighting elements for testing</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="flex flex-wrap gap-4">

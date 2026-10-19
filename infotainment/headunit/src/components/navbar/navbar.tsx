@@ -8,11 +8,11 @@ interface NavBarProps {
 
 const NavBar = ({ items }: NavBarProps) => {
   return (
-    <div className="h-full flex flex-col px-2 items-center justify-around">
+    <nav className="flex h-full flex-col py-1.5">
       {items.map((item) => (
-        <NavBarItem Icon={item.Icon} label={item.label} linkTo={item.linkTo} />
+        <NavBarItem key={item.linkTo} {...item} />
       ))}
-    </div>
+    </nav>
   );
 };
 

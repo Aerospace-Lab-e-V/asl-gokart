@@ -4,13 +4,8 @@ export interface NavBarItemData {
   Icon: LucideIcon;
   label: string;
   linkTo: string;
-}
-
-export interface LabeledSwitchProps {
-  id: string;
-  label: string;
-  defaultValue: boolean;
-  onChange?: (value: boolean) => void;
+  /** Other routes that keep this item highlighted, e.g. pages reached from it. */
+  alsoActiveOn?: string[];
 }
 
 export interface ValueCardProps {

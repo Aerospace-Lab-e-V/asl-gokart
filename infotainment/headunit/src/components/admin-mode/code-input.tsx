@@ -39,7 +39,7 @@ MaskedOTPSlot.displayName = "MaskedOTPSlot";
 
 export const CodeInput = () => {
 
-    const { adminPin, setAdminMode } = useStore();
+    const { adminPin, setAdminMode, setAdminPin } = useStore();
 
     const PIN = "69420";
 
@@ -49,7 +49,9 @@ export const CodeInput = () => {
             toast("Admin mode enabled!");
         } else {
             log.error("Wrong PIN!");
-            toast("Wrong PIN!");
+            toast.error("Wrong PIN!");
+            // Clear the code so the next attempt can be typed right away.
+            setAdminPin("");
         }
     };
 

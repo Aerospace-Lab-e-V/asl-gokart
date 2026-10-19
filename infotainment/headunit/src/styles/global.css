@@ -153,6 +153,22 @@ input, button, textarea, :focus {
         @apply overflow-hidden bg-background text-foreground;
     }
 
+    /* Thin pill with no track: on the touchscreen it only hints that there's more to scroll */
+    ::-webkit-scrollbar {
+        width: 4px;
+        height: 4px;
+    }
+
+    ::-webkit-scrollbar-track,
+    ::-webkit-scrollbar-corner {
+        background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        border-radius: 9999px;
+        background-color: hsl(var(--muted-foreground) / 0.4);
+    }
+
     .draglayer {
         @apply bg-background;
         -webkit-app-region: drag;
