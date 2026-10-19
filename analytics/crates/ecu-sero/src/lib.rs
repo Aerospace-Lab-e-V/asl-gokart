@@ -203,8 +203,10 @@ pub fn decode(service: u16, event: u16, payload: &[u8]) -> Result<Option<EcuEven
                 return Err(err("a non-zero multiple of 4"));
             }
             let temps = payload
-                .chunks_exact(4)
-                .map(|c| f32::from_le_bytes(c.try_into().expect("chunk of 4")))
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|c| f32::from_le_bytes(*c))
                 .collect();
             EcuEvent::Battery(BatteryEvent::Temps(temps))
         }
