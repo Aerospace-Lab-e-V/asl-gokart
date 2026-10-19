@@ -1,7 +1,6 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Check, ChevronDown, ChevronLeft, CloudOff, HardDrive, LucideIcon, Network, RadioTower, SlidersHorizontal, X } from "lucide-react";
-import { HeaderBar } from "@/components/shared/header-bar";
+import { Check, ChevronDown, CloudOff, HardDrive, LucideIcon, Network, RadioTower, SlidersHorizontal, X } from "lucide-react";
+import { Subpage } from "@/components/shared/subpage";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { TelemetryConfigDialog } from "@/components/telemetry/telemetry-config-dialog";
@@ -16,32 +15,26 @@ import { cn } from "@/lib/utils";
  * the pit wall. Read at arm's length by the pit crew; the debug counters stay in its log.
  */
 const TelemetryPage = () => {
-    const navigate = useNavigate();
     const adminMode = useStore((state) => state.adminMode);
     const status = useStore((state) => state.kartAgentStatus);
     const error = useStore((state) => state.kartAgentError);
 
     return (
-        <div className="flex h-full w-full flex-col">
-            <HeaderBar />
-
-            <div className="flex items-center gap-2 py-2 pr-8 pl-4">
-                <Button variant="ghost" size="icon" className="h-12 w-12" aria-label="Back" onClick={() => navigate(-1)}>
-                    <ChevronLeft className="h-7 w-7" />
-                </Button>
-                <h1 className="text-2xl font-semibold">Telemetry</h1>
-                {adminMode && (
+        <Subpage
+            title="Telemetry"
+            actions={
+                adminMode && (
                     <TelemetryConfigDialog
                         trigger={
-                            <Button variant="outline" className="ml-auto h-12 px-6 text-base">
+                            <Button variant="outline" className="h-12 px-6 text-base">
                                 <SlidersHorizontal className="mr-2 h-5 w-5" />
                                 Configure
                             </Button>
                         }
                     />
-                )}
-            </div>
-
+                )
+            }
+        >
             {error ? (
                 <div className="flex flex-1 flex-col items-center justify-center gap-3 pb-12">
                     <CloudOff className="h-14 w-14 text-red-500" />
@@ -53,7 +46,7 @@ const TelemetryPage = () => {
             ) : (
                 <StatusList status={status} />
             )}
-        </div>
+        </Subpage>
     );
 };
 
@@ -61,7 +54,7 @@ const StatusList = ({ status }: { status: AgentStatus }) => {
     const [showEcus, setShowEcus] = useState(false);
 
     return (
-        <div className="flex-1 overflow-y-auto px-8">
+        <div>
             <Separator />
             <StatusRow icon={HardDrive} title="Recording" line={recording(status)} />
             <Separator />
