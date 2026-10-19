@@ -1,5 +1,5 @@
 import { setTheme, useTheme } from "../views/theme";
-import { MoonIcon, SunIcon } from "./icons";
+import { Moon, Sun } from "lucide-react";
 
 export function ThemeToggle() {
     const theme = useTheme();
@@ -12,7 +12,7 @@ export function ThemeToggle() {
             aria-label={`Switch to ${next} theme`}
             title={`Switch to ${next} theme`}
         >
-            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+            {theme === "dark" ? <Sun className="size-5" /> : <Moon className="size-5" />}
         </button>
     );
 }
