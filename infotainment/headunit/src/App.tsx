@@ -81,6 +81,7 @@ function MainAppContent() {
             Icon: Settings,
             label: "Settings",
             linkTo: "/settings",
+            alsoActiveOn: ["/telemetry", "/ecu-manager"],
         },
     ];
 
@@ -105,7 +106,7 @@ function MainAppContent() {
                         </Routes>
                     </>
                 </div>
-                {<div className="w-20 border-l-2">
+                {<div className="w-20 shrink-0 border-l">
                     <NavBar items={navBarItems} />
                 </div>}
                 <Toaster />
