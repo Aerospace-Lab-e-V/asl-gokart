@@ -13,7 +13,8 @@ const NavBarItem = ({ Icon, label, linkTo, alsoActiveOn = [] }: NavBarItemData) 
   const isActive = [linkTo, ...alsoActiveOn].some((path) => matchesPath(pathname, path));
 
   return (
-    <Link to={linkTo} aria-current={isActive ? "page" : undefined} className="flex min-h-0 flex-1 p-1.5">
+    <Link to={linkTo} aria-current={isActive ? "page" : undefined} className="relative flex min-h-0 flex-1 p-1.5">
+      {isActive && <span className="bg-foreground absolute top-1/2 left-0 h-12 w-1 -translate-y-1/2 rounded-r-full" />}
       <div
         className={cn(
           "flex h-full w-full flex-col items-center justify-center gap-1.5 rounded-xl",
