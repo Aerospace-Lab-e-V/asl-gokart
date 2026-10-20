@@ -1,6 +1,5 @@
-import { SERO_BATTERY_MESSAGE_CHANNEL, SERO_LIGHTS_MESSAGE_CHANNEL, SERO_SEND_BATTERY_CHANNEL, SERO_SEND_LIGHTS_CHANNEL, SERO_MOTOR_MESSAGE_CHANNEL, SERO_SEND_MOTOR_CHANNEL } from "./sero-channels";
-import { BatteryCommands, LightsCommands, MotorCommands } from "@/data/zonecontrollers/zonecontrollers";
-require('@asl-gokart/sero-node');
+import { SERO_BATTERY_MESSAGE_CHANNEL, SERO_LIGHTS_MESSAGE_CHANNEL, SERO_SEND_LIGHTS_CHANNEL, SERO_MOTOR_MESSAGE_CHANNEL, SERO_SEND_MOTOR_CHANNEL } from "./sero-channels";
+import { LightsCommands, MotorCommands } from "@/data/zonecontrollers/zonecontrollers";
 
 export function exposeSeroContext()  {
     const { contextBridge, ipcRenderer } = window.require('electron');
@@ -17,10 +16,6 @@ export function exposeSeroContext()  {
             return () => ipcRenderer.removeListener(SERO_LIGHTS_MESSAGE_CHANNEL, listener);
         },
 
-        // Send commands to the SERO zone controller for battery control
-        sendBatteryCommand: (command: BatteryCommands, value?: boolean | boolean[]) => {
-            ipcRenderer.send(SERO_SEND_BATTERY_CHANNEL, { command, value });
-        },
         // Listen for battery status updates from SERO
         onBatteryMessage: (callback: (batteryMessage: string) => void) => {
             const listener = (_: unknown, message: string) => callback(message);
