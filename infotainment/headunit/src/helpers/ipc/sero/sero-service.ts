@@ -9,6 +9,7 @@ import { BatteryCommands, LightsCommands, MotorCommands, Zones } from '@/data/zo
 import { IncomingPacket } from '@/data/zonecontrollers/packets';
 import { getBindAddress } from '@/helpers/ipc/hardware/network-config';
 import { SERO_UNICAST_PORT, SERO_CLIENT_ID, ZC_OTA_METHOD_ID } from '@/data/config';
+import { markServiceFound, markServiceLost, resetEcuPresence } from '@/helpers/ipc/firmware/ecu-presence';
 
 const RT_INTERVAL = 10; // Interval in milliseconds for processing SeroRuntime events
 
@@ -35,8 +36,16 @@ export function startSeroService(mainWindow: BrowserWindow) {
     log.info("Starting SERO service...");
     log.info('SeroRuntime initialized on', runtime.getLocalAddress().ip, 'port', runtime.getLocalAddress().port);
     
+    // Services whose events this runtime subscribed to. Sero renews the subscriptions by itself
+    // when a service is found again (e.g. after an OTA restart), so each is subscribed only once;
+    // a second subscribeEvent would only swap the handler and leak the old JS callback.
+    const subscribedServices = new Set<number>();
+
     runtime.onServiceFound((serviceId, address) => {
         log.info('Service found:', serviceId, 'at', address);
+        markServiceFound(serviceId, address.ip);
+        if (subscribedServices.has(serviceId)) return;
+        subscribedServices.add(serviceId);
         if(serviceId == 0x0001) {
             // Subscribe to LED state change events (event ID 0x8001: [left, right])
             runtime.subscribeEvent(0x0001, 0x8001, (svcId, evtId, payload) => {
@@ -88,6 +97,7 @@ export function startSeroService(mainWindow: BrowserWindow) {
     
     runtime.onServiceLost((service) => {
         log.info('Service lost:', service);
+        markServiceLost(service);
     });
     
     runtime.onSubscriptionAck((ack) => {
@@ -346,6 +356,7 @@ export function stopSeroService(): void {
         rt = null;
         log.info('[SERO] SeroRuntime destroyed');
     }
+    resetEcuPresence();
 }
 
 export function restartSeroService(): void {

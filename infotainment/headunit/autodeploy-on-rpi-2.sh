@@ -2,7 +2,7 @@
 
 GITHUB_API_BASE_URL="https://api.github.com"
 GITHUB_PAT="<your_github_personal_access_token"
-org="mad201802"
+org="Aerospace-Lab-e-V"
 repo="asl-gokart"
 release_file="tmp/release-selected.json"
 response_all_releases="tmp/releases-all.json"

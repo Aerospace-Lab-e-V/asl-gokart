@@ -20,7 +20,7 @@ export default function registerListeners(mainWindow: BrowserWindow) {
     registerSeroHandlers();
     addAppEventListeners(mainWindow);
     registerHardwareListeners();
-    registerFirmwareListeners();
+    registerFirmwareListeners(mainWindow);
     registerUpdaterListeners(mainWindow);
 
     // ponytail: Defer network-bound services until car network interface is available

@@ -2,8 +2,9 @@ import React from "react";
 import { AlertTriangle, CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { RowBadge, SettingsRadioRow, SettingsSection } from "@/components/settings/settings-list";
+import { RowBadge, SettingsRadioRow, SettingsSection, Status, VersionBadge } from "@/components/settings/settings-list";
 import { type AppRelease, type UpdateProgress } from "@/data/updater/updater-types";
+import { formatDate } from "@/lib/releases";
 import { cn } from "@/lib/utils";
 
 /* The steps of the App update page, one per update phase. */
@@ -15,35 +16,6 @@ export const formatBytes = (bytes: number): string => {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 };
-
-const formatDate = (iso: string): string =>
-    new Date(iso).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-
-const semverCompare = (a: string, b: string): number => {
-    const parse = (v: string) => v.replace(/^v/, "").split(".").map(Number);
-    const [aMaj, aMin, aPat] = parse(a);
-    const [bMaj, bMin, bPat] = parse(b);
-    return aMaj !== bMaj ? aMaj - bMaj : aMin !== bMin ? aMin - bMin : aPat - bPat;
-};
-
-const VersionBadge = ({ tag, currentVersion }: { tag: string; currentVersion: string | null }) => {
-    if (!currentVersion) return null;
-    const diff = semverCompare(tag, currentVersion);
-    if (diff === 0) return <RowBadge>installed</RowBadge>;
-    if (diff > 0) return <RowBadge className="border-green-500 text-green-500">upgrade</RowBadge>;
-    return <RowBadge className="border-orange-400 text-orange-400">downgrade</RowBadge>;
-};
-
-/** A centred message filling the page, for the steps that only report progress. */
-const Status = ({ children }: { children: React.ReactNode }) => (
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center" role="status">
-        {children}
-    </div>
-);
 
 type ReleaseListProps = {
     releases: AppRelease[] | null;

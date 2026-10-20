@@ -68,7 +68,7 @@ export const createMotorSlice: StateCreator<
   rpm: 1250,
   rpmBoundaries: [0, 1500],
   wheelCircumference: 1.415,
-  speed: 14,
+  speed: 0,
   dailyDistance: 1234.5,
   speedLimit: 35,
   maxSettableSpeed: 35,

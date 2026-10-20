@@ -4,6 +4,11 @@ import {
     FIRMWARE_TRIGGER_OTA_CHANNEL,
     FIRMWARE_GET_SERVER_URL_CHANNEL,
     FIRMWARE_GET_CACHED_VERSIONS_CHANNEL,
+    FIRMWARE_GET_ECU_STATUS_CHANNEL,
+    FIRMWARE_ECU_STATUS_CHANNEL,
+    FIRMWARE_GET_FLASH_HISTORY_CHANNEL,
+    FIRMWARE_GET_OTA_PROGRESS_CHANNEL,
+    FIRMWARE_OTA_PROGRESS_CHANNEL,
 } from './firmware-channels';
 
 export function exposeFirmwareContext(): void {
@@ -24,6 +29,25 @@ export function exposeFirmwareContext(): void {
         },
         getCachedVersions: async () => {
             return ipcRenderer.invoke(FIRMWARE_GET_CACHED_VERSIONS_CHANNEL);
+        },
+        getEcuStatus: async () => {
+            return ipcRenderer.invoke(FIRMWARE_GET_ECU_STATUS_CHANNEL);
+        },
+        getFlashHistory: async () => {
+            return ipcRenderer.invoke(FIRMWARE_GET_FLASH_HISTORY_CHANNEL);
+        },
+        onEcuStatus: (callback: (status: unknown) => void) => {
+            const listener = (_event: Electron.IpcRendererEvent, status: unknown) => callback(status);
+            ipcRenderer.on(FIRMWARE_ECU_STATUS_CHANNEL, listener);
+            return () => ipcRenderer.removeListener(FIRMWARE_ECU_STATUS_CHANNEL, listener);
+        },
+        getOtaProgress: async (ecuId: string) => {
+            return ipcRenderer.invoke(FIRMWARE_GET_OTA_PROGRESS_CHANNEL, ecuId);
+        },
+        onOtaProgress: (callback: (progress: unknown) => void) => {
+            const listener = (_event: Electron.IpcRendererEvent, progress: unknown) => callback(progress);
+            ipcRenderer.on(FIRMWARE_OTA_PROGRESS_CHANNEL, listener);
+            return () => ipcRenderer.removeListener(FIRMWARE_OTA_PROGRESS_CHANNEL, listener);
         },
     });
 }
