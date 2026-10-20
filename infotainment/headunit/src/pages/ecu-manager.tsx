@@ -6,6 +6,7 @@ import { EcuStatusLine } from "@/components/ecu/ecu-steps";
 import { ECU_DEFINITIONS } from "@/data/ecu/ecu-definitions";
 import { FlashHistory } from "@/data/ecu/ecu-types";
 import { useEcuStatus } from "@/hooks/useEcuStatus";
+import { firmware } from "@/services/firmware";
 import log from "@/lib/logger";
 
 const EcuManagerPage = () => {
@@ -13,7 +14,7 @@ const EcuManagerPage = () => {
     const [history, setHistory] = useState<FlashHistory>({});
 
     useEffect(() => {
-        window.firmware
+        firmware
             .getFlashHistory()
             .then(setHistory)
             .catch((err) => log.error("[EcuManagerPage] Failed to load the flash history:", err));

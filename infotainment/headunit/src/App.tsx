@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { syncThemeWithLocal } from "./helpers/theme-helpers";
+import { syncThemeWithLocal } from "./services/theme";
 import { useTranslation } from "react-i18next";
 import "./localization/i18n";
 import { updateAppLanguage } from "./helpers/language-helpers";
@@ -21,40 +21,26 @@ import AdminUnlockPage from "./pages/settings/admin-unlock";
 import DrivetrainPage from "./pages/settings/drivetrain";
 import SystemPage from "./pages/settings/system";
 import AppUpdatePage from "./pages/settings/app-update";
-import { useStore } from "@/stores/useStore";
+import { useSession } from "@/stores/session";
 import { Toaster } from "@/components/ui/sonner"
 import MotorPage from "./pages/motor";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
-import { useMotorData } from "./hooks/useMotorData";
-import { useThrottleData } from "./hooks/useThrottleData";
-import { useBatteryData } from "./hooks/useBatteryData";
-import { useLightsData } from "./hooks/useLightsData";
-import { useConnectionData } from "./hooks/useConnectionData";
-import { useKartAgentData } from "./hooks/useKartAgentData";
-import { initHardwareCommandSubscriber } from "./services/hardware-command-subscriber";
 import NetworkGateScreen from "./components/shared/network-gate-screen";
 import type { NetworkGateStatus } from "./helpers/ipc/network-gate";
+import { networkGate } from "./services/app";
 
 /** Sends back to Settings when admin mode is locked. */
 function AdminOnly({ children }: { children: React.ReactNode }) {
-    const adminMode = useStore((state) => state.adminMode);
+    const adminMode = useSession((state) => state.adminMode);
     return adminMode ? <>{children}</> : <Navigate to="/settings" replace />;
 }
 
 function MainAppContent() {
     const { i18n } = useTranslation();
 
-    useMotorData();
-    useThrottleData();
-    useBatteryData();
-    useLightsData();
-    useConnectionData();
-    useKartAgentData();
-
+    // Telemetry ingestion runs in services/bridge.ts, started once in renderer.ts.
     useEffect(() => {
         updateAppLanguage(i18n);
-        const unsubHardwareCommands = initHardwareCommandSubscriber();
-        return unsubHardwareCommands;
     }, []);
 
     const navBarItems: NavBarItemData[] = [
@@ -124,8 +110,8 @@ export default function App() {
         // Synced here, not in MainAppContent, so the gate screen follows the theme too
         syncThemeWithLocal().finally(() => setThemeReady(true));
         // An update that arrives before the initial status is newer, so it wins
-        window.app.getNetworkGateStatus().then((status) => setGate((current) => current ?? status));
-        return window.app.onNetworkStatusChange(setGate);
+        networkGate.getStatus().then((status) => setGate((current) => current ?? status));
+        return networkGate.onStatus(setGate);
     }, []);
 
     if (!themeReady || gate === null) {

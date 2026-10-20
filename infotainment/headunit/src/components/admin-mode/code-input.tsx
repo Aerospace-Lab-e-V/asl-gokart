@@ -2,10 +2,7 @@ import {
     InputOTP,
     InputOTPGroup,
   } from "@/components/ui/input-otp"
-import { useStore } from "@/stores/useStore";
 import { REGEXP_ONLY_DIGITS, OTPInputContext } from "input-otp";
-import { toast } from "sonner"
-import log from "@/lib/logger";
 import React from "react";
 import { cn } from "@/lib/utils";
 
@@ -37,30 +34,14 @@ const MaskedOTPSlot = React.forwardRef<
 });
 MaskedOTPSlot.displayName = "MaskedOTPSlot";
 
-export const CodeInput = () => {
-
-    const { adminPin, setAdminMode, setAdminPin } = useStore();
-
-    const PIN = "69420";
-
-    const handleLogin = (pin: string) => {
-        if (pin === PIN) {
-            setAdminMode(true);
-            toast("Admin mode enabled!");
-        } else {
-            log.error("Wrong PIN!");
-            toast.error("Wrong PIN!");
-            // Clear the code so the next attempt can be typed right away.
-            setAdminPin("");
-        }
-    };
-
+/** Shows the PIN typed on the numberpad; `onComplete` fires once all digits are in. */
+export const CodeInput = ({ value, onComplete }: { value: string; onComplete: (pin: string) => void }) => {
     return (
         <InputOTP
             maxLength={5}
             pattern={REGEXP_ONLY_DIGITS}
-            onComplete={(value) => handleLogin(value)}
-            value={adminPin}
+            onComplete={onComplete}
+            value={value}
         >
             <InputOTPGroup className="gap-2">
                 {Array.from({ length: 5 }).map((_, i) => (

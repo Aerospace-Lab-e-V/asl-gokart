@@ -13,6 +13,8 @@ import {
     SuccessStep,
 } from "@/components/settings/app-update-steps";
 import { type AppRelease, type UpdateProgress, UpdatePhase } from "@/data/updater/updater-types";
+import { updater } from "@/services/updater";
+import { useApp } from "@/stores/app";
 import log from "@/lib/logger";
 
 const BUTTON = "h-14 px-8 text-lg";
@@ -20,7 +22,7 @@ const BUTTON = "h-14 px-8 text-lg";
 const AppUpdatePage = () => {
     const navigate = useNavigate();
 
-    const [currentVersion, setCurrentVersion] = useState<string | null>(null);
+    const currentVersion = useApp((state) => state.version);
     const [releases, setReleases] = useState<AppRelease[] | null>(null);
     const [releasesError, setReleasesError] = useState<string | null>(null);
     const [selectedRelease, setSelectedRelease] = useState<AppRelease | null>(null);
@@ -37,12 +39,7 @@ const AppUpdatePage = () => {
     useEffect(() => {
         const load = async () => {
             try {
-                const [version, fetchedReleases] = await Promise.all([
-                    window.app.getVersion(),
-                    window.updater.getReleases(),
-                ]);
-                setCurrentVersion(version);
-                setReleases(fetchedReleases);
+                setReleases(await updater.getReleases());
             } catch (err) {
                 log.error("[AppUpdatePage] Failed to load:", err);
                 setReleasesError(err instanceof Error ? err.message : "Failed to fetch releases");
@@ -64,10 +61,10 @@ const AppUpdatePage = () => {
         setPhase(UpdatePhase.Downloading);
 
         progressCleanupRef.current?.();
-        progressCleanupRef.current = window.updater.onProgress(setProgress);
+        progressCleanupRef.current = updater.onProgress(setProgress);
 
         try {
-            await window.updater.install(selectedRelease.tag, selectedRelease.downloadUrl, selectedRelease.assetName);
+            await updater.install(selectedRelease.tag);
 
             progressCleanupRef.current?.();
             progressCleanupRef.current = null;
@@ -90,6 +87,12 @@ const AppUpdatePage = () => {
             toast.error(`Update failed: ${msg}`);
         }
     };
+
+    const relaunch = () =>
+        updater.relaunch().catch((err) => {
+            log.error("[AppUpdatePage] Relaunch failed:", err);
+            toast.error(`Restart failed: ${err instanceof Error ? err.message : err}`);
+        });
 
     const backToList = () => {
         setPhase(UpdatePhase.Idle);
@@ -160,7 +163,7 @@ const AppUpdatePage = () => {
                         <Button variant="outline" className={BUTTON} onClick={() => navigate("/settings")}>
                             Later
                         </Button>
-                        <Button className={BUTTON} onClick={() => window.updater.relaunch()}>
+                        <Button className={BUTTON} onClick={relaunch}>
                             <RefreshCw className="mr-2 h-5 w-5" />
                             Restart now
                         </Button>

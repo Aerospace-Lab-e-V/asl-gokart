@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { LucideIcon, Maximize2, Minimize2, X } from "lucide-react";
 import { Subpage } from "@/components/shared/subpage";
 import { cn } from "@/lib/utils";
+import { closeWindow, maximizeWindow, minimizeWindow } from "@/services/window";
 
 /** How long "Close app" stays armed after the first tap. */
 const CONFIRM_MS = 3000;
@@ -16,13 +17,13 @@ const PowerPage = () => {
     }, [closeArmed]);
 
     // Closing takes the dashboard away from the driver, so it needs a second tap.
-    const close = () => (closeArmed ? window.electronWindow.close() : setCloseArmed(true));
+    const close = () => (closeArmed ? closeWindow() : setCloseArmed(true));
 
     return (
         <Subpage title="Power" description="Window controls for the headunit app" backTo="/settings" className="justify-center">
             <div className="grid grid-cols-3 gap-6">
-                <PowerTile icon={Minimize2} label="Minimize" onClick={() => window.electronWindow.minimize()} />
-                <PowerTile icon={Maximize2} label="Maximize" onClick={() => window.electronWindow.maximize()} />
+                <PowerTile icon={Minimize2} label="Minimize" onClick={minimizeWindow} />
+                <PowerTile icon={Maximize2} label="Maximize" onClick={maximizeWindow} />
                 <PowerTile
                     icon={X}
                     label={closeArmed ? "Tap again to close" : "Close app"}

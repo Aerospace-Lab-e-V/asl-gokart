@@ -22,7 +22,8 @@ import {
     OtaProgress,
 } from "@/data/ecu/ecu-types";
 import { useEcuStatus } from "@/hooks/useEcuStatus";
-import { useStore } from "@/stores/useStore";
+import { useSignal } from "@/stores/signals";
+import { firmware } from "@/services/firmware";
 import log from "@/lib/logger";
 import { cn } from "@/lib/utils";
 
@@ -71,7 +72,7 @@ const EcuControllerPage = () => {
 const EcuController = ({ definition }: { definition: EcuDefinition }) => {
     const navigate = useNavigate();
     const status = useEcuStatus();
-    const speed = useStore((state) => state.speed);
+    const speed = useSignal("drive.speed");
 
     const [releases, setReleases] = useState<FirmwareRelease[] | null>(null);
     const [releasesError, setReleasesError] = useState<string | null>(null);
@@ -85,8 +86,8 @@ const EcuController = ({ definition }: { definition: EcuDefinition }) => {
 
     const presence = status?.[definition.id];
     const lastFlashed = history[definition.id]?.tag;
-    // Speed is only known while the motor controller reports it; without it the kart cannot drive.
-    const moving = !!status?.zc_motor.online && speed > 0;
+    // A hint only: main refuses the flash itself unless it has a fresh zero speed.
+    const moving = speed !== null && speed > 0;
     const blockedReason = !presence?.online
         ? "ECU offline"
         : moving
@@ -96,7 +97,7 @@ const EcuController = ({ definition }: { definition: EcuDefinition }) => {
 
     const loadHistory = useCallback(
         () =>
-            window.firmware
+            firmware
                 .getFlashHistory()
                 .then(setHistory)
                 .catch((err) =>
@@ -109,9 +110,9 @@ const EcuController = ({ definition }: { definition: EcuDefinition }) => {
         const load = async () => {
             try {
                 const [fetched, cached, progress] = await Promise.all([
-                    window.firmware.getReleases(definition.githubAssetName),
-                    window.firmware.getCachedVersions(),
-                    window.firmware.getOtaProgress(definition.id),
+                    firmware.getReleases(definition.id),
+                    firmware.getCachedVersions(),
+                    firmware.getOtaProgress(definition.id),
                 ]);
                 setReleases(fetched);
                 setCachedTags(cached[definition.id] ?? []);
@@ -136,7 +137,7 @@ const EcuController = ({ definition }: { definition: EcuDefinition }) => {
 
     useEffect(
         () =>
-            window.firmware.onOtaProgress((progress) => {
+            firmware.onOtaProgress((progress) => {
                 if (progress.ecuId !== definition.id) return;
                 setRun((current) =>
                     current && current.tag === progress.tag
@@ -156,7 +157,7 @@ const EcuController = ({ definition }: { definition: EcuDefinition }) => {
     );
 
     const download = async (release: FirmwareRelease) => {
-        await window.firmware.downloadFirmware(definition.id, release.tag, release.downloadUrl);
+        await firmware.download(definition.id, release.tag);
         setCachedTags((tags) => [...tags, release.tag]);
     };
 
@@ -191,11 +192,9 @@ const EcuController = ({ definition }: { definition: EcuDefinition }) => {
                 setRun((r) => r && { ...r, step: FlashStep.Send });
             }
             step = FlashStep.Send;
-            // The speed may have changed while downloading.
-            if (useStore.getState().speed > 0 && status?.zc_motor.online)
-                throw new Error("The kart is moving.");
+            // Main refuses (and rejects with why) while the kart moves or admin mode is locked.
             // From here the main process reports the progress (onOtaProgress).
-            await window.firmware.triggerOta(definition.id, release.tag);
+            await firmware.triggerOta(definition.id, release.tag);
         } catch (err) {
             log.error("[EcuController] Flash failed:", err);
             setRun((r) => r && { ...r, step, error: errorMessage(err, "Flash failed") });

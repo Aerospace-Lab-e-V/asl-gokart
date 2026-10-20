@@ -1,4 +1,3 @@
-import { useStore } from "@/stores/useStore";
 import { Delete } from "lucide-react";
 import log from "@/lib/logger";
 import React from "react";
@@ -39,8 +38,7 @@ const PadButton = ({
     </button>
 );
 
-export const CodeNumberpad = () => {
-    const { adminPin, setAdminPin } = useStore();
+export const CodeNumberpad = ({ value: adminPin, onChange: setAdminPin }: { value: string; onChange: (pin: string) => void }) => {
 
     const handleAdminPinChange = (value: string, removingChar: boolean) => {
         if (removingChar) {
