@@ -8,6 +8,7 @@ import {
     FIRMWARE_GET_CACHED_VERSIONS_CHANNEL,
     FIRMWARE_GET_ECU_STATUS_CHANNEL,
     FIRMWARE_ECU_STATUS_CHANNEL,
+    FIRMWARE_GET_FLASH_HISTORY_CHANNEL,
 } from './firmware-channels';
 import { fetchReleases } from './github-releases';
 import { downloadFirmware, getCachedVersions, getFirmwareLocalUrl, isDownloaded } from './firmware-manager';
@@ -17,6 +18,7 @@ import { EcuId } from '@/data/ecu/ecu-types';
 import { ECU_DEFINITIONS } from '@/data/ecu/ecu-definitions';
 import { sendOtaTrigger } from '@/helpers/ipc/sero/sero-service';
 import { getEcuStatus, onEcuPresenceChange } from './ecu-presence';
+import { getFlashHistory } from './firmware-history';
 
 export function registerFirmwareListeners(mainWindow: BrowserWindow): void {
     ipcMain.handle(FIRMWARE_GET_RELEASES_CHANNEL, async (_event, assetName: string) => {
@@ -60,6 +62,10 @@ export function registerFirmwareListeners(mainWindow: BrowserWindow): void {
 
     ipcMain.handle(FIRMWARE_GET_ECU_STATUS_CHANNEL, async () => {
         return getEcuStatus();
+    });
+
+    ipcMain.handle(FIRMWARE_GET_FLASH_HISTORY_CHANNEL, async () => {
+        return getFlashHistory();
     });
 
     onEcuPresenceChange(() => {

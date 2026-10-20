@@ -5,3 +5,4 @@ export const FIRMWARE_GET_SERVER_URL_CHANNEL = 'firmware:get-server-url';
 export const FIRMWARE_GET_CACHED_VERSIONS_CHANNEL = 'firmware:get-cached-versions';
 export const FIRMWARE_GET_ECU_STATUS_CHANNEL = 'firmware:get-ecu-status';
 export const FIRMWARE_ECU_STATUS_CHANNEL = 'firmware:ecu-status';
+export const FIRMWARE_GET_FLASH_HISTORY_CHANNEL = 'firmware:get-flash-history';

@@ -6,6 +6,7 @@ import {
     FIRMWARE_GET_CACHED_VERSIONS_CHANNEL,
     FIRMWARE_GET_ECU_STATUS_CHANNEL,
     FIRMWARE_ECU_STATUS_CHANNEL,
+    FIRMWARE_GET_FLASH_HISTORY_CHANNEL,
 } from './firmware-channels';
 
 export function exposeFirmwareContext(): void {
@@ -29,6 +30,9 @@ export function exposeFirmwareContext(): void {
         },
         getEcuStatus: async () => {
             return ipcRenderer.invoke(FIRMWARE_GET_ECU_STATUS_CHANNEL);
+        },
+        getFlashHistory: async () => {
+            return ipcRenderer.invoke(FIRMWARE_GET_FLASH_HISTORY_CHANNEL);
         },
         onEcuStatus: (callback: (status: unknown) => void) => {
             const listener = (_event: Electron.IpcRendererEvent, status: unknown) => callback(status);

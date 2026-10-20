@@ -31,6 +31,9 @@ export interface EcuPresence {
 
 export type EcuStatusMap = Record<EcuId, EcuPresence>;
 
+/** The last version flashed to each ECU from this headunit and confirmed back online. */
+export type FlashHistory = Partial<Record<EcuId, { tag: string; flashedAt: string }>>;
+
 export interface FirmwareRelease {
     tag: string;
     version: string;
