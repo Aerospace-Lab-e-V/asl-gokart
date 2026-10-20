@@ -3,6 +3,7 @@ import { BatteryCommands, LightsCommands, MotorCommands, Zones } from "../../dat
 import { ResolvedInterface } from "../../helpers/ipc/hardware/network-config";
 import { NetworkGateStatus } from "../../helpers/ipc/network-gate";
 import { EcuId, EcuStatusMap, FlashHistory, OtaProgress } from "../../data/ecu/ecu-types";
+import type { Api } from "../../ipc/api";
 
 interface ThemeModeContext {
     toggle: () => Promise<boolean>;
@@ -105,6 +106,7 @@ interface UpdaterContext {
 
 declare global {
     interface Window {
+        api: Api;
         themeMode: ThemeModeContext;
         electronWindow: ElectronWindow;
         websocket: WebSocketContext;
