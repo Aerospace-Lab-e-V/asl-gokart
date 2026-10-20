@@ -1,4 +1,4 @@
-import { FlowState } from "@/lib/utils/flow-state";
+import { FlowState } from "@/domain/signals";
 
 export interface FlowStateDisplay {
     label: string;

@@ -1,184 +1,133 @@
 import TabsSelector from "@/components/shared/tabs-selector";
 import { Progress } from "@/components/ui/progress";
-import { useStore } from "@/stores/useStore";
-import { useShallow } from "zustand/react/shallow";
-import { tabsSelectorStates } from "@/data/controlling_models/drivetrain";
+import { Gears, tabsSelectorStates } from "@/data/controlling_models/drivetrain";
 import {
   CircularProgressbarWithChildren,
   buildStyles,
 } from "react-circular-progressbar";
 import "react-circular-progressbar/dist/styles.css";
 import { HeaderBar } from "@/components/shared/header-bar";
-import ResetDailyDistanceDialog from "@/components/shared/reset-daily-distance-dialog";
-import React, { useState, useEffect } from "react";
-import { LightsCommands } from "@/data/zonecontrollers/zonecontrollers";
+import React from "react";
 import { Construction, Lightbulb, OctagonAlert, Spotlight, SquareArrowLeft, SquareArrowRight, TriangleAlert } from "lucide-react";
-import { THROTTLE_BOUNDARIES, THROTTLE_SEGMENTS, RPM_SEGMENTS } from "@/data/gauge-config";
+import { THROTTLE_BOUNDARIES, THROTTLE_SEGMENTS, RPM_SEGMENTS, Segment } from "@/data/gauge-config";
 import { interpolateColor } from "@/lib/utils/gauge-utils";
 import TemperatureBox from "@/components/shared/temperature-scale/temperature-box";
+import { LightToggle } from "@/components/drive/light-toggle";
+import { avg, fmt } from "@/components/drive/format";
+import { useSignal } from "@/stores/signals";
+import { useIsDark } from "@/hooks/use-is-dark";
+
+const RPM_BOUNDARIES: [number, number] = [0, 1500];
+
+/** Three-quarter ring gauge; null renders an empty ring and "--". */
+const Gauge = ({ value, unit, label, bounds, segments }: { value: number | null; unit: string; label: string; bounds: [number, number]; segments: Segment[] }) => {
+  const isDark = useIsDark();
+  const v = value ?? bounds[0];
+  return (
+    <div className="w-50">
+      <CircularProgressbarWithChildren
+        value={v}
+        circleRatio={0.75}
+        minValue={bounds[0]}
+        maxValue={bounds[1]}
+        styles={buildStyles({
+          pathColor: interpolateColor(v, bounds[0], bounds[1], segments),
+          rotation: 1 / 2 + 1 / 8,
+          strokeLinecap: "butt",
+          trailColor: isDark ? "#374151" : "#eee",
+        })}
+      >
+        <p className="font-semibold text-4xl">{fmt(value)}{unit}</p>
+        <p>{label}</p>
+      </CircularProgressbarWithChildren>
+    </div>
+  );
+};
+
+const ThrottleGauge = () => (
+  <Gauge value={useSignal("drive.throttle")} unit="%" label="Throttle" bounds={THROTTLE_BOUNDARIES} segments={THROTTLE_SEGMENTS} />
+);
+
+const RpmGauge = () => {
+  const rpm = avg(useSignal("drive.rpm_left"), useSignal("drive.rpm_right"));
+  return <Gauge value={rpm} unit="" label="RPM" bounds={RPM_BOUNDARIES} segments={RPM_SEGMENTS} />;
+};
+
+const GearIndicator = () => {
+  const reverse = useSignal("drive.reverse");
+  // No tab selected while unknown.
+  const gear = reverse === null ? "" : reverse === 1 ? Gears.r : Gears.d;
+  return <TabsSelector label="" options={tabsSelectorStates().gears} defaultValue={gear} value={gear} readOnly={true} />;
+};
+
+const Speed = () => {
+  const speed = useSignal("drive.speed");
+  return <p className="font-semibold text-9xl">{fmt(speed)}</p>;
+};
+
+const BatteryBar = () => {
+  const soc = useSignal("battery.soc");
+  return (
+    <div className="w-1/3 flex flex-col items-center justify-center pt-4">
+      <p>Battery</p>
+      <Progress className="rounded-md w-full h-10" value={soc ?? 0} />
+      <p>{fmt(soc, 1)}%</p>
+    </div>
+  );
+};
+
+const BatteryTemp = () => (
+  <TemperatureBox label="Battery" currentTemp={useSignal("battery.temp_avg")} minTemp={-10} maxTemp={45} />
+);
+
+const MotorTemp = () => {
+  const temp = avg(useSignal("temp.motor_left"), useSignal("temp.motor_right"));
+  return <TemperatureBox label="Motor" currentTemp={temp} minTemp={-20} maxTemp={50} />;
+};
+
+const ControllerTemp = ({ label, signal }: { label: string; signal: "temp.esc_left" | "temp.esc_right" }) => (
+  <TemperatureBox label={label} currentTemp={useSignal(signal)} minTemp={-10} maxTemp={50} />
+);
 
 const DriveNormalPage = () => {
-
-  const [isDarkMode, setIsDarkMode] = useState(
-    document.documentElement.classList.contains("dark")
-  );
-
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setIsDarkMode(document.documentElement.classList.contains("dark"));
-    });
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-    return () => observer.disconnect();
-  }, []);
-
-  const { gear, rawThrottle, throttle, showRawThrottle, rpm, speed, rpmBoundaries, batteryPercentage, turnSignalRight, turnSignalLeft, hazardLights, headlights, highBeams, tailLights, avgBatteryTemp, leftMotorData, rightMotorData } = useStore(
-    useShallow((state) => ({
-      gear: state.gear,
-      rawThrottle: state.rawThrottle,
-      throttle: state.throttle,
-      showRawThrottle: state.showRawThrottle,
-      rpm: state.rpm,
-      speed: state.speed,
-      rpmBoundaries: state.rpmBoundaries,
-      batteryPercentage: state.batteryPercentage,
-      turnSignalRight: state.turnSignalRight,
-      turnSignalLeft: state.turnSignalLeft,
-      hazardLights: state.hazardLights,
-      headlights: state.headlights,
-      highBeams: state.highBeams,
-      tailLights: state.tailLights,
-      avgBatteryTemp: state.avgBatteryTemp,
-      leftMotorData: state.leftMotorData,
-      rightMotorData: state.rightMotorData,
-    }))
-  );
-
-  const leftMotorTemp = leftMotorData?.motorTemp ?? 0;
-  const rightMotorTemp = rightMotorData?.motorTemp ?? 0;
-  const avgMotorTemp = leftMotorData && rightMotorData ? (leftMotorTemp + rightMotorTemp) / 2 : (leftMotorTemp || rightMotorTemp || 0);
-
-  const leftThrottle = leftMotorData?.throttle ?? 0;
-  const rightThrottle = rightMotorData?.throttle ?? 0;
-  const avgThrottleRaw = leftMotorData && rightMotorData ? (leftThrottle + rightThrottle) / 2 : (leftThrottle || rightThrottle || 0);
-  const displayThrottle = (avgThrottleRaw / 255) * 100;
-
-  const controller1Temp = leftMotorData?.controllerTemp ?? 0;
-  const controller2Temp = rightMotorData?.controllerTemp ?? 0;
-
   // TODO: Convert colors to tailwind-css colors
   // TODO: Transfer color scaling boundaries to individual states (or only max. value) and multiply times 0.75 or 0.5 for the scale.
 
   return (
     <div className="w-full flex flex-col">
-      
+
       <HeaderBar />
 
       <div className="flex flex-col items-center justify-center gap-y-2 pt-10">
         <div className="flex flex-row items-center justify-center gap-x-2">
-          { (hazardLights && turnSignalLeft && turnSignalRight) ?
-            <TriangleAlert size={36} className="text-green-400" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_HAZARD_LIGHTS)} />
-            :
-            <TriangleAlert size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_HAZARD_LIGHTS)} />
-          }
+          <LightToggle signal="lights.hazard" light="hazard" label="hazard lights" icon={TriangleAlert} onClassName="text-green-400" />
         </div>
         <div className="grid grid-cols-3 w-full">
           <div className="flex flex-col items-center justify-center">
-            <div className="w-50">
-              <CircularProgressbarWithChildren
-                value={displayThrottle}
-                circleRatio={0.75}
-                styles={buildStyles({
-                  pathColor: interpolateColor(
-                    displayThrottle,
-                    THROTTLE_BOUNDARIES[0],
-                    THROTTLE_BOUNDARIES[1],
-                    THROTTLE_SEGMENTS
-                  ),
-                  rotation: 1 / 2 + 1 / 8,
-                  strokeLinecap: "butt",
-                  trailColor: isDarkMode ? "#374151" : "#eee",
-                })}
-              >
-                <p className="font-semibold text-4xl">{displayThrottle.toFixed(0)}%</p>
-                <p>Throttle</p>
-              </CircularProgressbarWithChildren>
-            </div>
+            <ThrottleGauge />
           </div>
           <div className="flex flex-col items-center justify-center">
             <div className="flex flex-row items-center gap-x-4">
-              { (turnSignalLeft) ?
-                <SquareArrowLeft size={36} className="text-green-400" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TURN_SIGNAL_LEFT)} />
-                :
-                <SquareArrowLeft size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TURN_SIGNAL_LEFT)} />
-              }
-              <TabsSelector 
-                label="" 
-                options={tabsSelectorStates().gears}
-                defaultValue={gear}  
-                value={gear}
-                readOnly={true}
-                  />
-              { (turnSignalRight) ?
-                <SquareArrowRight size={36} className="text-green-400" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TURN_SIGNAL_RIGHT)} />
-                :
-                <SquareArrowRight size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TURN_SIGNAL_RIGHT)} />
-              }
+              <LightToggle signal="lights.turn_left" light="turn_left" label="left turn signal" icon={SquareArrowLeft} onClassName="text-green-400" />
+              <GearIndicator />
+              <LightToggle signal="lights.turn_right" light="turn_right" label="right turn signal" icon={SquareArrowRight} onClassName="text-green-400" />
             </div>
-            <p className="font-semibold text-9xl">{speed.toFixed(0)}</p>
+            <Speed />
             <p className="font">km/h</p>
           </div>
           <div className="flex flex-col items-center justify-center">
-            <div className="w-50">
-              <CircularProgressbarWithChildren
-                value={rpm}
-                circleRatio={0.75}
-                minValue={rpmBoundaries[0]}
-                maxValue={rpmBoundaries[1]}
-                styles={buildStyles({
-                  pathColor: interpolateColor(
-                    rpm,
-                    rpmBoundaries[0],
-                    rpmBoundaries[1],
-                    RPM_SEGMENTS
-                  ),
-                  rotation: 1 / 2 + 1 / 8,
-                  strokeLinecap: "butt",
-                  trailColor: isDarkMode ? "#374151" : "#eee",
-                })}
-              >
-                <p className="font-semibold text-4xl">{rpm}</p>
-                <p>RPM</p>
-              </CircularProgressbarWithChildren>
-            </div>
+            <RpmGauge />
           </div>
         </div>
         <div className="grid grid-cols-3 w-full">
           <div className="flex flex-row items-start gap-x-6 justify-evenly">
                 {/* Use color text-red-500 if critical or text-orange-400 if warning */}
-
-                {(headlights[0] || headlights[1]) ?
-                  <Lightbulb size={36} className="text-green-600" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_DRL)} />
-                  :
-                  <Lightbulb size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_DRL)} />
-                }
-                {(highBeams[0] || highBeams[1]) ?
-                  <Spotlight size={36} className="text-blue-600" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_HIGH_BEAMS)} />
-                  :
-                  <Spotlight size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_HIGH_BEAMS)} />
-                }
-                {
-                  (tailLights) ?
-                  <Construction size={36} className="text-green-600" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TAIL_LIGHT)} />
-                  :
-                  <Construction size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TAIL_LIGHT)} />
-                }
-
+                <LightToggle signal="lights.drl" light="drl" label="daytime running lights" icon={Lightbulb} onClassName="text-green-600" />
+                <LightToggle signal="lights.high_beam_left" orSignal="lights.high_beam_right" light="high_beam" label="high beams" icon={Spotlight} onClassName="text-blue-600" />
+                <LightToggle signal="lights.tail" light="tail" label="tail lights" icon={Construction} onClassName="text-green-600" />
           </div>
           <div className="flex flex-row justify-evenly">
-            <ResetDailyDistanceDialog />
+            {/* TODO(firmware): no ECU publishes trip distance; re-mount <ResetDailyDistanceDialog /> when one does. */}
           </div>
           <div className="flex flex-row items-end gap-x-6 justify-evenly">
                 {/* <OctagonAlert size={36} className="text-orange-400" /> */}
@@ -191,17 +140,13 @@ const DriveNormalPage = () => {
         </div>
         <div className="w-full flex flex-row justify-center gap-x-4 pt-8">
           <div className="w-1/3 flex flex-col justify-center">
-            <TemperatureBox label="Battery" currentTemp={avgBatteryTemp} minTemp={-10} maxTemp={45}></TemperatureBox>
-            <TemperatureBox label="Motor" currentTemp={avgMotorTemp} minTemp={-20} maxTemp={50}></TemperatureBox>
+            <BatteryTemp />
+            <MotorTemp />
           </div>
-          <div className="w-1/3 flex flex-col items-center justify-center pt-4">
-            <p>Battery</p>
-            <Progress className="rounded-md w-full h-10" value={batteryPercentage*100} />
-              <p>{(batteryPercentage*100).toFixed(1)}%</p>
-          </div>
+          <BatteryBar />
           <div className="w-1/3 flex flex-col justify-center">
-            <TemperatureBox label="Controller 1" currentTemp={controller1Temp} minTemp={-10} maxTemp={50}></TemperatureBox>
-            <TemperatureBox label="Controller 2" currentTemp={controller2Temp} minTemp={-10} maxTemp={50}></TemperatureBox>
+            <ControllerTemp label="Controller 1" signal="temp.esc_left" />
+            <ControllerTemp label="Controller 2" signal="temp.esc_right" />
           </div>
         </div>
       </div>

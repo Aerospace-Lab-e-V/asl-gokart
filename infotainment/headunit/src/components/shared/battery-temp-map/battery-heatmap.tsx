@@ -3,7 +3,8 @@ import HeatmapComponent from "./heatmap-component";
 import React from "react";
 
 interface BatteryHeatmapProps {
-    tempValues: number[];
+    /** One per sensor in grid order; null (no valid reading) leaves its cell empty. */
+    tempValues: (number | null)[];
     width: number;
     height: number;
     maxTemp: number;
@@ -20,15 +21,16 @@ const BatteryHeatmap = (props: BatteryHeatmapProps) => {
     const cellHeight = props.height / numRows;
 
     // Generate the data points
-    const data: DataPoint[] = props.tempValues.map((temp, index) => {
+    const data: DataPoint[] = props.tempValues.flatMap((temp, index) => {
+        if (temp === null) return [];
         const row = Math.floor(index / numCols);
         const col = index % numCols;
 
-        return {
+        return [{
             x: col * cellWidth + cellWidth / 2,
             y: row * cellHeight + cellHeight / 2,
             value: temp,
-        };
+        }];
     });
 
     return (

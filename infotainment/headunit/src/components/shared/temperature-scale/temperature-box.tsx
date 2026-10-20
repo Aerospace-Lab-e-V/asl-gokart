@@ -5,7 +5,8 @@ interface TemperatureBoxProps {
     label: string;
     maxTemp: number;
     minTemp: number;
-    currentTemp: number;
+    /** null: no reading, the scale shows no marker. */
+    currentTemp: number | null;
 }
 
 const TemperatureBox = ({ label, currentTemp, minTemp, maxTemp }: TemperatureBoxProps) => {
