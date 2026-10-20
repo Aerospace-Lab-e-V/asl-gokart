@@ -8,6 +8,23 @@ import { FIRMWARE_SERVER_PORT } from '@/data/config';
 
 let currentServer: http.Server | null = null;
 
+/** An ECU downloading a binary, for following a flash. */
+export type FirmwareFetchEvent = { ecuId: string; tag: string } & (
+    | { kind: 'start'; totalBytes: number }
+    | { kind: 'progress'; sentBytes: number }
+    | { kind: 'end'; complete: boolean }
+);
+
+const fetchListeners = new Set<(event: FirmwareFetchEvent) => void>();
+
+/** Returns a function that removes the listener. */
+export function onFirmwareFetch(listener: (event: FirmwareFetchEvent) => void): () => void {
+    fetchListeners.add(listener);
+    return () => fetchListeners.delete(listener);
+}
+
+const emitFetch = (event: FirmwareFetchEvent) => fetchListeners.forEach((l) => l(event));
+
 function getFirmwareCacheRoot(): string {
     return path.join(app.getPath('userData'), 'firmware');
 }
@@ -48,6 +65,14 @@ export function startFirmwareServer(): void {
         });
 
         const stream = fs.createReadStream(filePath);
+        let sentBytes = 0;
+        emitFetch({ ecuId, tag, kind: 'start', totalBytes: stat.size });
+        stream.on('data', (chunk) => {
+            sentBytes += chunk.length;
+            emitFetch({ ecuId, tag, kind: 'progress', sentBytes });
+        });
+        // 'close' follows 'finish' too; only a connection closed before the end is incomplete.
+        res.on('close', () => emitFetch({ ecuId, tag, kind: 'end', complete: res.writableFinished }));
         stream.on('error', (err) => {
             log.error(`[firmware-server] Error streaming file ${filePath}:`, err.message);
             res.end();

@@ -2,7 +2,7 @@ import { OutgoingPacket } from "../../data/zonecontrollers/packets";
 import { BatteryCommands, LightsCommands, MotorCommands, Zones } from "../../data/zonecontrollers/zonecontrollers";
 import { ResolvedInterface } from "../../helpers/ipc/hardware/network-config";
 import { NetworkGateStatus } from "../../helpers/ipc/network-gate";
-import { EcuStatusMap, FlashHistory } from "../../data/ecu/ecu-types";
+import { EcuId, EcuStatusMap, FlashHistory, OtaProgress } from "../../data/ecu/ecu-types";
 
 interface ThemeModeContext {
     toggle: () => Promise<boolean>;
@@ -74,6 +74,10 @@ interface FirmwareContext {
     getFlashHistory: () => Promise<FlashHistory>;
     /** Pushes the whole map whenever an ECU goes online or offline. Returns the cleanup. */
     onEcuStatus: (callback: (status: EcuStatusMap) => void) => () => void;
+    /** The flash in progress for this ECU, or null. */
+    getOtaProgress: (ecuId: EcuId) => Promise<OtaProgress | null>;
+    /** Pushes each step of a flash after the trigger was sent. Returns the cleanup. */
+    onOtaProgress: (callback: (progress: OtaProgress) => void) => () => void;
 }
 
 interface AppRelease {

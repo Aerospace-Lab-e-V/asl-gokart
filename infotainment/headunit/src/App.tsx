@@ -13,6 +13,7 @@ import SettingsPage from "./pages/settings";
 import CarPage from "./pages/car";
 import BatteryPage from "./pages/battery";
 import EcuManagerPage from "./pages/ecu-manager";
+import EcuControllerPage from "./pages/ecu-controller";
 import TelemetryPage from "./pages/telemetry";
 import NetworkInterfacePage from "./pages/settings/network";
 import PowerPage from "./pages/settings/power";
@@ -102,6 +103,7 @@ function MainAppContent() {
                             <Route path="/settings/system" element={<ErrorBoundary><AdminOnly><SystemPage /></AdminOnly></ErrorBoundary>} />
                             <Route path="/settings/update" element={<ErrorBoundary><AdminOnly><AppUpdatePage /></AdminOnly></ErrorBoundary>} />
                             <Route path="/ecu-manager" element={<ErrorBoundary><AdminOnly><EcuManagerPage /></AdminOnly></ErrorBoundary>} />
+                            <Route path="/ecu-manager/:id" element={<ErrorBoundary><AdminOnly><EcuControllerPage /></AdminOnly></ErrorBoundary>} />
                             <Route path="/telemetry" element={<ErrorBoundary><TelemetryPage /></ErrorBoundary>} />
                         </Routes>
                     </>

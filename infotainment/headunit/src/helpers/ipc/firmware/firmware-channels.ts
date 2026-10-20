@@ -6,3 +6,5 @@ export const FIRMWARE_GET_CACHED_VERSIONS_CHANNEL = 'firmware:get-cached-version
 export const FIRMWARE_GET_ECU_STATUS_CHANNEL = 'firmware:get-ecu-status';
 export const FIRMWARE_ECU_STATUS_CHANNEL = 'firmware:ecu-status';
 export const FIRMWARE_GET_FLASH_HISTORY_CHANNEL = 'firmware:get-flash-history';
+export const FIRMWARE_GET_OTA_PROGRESS_CHANNEL = 'firmware:get-ota-progress';
+export const FIRMWARE_OTA_PROGRESS_CHANNEL = 'firmware:ota-progress';

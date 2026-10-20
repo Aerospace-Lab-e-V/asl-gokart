@@ -7,6 +7,8 @@ import {
     FIRMWARE_GET_ECU_STATUS_CHANNEL,
     FIRMWARE_ECU_STATUS_CHANNEL,
     FIRMWARE_GET_FLASH_HISTORY_CHANNEL,
+    FIRMWARE_GET_OTA_PROGRESS_CHANNEL,
+    FIRMWARE_OTA_PROGRESS_CHANNEL,
 } from './firmware-channels';
 
 export function exposeFirmwareContext(): void {
@@ -38,6 +40,14 @@ export function exposeFirmwareContext(): void {
             const listener = (_event: Electron.IpcRendererEvent, status: unknown) => callback(status);
             ipcRenderer.on(FIRMWARE_ECU_STATUS_CHANNEL, listener);
             return () => ipcRenderer.removeListener(FIRMWARE_ECU_STATUS_CHANNEL, listener);
+        },
+        getOtaProgress: async (ecuId: string) => {
+            return ipcRenderer.invoke(FIRMWARE_GET_OTA_PROGRESS_CHANNEL, ecuId);
+        },
+        onOtaProgress: (callback: (progress: unknown) => void) => {
+            const listener = (_event: Electron.IpcRendererEvent, progress: unknown) => callback(progress);
+            ipcRenderer.on(FIRMWARE_OTA_PROGRESS_CHANNEL, listener);
+            return () => ipcRenderer.removeListener(FIRMWARE_OTA_PROGRESS_CHANNEL, listener);
         },
     });
 }
