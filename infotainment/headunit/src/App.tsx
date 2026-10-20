@@ -26,12 +26,10 @@ import { Toaster } from "@/components/ui/sonner"
 import MotorPage from "./pages/motor";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { useMotorData } from "./hooks/useMotorData";
-import { useThrottleData } from "./hooks/useThrottleData";
 import { useBatteryData } from "./hooks/useBatteryData";
 import { useLightsData } from "./hooks/useLightsData";
 import { useConnectionData } from "./hooks/useConnectionData";
 import { useKartAgentData } from "./hooks/useKartAgentData";
-import { initHardwareCommandSubscriber } from "./services/hardware-command-subscriber";
 import NetworkGateScreen from "./components/shared/network-gate-screen";
 import type { NetworkGateStatus } from "./helpers/ipc/network-gate";
 
@@ -45,7 +43,6 @@ function MainAppContent() {
     const { i18n } = useTranslation();
 
     useMotorData();
-    useThrottleData();
     useBatteryData();
     useLightsData();
     useConnectionData();
@@ -53,8 +50,6 @@ function MainAppContent() {
 
     useEffect(() => {
         updateAppLanguage(i18n);
-        const unsubHardwareCommands = initHardwareCommandSubscriber();
-        return unsubHardwareCommands;
     }, []);
 
     const navBarItems: NavBarItemData[] = [

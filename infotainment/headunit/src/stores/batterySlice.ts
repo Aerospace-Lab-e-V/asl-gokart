@@ -47,12 +47,10 @@ export const createBatterySlice: StateCreator<
         batteryPercentage: batteryPercentage };
     }),
     setBatteryCurrent: (current: number) => {
-      const throttle = get().throttle;
-      const rpm = get().rpm;
       const debugOverride = get().debugFlowStateOverride;
       set({ 
         batteryCurrent: current,
-        flowState: debugOverride ?? calculateFlowState(current, throttle, rpm)
+        flowState: debugOverride ?? calculateFlowState(current)
       });
     }
   })
