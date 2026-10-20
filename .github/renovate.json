@@ -9,7 +9,7 @@
       "groupName": "napi-rs"
     },
     {
-      "matchPackagePatterns": ["^eslint", "^@typescript-eslint"],
+      "matchPackageNames": ["oxlint"],
       "groupName": "linter"
     }
   ],
