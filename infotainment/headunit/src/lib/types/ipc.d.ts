@@ -2,6 +2,7 @@ import { OutgoingPacket } from "../../data/zonecontrollers/packets";
 import { BatteryCommands, LightsCommands, MotorCommands, Zones } from "../../data/zonecontrollers/zonecontrollers";
 import { ResolvedInterface } from "../../helpers/ipc/hardware/network-config";
 import { NetworkGateStatus } from "../../helpers/ipc/network-gate";
+import { EcuStatusMap } from "../../data/ecu/ecu-types";
 
 interface ThemeModeContext {
     toggle: () => Promise<boolean>;
@@ -69,6 +70,9 @@ interface FirmwareContext {
     triggerOta: (ecuId: string, tag: string) => Promise<{ success: boolean; url: string }>;
     getServerBaseUrl: () => Promise<string>;
     getCachedVersions: () => Promise<Record<string, string[]>>;
+    getEcuStatus: () => Promise<EcuStatusMap>;
+    /** Pushes the whole map whenever an ECU goes online or offline. Returns the cleanup. */
+    onEcuStatus: (callback: (status: EcuStatusMap) => void) => () => void;
 }
 
 interface AppRelease {

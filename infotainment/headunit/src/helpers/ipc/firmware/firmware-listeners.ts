@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+import { BrowserWindow, ipcMain } from 'electron';
 import log from 'electron-log/main';
 import {
     FIRMWARE_GET_RELEASES_CHANNEL,
@@ -6,6 +6,8 @@ import {
     FIRMWARE_TRIGGER_OTA_CHANNEL,
     FIRMWARE_GET_SERVER_URL_CHANNEL,
     FIRMWARE_GET_CACHED_VERSIONS_CHANNEL,
+    FIRMWARE_GET_ECU_STATUS_CHANNEL,
+    FIRMWARE_ECU_STATUS_CHANNEL,
 } from './firmware-channels';
 import { fetchReleases } from './github-releases';
 import { downloadFirmware, getCachedVersions, getFirmwareLocalUrl, isDownloaded } from './firmware-manager';
@@ -14,8 +16,9 @@ import { FIRMWARE_SERVER_PORT } from '@/data/config';
 import { EcuId } from '@/data/ecu/ecu-types';
 import { ECU_DEFINITIONS } from '@/data/ecu/ecu-definitions';
 import { sendOtaTrigger } from '@/helpers/ipc/sero/sero-service';
+import { getEcuStatus, onEcuPresenceChange } from './ecu-presence';
 
-export function registerFirmwareListeners(): void {
+export function registerFirmwareListeners(mainWindow: BrowserWindow): void {
     ipcMain.handle(FIRMWARE_GET_RELEASES_CHANNEL, async (_event, assetName: string) => {
         return fetchReleases(assetName);
     });
@@ -53,5 +56,13 @@ export function registerFirmwareListeners(): void {
 
     ipcMain.handle(FIRMWARE_GET_CACHED_VERSIONS_CHANNEL, async () => {
         return getCachedVersions();
+    });
+
+    ipcMain.handle(FIRMWARE_GET_ECU_STATUS_CHANNEL, async () => {
+        return getEcuStatus();
+    });
+
+    onEcuPresenceChange(() => {
+        if (!mainWindow.isDestroyed()) mainWindow.webContents.send(FIRMWARE_ECU_STATUS_CHANNEL, getEcuStatus());
     });
 }

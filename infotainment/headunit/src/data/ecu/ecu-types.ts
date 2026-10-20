@@ -20,6 +20,17 @@ export interface EcuDefinition {
     mockOnline: boolean;
 }
 
+/** Reachability of one ECU, from Sero service discovery. */
+export interface EcuPresence {
+    online: boolean;
+    /** Set while online. */
+    ip?: string;
+    /** Epoch ms of the last change. */
+    changedAt: number;
+}
+
+export type EcuStatusMap = Record<EcuId, EcuPresence>;
+
 export interface FirmwareRelease {
     tag: string;
     version: string;
