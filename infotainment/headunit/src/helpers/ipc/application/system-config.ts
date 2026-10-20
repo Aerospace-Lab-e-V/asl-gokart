@@ -8,14 +8,26 @@ interface SystemConfigData {
     autoStart: boolean;
     fullscreenOnStartup: boolean;
     devToolsEnabled: boolean;
+    /** Hex sha256 of the admin PIN. Edit it in the config file; there is no UI to change it. */
+    adminPinHash: string;
 }
+
+// TODO: set a kart-specific PIN hash in the config file. This default is sha256 of the old hard-coded "69420".
+const DEFAULT_ADMIN_PIN_HASH = "441b7681786fefcf0b41c3952a0ffecb1221315407a031f61d145ae99dbe9bf7";
+
+const DEFAULTS: SystemConfigData = {
+    autoStart: false,
+    fullscreenOnStartup: false,
+    devToolsEnabled: true,
+    adminPinHash: DEFAULT_ADMIN_PIN_HASH,
+};
 
 const CONFIG_FILE = path.join(app.getPath("userData"), "system-config.json");
 
 function readConfig(): SystemConfigData {
     try {
         if (!fs.existsSync(CONFIG_FILE)) {
-            return { autoStart: false, fullscreenOnStartup: false, devToolsEnabled: true };
+            return { ...DEFAULTS };
         }
         const raw = fs.readFileSync(CONFIG_FILE, "utf-8");
         const parsed = JSON.parse(raw);
@@ -23,10 +35,11 @@ function readConfig(): SystemConfigData {
             autoStart: parsed.autoStart ?? false,
             fullscreenOnStartup: parsed.fullscreenOnStartup ?? false,
             devToolsEnabled: parsed.devToolsEnabled ?? true,
+            adminPinHash: parsed.adminPinHash ?? DEFAULT_ADMIN_PIN_HASH,
         };
     } catch (e) {
         log.error("[system-config] Failed to read system config:", e);
-        return { autoStart: false, fullscreenOnStartup: false, devToolsEnabled: true };
+        return { ...DEFAULTS };
     }
 }
 
@@ -109,4 +122,8 @@ export function setDevToolsEnabled(enabled: boolean): boolean {
     config.devToolsEnabled = enabled;
     writeConfig(config);
     return getDevToolsEnabled();
+}
+
+export function getAdminPinHash(): string {
+    return readConfig().adminPinHash;
 }

@@ -84,6 +84,13 @@ export async function fetchReleases(assetName: string): Promise<FirmwareRelease[
     return releases;
 }
 
+/** The release to download for `tag`, from the GitHub list (never a URL from the renderer). */
+export async function resolveFirmwareRelease(assetName: string, tag: string): Promise<FirmwareRelease> {
+    const release = (await fetchReleases(assetName)).find((r) => r.tag === tag);
+    if (!release) throw new Error(`Release ${tag} of ${assetName} not found`);
+    return release;
+}
+
 export function invalidateCache(): void {
     cache.clear();
 }

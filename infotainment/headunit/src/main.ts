@@ -2,7 +2,8 @@ import { app, BrowserWindow } from "electron";
 import log from "electron-log/main";
 import registerListeners from "./helpers/ipc/listeners-register";
 import path from "path";
-import { stopSeroService } from "./helpers/ipc/sero/sero-service";
+import { stopSeroAdapter } from "./main/adapters/sero";
+import { stopKartAgent } from "./main/kart-agent";
 import { getFullscreenOnStartup, getDevToolsEnabled } from "./helpers/ipc/application/system-config";
 
 // Initialize electron-log before anything else
@@ -19,16 +20,19 @@ if (require("electron-squirrel-startup")) {
 function createWindow() {
     const preload = path.join(__dirname, "preload.js");
     const isFullscreen = getFullscreenOnStartup();
+    // Read once: DevTools can only be opened in a window created with them enabled.
+    const devToolsEnabled = getDevToolsEnabled();
     const mainWindow = new BrowserWindow({
         width: 1024,
         height: 600,
         fullscreen: isFullscreen,
         webPreferences: {
-            devTools: true,
+            devTools: devToolsEnabled,
             contextIsolation: true,
-            nodeIntegration: true,
+            nodeIntegration: false,
             nodeIntegrationInSubFrames: false,
-            webSecurity: false,
+            sandbox: true,
+            webSecurity: true,
             preload: preload,
         },
         titleBarStyle: "default",
@@ -43,7 +47,6 @@ function createWindow() {
             path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)
         );
     }
-    const devToolsEnabled = getDevToolsEnabled();
     if (devToolsEnabled) {
         mainWindow.webContents.openDevTools();
     }
@@ -51,7 +54,10 @@ function createWindow() {
 
 app.whenReady().then(createWindow);
 
-app.on("before-quit", stopSeroService);
+app.on("before-quit", () => {
+    stopSeroAdapter();
+    stopKartAgent();
+});
 
 //osX only
 app.on("window-all-closed", () => {

@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain } from "electron";
 import os from "os";
 import log from "electron-log/main";
+import { CH } from "@/ipc/channels";
 import { getStoredMac, resolveInterfaceByMac } from "./hardware/network-config";
 
 /** One OS network interface as the gate's engineer info shows it. */
@@ -48,7 +49,7 @@ function listInterfaces(): GateInterface[] {
 function publish(patch: Partial<NetworkGateStatus>) {
     status = { ...status, ...patch };
     if (gateWindow && !gateWindow.isDestroyed()) {
-        gateWindow.webContents.send("network-gate:status", status);
+        gateWindow.webContents.send(CH.networkGate.status, status);
     }
 }
 
@@ -95,14 +96,15 @@ export function waitForCarNetwork(mainWindow: BrowserWindow): Promise<void> {
     });
 }
 
-// Register IPC handler so renderer can ask for the status on mount
-ipcMain.handle("network-gate:get-status", () => {
-    return status;
-});
+export function registerNetworkGateListeners(): void {
+    // The renderer asks for the status on mount
+    ipcMain.handle(CH.networkGate.getStatus, () => status);
 
-// Manual override from the gate's engineer info; never triggered automatically
-ipcMain.handle("network-gate:skip", () => {
-    if (status.ready) return;
-    log.info("[network-gate] Skip/override requested by user.");
-    openGate();
-});
+    // Manual override from the gate's engineer info; never triggered automatically. Not admin-gated:
+    // the gate shows at boot, before anyone can unlock admin mode.
+    ipcMain.handle(CH.networkGate.skip, () => {
+        if (status.ready) return;
+        log.info("[network-gate] Skip/override requested by user.");
+        openGate();
+    });
+}
