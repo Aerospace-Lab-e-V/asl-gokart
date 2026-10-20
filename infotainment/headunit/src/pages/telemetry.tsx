@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { TelemetryConfigDialog } from "@/components/telemetry/telemetry-config-dialog";
 import { UplinkSwitch } from "@/components/telemetry/uplink-switch";
-import { useStore } from "@/stores/useStore";
+import { useSession } from "@/stores/session";
+import { useAgent } from "@/stores/agent";
 import { AgentStatus } from "@/services/kart-agent/schema";
 import { carNetwork, ecus, Line, recording, Tone, uplink } from "@/services/kart-agent/health";
 import { cn } from "@/lib/utils";
@@ -15,9 +16,9 @@ import { cn } from "@/lib/utils";
  * the pit wall. Read at arm's length by the pit crew; the debug counters stay in its log.
  */
 const TelemetryPage = () => {
-    const adminMode = useStore((state) => state.adminMode);
-    const status = useStore((state) => state.kartAgentStatus);
-    const error = useStore((state) => state.kartAgentError);
+    const adminMode = useSession((state) => state.adminMode);
+    const status = useAgent((state) => state.status);
+    const error = useAgent((state) => state.error);
 
     return (
         <Subpage

@@ -4,6 +4,8 @@ import type { GateInterface, NetworkGateStatus } from "@/helpers/ipc/network-gat
 import { AslLogo } from "@/components/shared/asl-logo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { networkGate } from "@/services/app";
+import { closeWindow } from "@/services/window";
 
 /** After this long the crew gets a hint that something is wrong. */
 const SLOW_AFTER_MS = 30_000;
@@ -134,14 +136,14 @@ const EngineerPanel = ({ open, onClose, status, now }: EngineerPanelProps) => (
                 icon={SkipForward}
                 label="Skip network check"
                 armedLabel="Tap again to skip"
-                onConfirm={() => window.app.skipNetworkGate()}
+                onConfirm={networkGate.skip}
             />
             <ConfirmButton
                 icon={Power}
                 label="Quit app"
                 armedLabel="Tap again to quit"
                 destructive
-                onConfirm={() => window.electronWindow.close()}
+                onConfirm={closeWindow}
             />
         </div>
     </section>

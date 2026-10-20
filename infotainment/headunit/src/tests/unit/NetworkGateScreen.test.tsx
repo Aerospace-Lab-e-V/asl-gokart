@@ -17,12 +17,12 @@ const status = (patch: Partial<NetworkGateStatus> = {}): NetworkGateStatus => ({
     ...patch,
 });
 
-const skipNetworkGate = jest.fn();
+const skip = jest.fn();
 const close = jest.fn();
 
 beforeEach(() => {
     jest.useFakeTimers({ now: START });
-    Object.assign(window, { app: { skipNetworkGate }, electronWindow: { close } });
+    Object.assign(window, { api: { networkGate: { skip }, window: { close } } });
 });
 
 afterEach(() => {
@@ -84,5 +84,5 @@ test("skip disarms again when the second tap does not come", () => {
     act(() => jest.advanceTimersByTime(3000));
     fireEvent.click(screen.getByRole("button", { name: /skip network check/i }));
 
-    expect(skipNetworkGate).not.toHaveBeenCalled();
+    expect(skip).not.toHaveBeenCalled();
 });

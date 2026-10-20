@@ -6,7 +6,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getConfig, putConfig } from "@/services/kart-agent/client";
+import { agent } from "@/services/agent";
+import { hardware } from "@/services/hardware";
 import { AgentConfig, ConfigPatch } from "@/services/kart-agent/schema";
 import { NetworkInterfaceFamily, parseNetworkInterfaces } from "@/lib/types/hardware";
 import log from "@/lib/logger";
@@ -41,7 +42,8 @@ export const TelemetryConfigDialog = ({ trigger }: { trigger: React.ReactNode })
             setForm(null);
             return;
         }
-        getConfig()
+        agent
+            .getConfig()
             .then((reply) => {
                 setSaved(toForm(reply.effective));
                 setForm(toForm(reply.effective));
@@ -51,7 +53,7 @@ export const TelemetryConfigDialog = ({ trigger }: { trigger: React.ReactNode })
                 toast.error(`Could not load the settings: ${e instanceof Error ? e.message : e}`);
                 setOpen(false);
             });
-        window.hardware
+        hardware
             .getAvailableNetworkInterfaces()
             .then((raw) => {
                 const names = parseNetworkInterfaces(raw)
@@ -70,7 +72,7 @@ export const TelemetryConfigDialog = ({ trigger }: { trigger: React.ReactNode })
     const save = async () => {
         setSaving(true);
         try {
-            const reply = await putConfig(patch);
+            const reply = await agent.putConfig(patch);
             toast(reply.restart_required ? "Saved, telemetry is restarting…" : "Saved");
             setOpen(false);
         } catch (e) {

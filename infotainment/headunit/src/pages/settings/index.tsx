@@ -1,7 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { useStore } from "@/stores/useStore";
-import { useShallow } from "zustand/react/shallow";
+import { useApp } from "@/stores/app";
+import { useAgent } from "@/stores/agent";
+import { useSession } from "@/stores/session";
+import { app } from "@/services/app";
+import { admin } from "@/services/admin";
+import { hardware } from "@/services/hardware";
 import { DriveModes } from "@/data/controlling_models/drivetrain";
 import { HeaderBar } from "@/components/shared/header-bar";
 import { toast } from "sonner";
@@ -13,7 +17,6 @@ import {
   Cog,
   Download,
   EthernetPort,
-  Gauge,
   Lock,
   Power,
   RadioTower,
@@ -27,7 +30,6 @@ import {
   SettingsLinkRow,
   SettingsRow,
   SettingsSection,
-  SettingsSliderRow,
 } from "@/components/settings/settings-list";
 
 const DRIVE_MODES = [
@@ -37,56 +39,32 @@ const DRIVE_MODES = [
   { value: DriveModes.ludicrous, label: "Ludicrous" },
 ];
 
-const SettingsPage = () => {
-  const {
-    driveMode,
-    speedLimit,
-    minSettableSpeed,
-    maxSettableSpeed,
-    appVersion,
-    logLevel,
-    adminMode,
-    setDriveMode,
-    setSpeedLimit,
-    setAppVersion,
-    setLogLevel,
-    setAdminMode,
-    setAdminPin,
-  } = useStore(
-    useShallow((state) => ({
-      driveMode: state.driveMode,
-      speedLimit: state.speedLimit,
-      minSettableSpeed: state.minSettableSpeed,
-      maxSettableSpeed: state.maxSettableSpeed,
-      appVersion: state.appVersion,
-      logLevel: state.logLevel,
-      adminMode: state.adminMode,
-      setDriveMode: state.setDriveMode,
-      setSpeedLimit: state.setSpeedLimit,
-      setAppVersion: state.setAppVersion,
-      setLogLevel: state.setLogLevel,
-      setAdminMode: state.setAdminMode,
-      setAdminPin: state.setAdminPin,
-    }))
+/**
+ * TODO(firmware): no ECU supports drive modes. Not mounted until one does; then send a command
+ * and show the ECU's echo instead of this local state.
+ */
+export const DriveModeRow = () => {
+  const [driveMode, setDriveMode] = useState(DriveModes.comfort);
+  return (
+    <SettingsRow icon={Zap} title="Drive mode">
+      <SegmentedControl label="Drive mode" value={driveMode} options={DRIVE_MODES} onValueChange={setDriveMode} />
+    </SettingsRow>
   );
+};
 
-  const uplinkState = useStore((state) =>
-    state.kartAgentError ? "Not running" : state.kartAgentStatus ? uplink(state.kartAgentStatus).state : ""
+const SettingsPage = () => {
+  const appVersion = useApp((state) => state.version);
+  const adminMode = useSession((state) => state.adminMode);
+  const uplinkState = useAgent((state) =>
+    state.error ? "Not running" : state.status ? uplink(state.status).state : ""
   );
+  const [logLevel, setLogLevel] = useState<LogLevel | null>(null);
   const [networkInterface, setNetworkInterface] = useState("");
 
   useEffect(() => {
-    const fetchAppVersion = async () => {
-      try {
-        const version = await window.app.getVersion();
-        setAppVersion(version);
-      } catch (e) {
-        log.error(e);
-      }
-    };
     const fetchLogLevel = async () => {
       try {
-        const level = (await window.app.getLogLevel()) as LogLevel;
+        const level = await app.getLogLevel();
         setLogLevel(level);
         setRendererLogLevel(level);
       } catch (e) {
@@ -95,21 +73,25 @@ const SettingsPage = () => {
     };
     const fetchNetworkInterface = async () => {
       try {
-        const current = await window.hardware.getNetworkInterface();
+        const current = await hardware.getNetworkInterface();
         setNetworkInterface(current?.name ?? "All interfaces");
       } catch (e) {
         log.error(e);
       }
     };
-    fetchAppVersion();
     fetchLogLevel();
     fetchNetworkInterface();
-  }, [setAppVersion, setLogLevel]);
+  }, []);
 
-  const handleAdminLogout = () => {
-    setAdminMode(false);
-    setAdminPin("");
-    toast("Admin mode disabled!");
+  // Main pushes the locked state to the session store.
+  const handleAdminLogout = async () => {
+    try {
+      await admin.lock();
+      toast("Admin mode disabled!");
+    } catch (e) {
+      log.error(e);
+      toast.error(`Could not lock: ${e instanceof Error ? e.message : e}`);
+    }
   };
 
   return (
@@ -117,21 +99,8 @@ const SettingsPage = () => {
       <HeaderBar />
 
       <div className="flex-1 overflow-y-auto px-8">
-        <SettingsSection title="Driver">
-          <SettingsRow icon={Zap} title="Drive mode">
-            <SegmentedControl label="Drive mode" value={driveMode} options={DRIVE_MODES} onValueChange={setDriveMode} />
-          </SettingsRow>
-          <SettingsSliderRow
-            icon={Gauge}
-            title="Max speed"
-            unit="km/h"
-            value={speedLimit}
-            min={minSettableSpeed}
-            max={maxSettableSpeed}
-            step={1}
-            onCommit={setSpeedLimit}
-          />
-        </SettingsSection>
+        {/* TODO(firmware): zc_throttle WebSocket path removed; re-add the Driver section with the
+            "Max speed" slider when settings move to Sero. Drive mode: see DriveModeRow. */}
 
         <SettingsSection title="System">
           {/* Telemetry (kart-agent): the row opens the details, the switch sends to the pit wall */}
@@ -162,19 +131,14 @@ const SettingsPage = () => {
 
         {adminMode && (
           <SettingsSection title="Engineer">
-            <SettingsLinkRow
-              to="/settings/drivetrain"
-              icon={Cog}
-              title="Drivetrain"
-              value={`${minSettableSpeed}–${maxSettableSpeed} km/h`}
-            />
-            <SettingsLinkRow to="/settings/system" icon={AppWindow} title="System" value={`Log level: ${logLevel}`} />
+            <SettingsLinkRow to="/settings/drivetrain" icon={Cog} title="Drivetrain" />
+            <SettingsLinkRow to="/settings/system" icon={AppWindow} title="System" value={logLevel && `Log level: ${logLevel}`} />
             <SettingsLinkRow to="/ecu-manager" icon={CircuitBoard} title="ECU Manager" />
-            <SettingsLinkRow to="/settings/update" icon={Download} title="App update" value={`v${appVersion}`} />
+            <SettingsLinkRow to="/settings/update" icon={Download} title="App update" value={appVersion && `v${appVersion}`} />
           </SettingsSection>
         )}
 
-        <p className="text-muted-foreground py-6 text-center text-base">Release {appVersion}</p>
+        <p className="text-muted-foreground py-6 text-center text-base">Release {appVersion ?? "unknown"}</p>
       </div>
     </div>
   );
