@@ -1,6 +1,7 @@
 import { OutgoingPacket } from "../../data/zonecontrollers/packets";
 import { BatteryCommands, LightsCommands, MotorCommands, Zones } from "../../data/zonecontrollers/zonecontrollers";
 import { ResolvedInterface } from "../../helpers/ipc/hardware/network-config";
+import { NetworkGateStatus } from "../../helpers/ipc/network-gate";
 
 interface ThemeModeContext {
     toggle: () => Promise<boolean>;
@@ -31,8 +32,8 @@ interface AppContext {
     setFullscreenOnStartup: (enabled: boolean) => Promise<boolean>;
     getDevToolsEnabled: () => Promise<boolean>;
     setDevToolsEnabled: (enabled: boolean) => Promise<boolean>;
-    isNetworkReady: () => Promise<boolean>;
-    onNetworkStatusChange: (callback: (status: { ready: boolean }) => void) => () => void;
+    getNetworkGateStatus: () => Promise<NetworkGateStatus>;
+    onNetworkStatusChange: (callback: (status: NetworkGateStatus) => void) => () => void;
     skipNetworkGate: () => Promise<void>;
 }
 

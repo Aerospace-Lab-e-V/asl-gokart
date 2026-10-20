@@ -32,6 +32,7 @@ import { useConnectionData } from "./hooks/useConnectionData";
 import { useKartAgentData } from "./hooks/useKartAgentData";
 import { initHardwareCommandSubscriber } from "./services/hardware-command-subscriber";
 import NetworkGateScreen from "./components/shared/network-gate-screen";
+import type { NetworkGateStatus } from "./helpers/ipc/network-gate";
 
 /** Sends back to Settings when admin mode is locked. */
 function AdminOnly({ children }: { children: React.ReactNode }) {
@@ -114,33 +115,24 @@ function MainAppContent() {
 }
 
 export default function App() {
-    const [networkReady, setNetworkReady] = useState<boolean | null>(null);
+    const [gate, setGate] = useState<NetworkGateStatus | null>(null);
     const [themeReady, setThemeReady] = useState(false);
 
     useEffect(() => {
         // Synced here, not in MainAppContent, so the gate screen follows the theme too
         syncThemeWithLocal().finally(() => setThemeReady(true));
-
-        // Query initial network readiness
-        window.app.isNetworkReady().then((ready) => {
-            setNetworkReady(ready);
-        });
-
-        // Listen for network gate readiness updates
-        const unsubscribe = window.app.onNetworkStatusChange((status) => {
-            setNetworkReady(status.ready);
-        });
-
-        return unsubscribe;
+        // An update that arrives before the initial status is newer, so it wins
+        window.app.getNetworkGateStatus().then((status) => setGate((current) => current ?? status));
+        return window.app.onNetworkStatusChange(setGate);
     }, []);
 
-    if (!themeReady || networkReady === null) {
+    if (!themeReady || gate === null) {
         // Blank while fetching theme and status, preventing a flash of the wrong screen or theme
         return <div className="bg-background h-full w-full" />;
     }
 
-    if (!networkReady) {
-        return <NetworkGateScreen />;
+    if (!gate.ready) {
+        return <NetworkGateScreen status={gate} />;
     }
 
     return <MainAppContent />;

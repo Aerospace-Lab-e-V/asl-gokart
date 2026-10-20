@@ -69,10 +69,16 @@ module.exports = {
                     from: { height: "var(--radix-accordion-content-height)" },
                     to: { height: "0" },
                 },
+                // Slides a 1/3-wide bar across its track, for progress of unknown length
+                indeterminate: {
+                    from: { transform: "translateX(-100%)" },
+                    to: { transform: "translateX(300%)" },
+                },
             },
             animation: {
                 "accordion-down": "accordion-down 0.2s ease-out",
                 "accordion-up": "accordion-up 0.2s ease-out",
+                indeterminate: "indeterminate 1.6s ease-in-out infinite",
             },
         },
     },
