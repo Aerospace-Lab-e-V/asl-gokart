@@ -35,8 +35,15 @@ export function startSeroService(mainWindow: BrowserWindow) {
     log.info("Starting SERO service...");
     log.info('SeroRuntime initialized on', runtime.getLocalAddress().ip, 'port', runtime.getLocalAddress().port);
     
+    // Services whose events this runtime subscribed to. Sero renews the subscriptions by itself
+    // when a service is found again (e.g. after an OTA restart), so each is subscribed only once;
+    // a second subscribeEvent would only swap the handler and leak the old JS callback.
+    const subscribedServices = new Set<number>();
+
     runtime.onServiceFound((serviceId, address) => {
         log.info('Service found:', serviceId, 'at', address);
+        if (subscribedServices.has(serviceId)) return;
+        subscribedServices.add(serviceId);
         if(serviceId == 0x0001) {
             // Subscribe to LED state change events (event ID 0x8001: [left, right])
             runtime.subscribeEvent(0x0001, 0x8001, (svcId, evtId, payload) => {
