@@ -28,48 +28,15 @@ bun run make:odroid
 - Pi 4 image: `./out/make/deb/arm64/headunit_X.X.X_arm64.deb`
 - ODROID image: `./out/make/deb/armv7l/headunit_X.X.X_armhf.deb`
 
-## WebSocket logic
+## Dataflow
 
-The backend (`ws-server.ts`) waits for new WS clients to connect and send a first `RegisterPacket` to declare which zone they belong to. It saves these tuples in a `Map<Zone, ZoneController>`.
+- Main: `src/main/adapters/sero.ts` decodes Sero events into catalog signals (`analytics/schema/signals.yaml` names) and
+  publishes them to `src/main/signal-hub.ts`, which tracks staleness and pushes changes to the
+  renderer as one `signals:batch` every 50 ms. Derived values (speed, SoC, temp stats, flow state, hazard) live in
+  `src/main/derive.ts`. Commands from the UI go through `src/main/command-bus.ts`.
+- Preload: `src/ipc/api.ts` is the whole renderer surface (`window.api`); channels are in `src/ipc/channels.ts`.
+- Renderer: `src/services/bridge.ts` (started in `renderer.ts`) writes main's pushes into `src/stores/*`. Views read
+  with `useSignal("battery.voltage")` (null = no sample or stale, shown as `--`) and act with `send()` /
+  `useCommand()` from `src/services/commands.ts`. State changes only when the ECU echoes it.
 
-After a WS client has registered itself in the backend, it can send "normal" `IncomingPacket`s containing data.
-
-### Register a new zone controller as WebSocket client
-
-1. Connect to the WebSocket server at `ws://localhost:6969`
-2. Send a JSON body containing the `RegisterPacket`
-```json
-{
-    "zone": "throttle"
-}
-```
-
-### Send data from a `ZoneController` to an `ipcRenderer` listener
-
-**Example**: Sending `getThrottle` to `window.websocket.onThrottleMessage`:
-
-1. Register successfully (See above)
-2. Send a JSON body containing the `IncomingPacket`
-```json
-{
-    "zone": "throttle
-    "command": "getThrootle",
-    "value": 0.25
-}
-```
-
-### Send data from `ipcRenderer` (a browser window) to a `ZoneController`
-
-**Example**: Sending the command `getHealth` to the `BatteryController`:
-
-1. Register the `BatteryController` successfully (See above)
-2. Call the `window.websocket.send()` function like this
-```ts
-function() {
-    const newPacket: OutgoingPacket = {
-        zone: Zones.BATTERY,
-        command: BatteryCommands.GET_HEALTH,
-    };
-    window.websocket.send(newPacket, Zones.BATTERY);
-    }
-```
+Adding a signal: name it in `src/domain/signals.ts` (catalog name), decode it in the Sero adapter, read it with `useSignal`.

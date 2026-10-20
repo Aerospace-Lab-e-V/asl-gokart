@@ -4,7 +4,7 @@ import {
     ConfigPatch,
     ConfigReply,
     ConfigReplySchema,
-} from "./schema";
+} from "@/services/kart-agent/schema";
 
 /**
  * kart-agent runs next to the headunit as a systemd service and serves its status

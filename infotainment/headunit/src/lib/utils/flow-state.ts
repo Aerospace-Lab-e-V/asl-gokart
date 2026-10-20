@@ -12,16 +12,3 @@ export function flowStateFor(batteryCurrent: number): Flow {
     if (Math.abs(batteryCurrent) < IDLE_CURRENT_A) return Flow.IDLE;
     return batteryCurrent > 0 ? Flow.REGEN : Flow.POWER;
 }
-
-/** @deprecated String form for the old renderer stores; use `FlowState` from `@/domain/signals`. */
-export enum FlowState {
-    POWER = "power",
-    REGEN = "regen",
-    IDLE = "idle",
-}
-
-const LEGACY = { [Flow.IDLE]: FlowState.IDLE, [Flow.POWER]: FlowState.POWER, [Flow.REGEN]: FlowState.REGEN };
-
-/** @deprecated Old renderer stores only; main publishes `drive.flow_state` via `flowStateFor`. */
-export const calculateFlowState = (batteryCurrent: number, _throttle?: number, _rpm?: number): FlowState =>
-    LEGACY[flowStateFor(batteryCurrent)];

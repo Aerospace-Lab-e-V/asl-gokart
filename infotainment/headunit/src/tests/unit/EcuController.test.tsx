@@ -43,8 +43,7 @@ const firmware = (status: EcuStatusMap) => ({
 
 const renderPage = async (status: EcuStatusMap, speed = 0, stale = false) => {
     const api = firmware(status);
-    // sero: HeaderBar still subscribes to it until it reads the stores.
-    Object.assign(window, { api: { firmware: api }, sero: { onBatteryMessage: () => () => {} } });
+    Object.assign(window, { api: { firmware: api } });
     useSignals.setState({ "drive.speed": { value: speed, ts: 0, stale } }, true);
     render(
         <MemoryRouter initialEntries={["/ecu-manager/zc_lights"]}>

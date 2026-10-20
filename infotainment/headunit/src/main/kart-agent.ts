@@ -1,6 +1,6 @@
 import { BrowserWindow, ipcMain } from "electron";
 import { CH } from "@/ipc/channels";
-import { getConfig, getStatus, putConfig } from "@/services/kart-agent/client";
+import { getConfig, getStatus, putConfig } from "@/main/kart-agent-client";
 import type { AgentState, ConfigPatch } from "@/services/kart-agent/schema";
 import { requireAdmin } from "./admin";
 

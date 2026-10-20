@@ -19,7 +19,7 @@ const config: ForgeConfig = {
         // full node_modules below.
         prune: true,
         // The Vite plugin's default ignore strips everything except .vite/,
-        // but main-process externals (sero-node, electron-log, faye-websocket
+        // but main-process externals (sero-node, electron-log
         // and their transitive deps) must be present in node_modules at runtime.
         ignore: (file: string) => {
             if (!file) return false;
