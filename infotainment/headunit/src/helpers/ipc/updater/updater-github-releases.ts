@@ -2,7 +2,7 @@ import * as https from 'https';
 import log from 'electron-log/main';
 import { AppRelease } from '@/data/updater/updater-types';
 
-const GITHUB_REPO = 'mad201802/asl-gokart';
+const GITHUB_REPO = 'Aerospace-Lab-e-V/asl-gokart';
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 interface CacheEntry {

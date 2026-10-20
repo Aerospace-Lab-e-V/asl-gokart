@@ -2,7 +2,7 @@ import https from 'https';
 import log from 'electron-log/main';
 import { FirmwareRelease } from '@/data/ecu/ecu-types';
 
-const GITHUB_REPO = 'mad201802/asl-gokart';
+const GITHUB_REPO = 'Aerospace-Lab-e-V/asl-gokart';
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 interface CacheEntry {
