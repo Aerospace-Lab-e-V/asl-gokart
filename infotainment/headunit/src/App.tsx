@@ -50,7 +50,6 @@ function MainAppContent() {
     useKartAgentData();
 
     useEffect(() => {
-        syncThemeWithLocal();
         updateAppLanguage(i18n);
         const unsubHardwareCommands = initHardwareCommandSubscriber();
         return unsubHardwareCommands;
@@ -116,8 +115,12 @@ function MainAppContent() {
 
 export default function App() {
     const [networkReady, setNetworkReady] = useState<boolean | null>(null);
+    const [themeReady, setThemeReady] = useState(false);
 
     useEffect(() => {
+        // Synced here, not in MainAppContent, so the gate screen follows the theme too
+        syncThemeWithLocal().finally(() => setThemeReady(true));
+
         // Query initial network readiness
         window.app.isNetworkReady().then((ready) => {
             setNetworkReady(ready);
@@ -131,9 +134,9 @@ export default function App() {
         return unsubscribe;
     }, []);
 
-    if (networkReady === null) {
-        // Blanks render while fetching status, preventing flash of gate screen
-        return <div className="w-full h-full min-h-screen bg-slate-950" />;
+    if (!themeReady || networkReady === null) {
+        // Blank while fetching theme and status, preventing a flash of the wrong screen or theme
+        return <div className="bg-background h-full w-full" />;
     }
 
     if (!networkReady) {
