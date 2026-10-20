@@ -8,25 +8,23 @@ import {
   DialogTrigger,
   DialogClose
 } from "@/components/ui/dialog"
-import { useStore } from "@/stores/useStore";
-import { useShallow } from "zustand/react/shallow";
 import React from "react";
-import { sendResetDailyDistance } from "@/services/throttle-commands";
+import { fmt } from "@/components/drive/format";
 
-const ResetDailyDistanceDialog = () => {
+interface ResetDailyDistanceDialogProps {
+    /** km; null shows "--". */
+    dailyDistance: number | null;
+    onReset: () => void;
+}
 
-    const { dailyDistance, setDailyDistance } = useStore(
-        useShallow((state) => ({
-            dailyDistance: state.dailyDistance,
-            setDailyDistance: state.setDailyDistance,
-        }))
-    );
+/** Not mounted. TODO(firmware): no ECU publishes trip distance; feed it from a signal and a reset command when one does. */
+const ResetDailyDistanceDialog = ({ dailyDistance, onReset }: ResetDailyDistanceDialogProps) => {
 
     return (
         <Dialog>
         <DialogTrigger>
           <Button variant="ghost">
-            <p className="text-lg">{dailyDistance.toFixed(1)} km</p>
+            <p className="text-lg">{fmt(dailyDistance, 1)} km</p>
           </Button>
         </DialogTrigger>
         <DialogContent>
@@ -41,7 +39,7 @@ const ResetDailyDistanceDialog = () => {
               </Button>
             </DialogClose>
             <DialogClose>
-              <Button variant="destructive" onClick={() => { setDailyDistance(0); sendResetDailyDistance(); }}>
+              <Button variant="destructive" onClick={onReset}>
                 <p>Reset</p>
               </Button>
             </DialogClose>

@@ -15,5 +15,6 @@ export interface ValueCardProps {
 }
 
 export interface BatteryIndicatorProps {
-  batteryLevel: number;
+  /** Percent 0-100; null shows "--". */
+  batteryLevel: number | null;
 }
