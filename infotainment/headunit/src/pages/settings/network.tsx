@@ -92,7 +92,7 @@ const NetworkInterfacePage = () => {
     return (
         <Subpage
             title="Network interface"
-            description="The network the WebSocket and SERO services listen on"
+            description="The network the SERO and firmware services listen on"
             backTo="/settings"
             backDisabled={saving}
             footer={

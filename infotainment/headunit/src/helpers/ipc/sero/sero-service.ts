@@ -2,7 +2,7 @@
 import {
     SeroRuntime,
 } from '@asl-gokart/sero-node';
-import { BrowserWindow, ipcMain, ipcRenderer } from 'electron';
+import { BrowserWindow, ipcMain } from 'electron';
 import log from 'electron-log/main';
 import { SERO_SEND_LIGHTS_CHANNEL, SERO_LIGHTS_MESSAGE_CHANNEL, SERO_BATTERY_MESSAGE_CHANNEL, SERO_MOTOR_MESSAGE_CHANNEL, SERO_SEND_MOTOR_CHANNEL } from './sero-channels';
 import { BatteryCommands, LightsCommands, MotorCommands, Zones } from '@/data/zonecontrollers/zonecontrollers';

@@ -1,5 +1,4 @@
-import { OutgoingPacket } from "../../data/zonecontrollers/packets";
-import { BatteryCommands, LightsCommands, MotorCommands, Zones } from "../../data/zonecontrollers/zonecontrollers";
+import { BatteryCommands, LightsCommands, MotorCommands } from "../../data/zonecontrollers/zonecontrollers";
 import { ResolvedInterface } from "../../helpers/ipc/hardware/network-config";
 import { NetworkGateStatus } from "../../helpers/ipc/network-gate";
 import { EcuId, EcuStatusMap, FlashHistory, OtaProgress } from "../../data/ecu/ecu-types";
@@ -16,11 +15,6 @@ interface ElectronWindow {
     minimize: () => Promise<void>;
     maximize: () => Promise<void>;
     close: () => Promise<void>;
-}
-
-interface WebSocketContext {
-    send: (message: OutgoingPacket, zone: Zones) => void;
-    onThrottleMessage: (callback: (throttleMessage: string) => void) => () => void;
 }
 
 interface AppContext {
@@ -107,7 +101,6 @@ declare global {
     interface Window {
         themeMode: ThemeModeContext;
         electronWindow: ElectronWindow;
-        websocket: WebSocketContext;
         sero: SeroContext;
         app: AppContext;
         hardware: HardwareContext;

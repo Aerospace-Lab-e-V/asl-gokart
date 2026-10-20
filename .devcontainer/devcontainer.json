@@ -62,7 +62,7 @@
         "actboy168.tasks",
         "Wokwi.wokwi-vscode",
         "eamodio.gitlens",
-        "dbaeumer.vscode-eslint",
+        "oxc.oxc-vscode",
         "esbenp.prettier-vscode",
         "bradlc.vscode-tailwindcss"
       ]

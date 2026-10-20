@@ -1,5 +1,5 @@
 import React from 'react';
-import { CustomPicker, InjectedColorProps, ColorChangeHandler, ColorResult } from 'react-color';
+import { CustomPicker, InjectedColorProps, ColorChangeHandler } from 'react-color';
 import { Hue } from 'react-color/lib/components/common';
 import { cn } from '@/lib/utils';
 import { ColorPickerProps } from './color-picker.types';
@@ -25,7 +25,7 @@ const ColorPickerBase: React.FC<CustomInjectedProps & ColorPickerProps> = ({
   onChange, 
   className 
 }) => {
-  const handleChange: ColorChangeHandler = (color, event) => {
+  const handleChange: ColorChangeHandler = (color) => {
     if (onChange) {
       onChange(color as any);
     }

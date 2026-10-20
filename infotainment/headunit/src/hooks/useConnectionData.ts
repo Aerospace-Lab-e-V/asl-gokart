@@ -9,7 +9,7 @@ export function useConnectionData() {
             try {
                 const networkInterface = await window.hardware.getNetworkInterface();
                 setGokartLanConnected(networkInterface !== null);
-            } catch (e) {
+            } catch {
                 setGokartLanConnected(false);
             }
         };
