@@ -8,9 +8,9 @@ import {
 
 /**
  * kart-agent runs next to the headunit as a systemd service and serves its status
- * and configuration on loopback. The renderer talks to it directly, so the Electron
- * main process stays out of the path (possible because the window has
- * webSecurity disabled; if that changes, this module is the one place to move to IPC).
+ * and configuration on loopback. Used by the main process (src/main/kart-agent.ts),
+ * which polls it and serves it to the renderer over IPC (CH.agent.*); the renderer
+ * does not fetch it (the window has webSecurity on).
  */
 export const KART_AGENT_URL = "http://127.0.0.1:7411";
 
