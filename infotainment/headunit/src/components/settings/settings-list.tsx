@@ -4,6 +4,7 @@ import { Check, ChevronRight, LucideIcon } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { semverCompare } from "@/lib/releases";
 import { cn } from "@/lib/utils";
 
 /*
@@ -112,6 +113,22 @@ export const SettingsRadioRow = ({ checked, onSelect, disabled, children, ...tex
 /** A small label next to a row's title or value, e.g. "In use". */
 export const RowBadge = ({ children, className }: { children: React.ReactNode; className?: string }) => (
     <span className={cn("text-muted-foreground rounded-md border px-2 py-0.5 text-base", className)}>{children}</span>
+);
+
+/** How a release relates to the version on the device; nothing while that version is unknown. */
+export const VersionBadge = ({ tag, currentVersion }: { tag: string; currentVersion: string | null | undefined }) => {
+    if (!currentVersion) return null;
+    const diff = semverCompare(tag, currentVersion);
+    if (diff === 0) return <RowBadge>installed</RowBadge>;
+    if (diff > 0) return <RowBadge className="border-green-500 text-green-500">upgrade</RowBadge>;
+    return <RowBadge className="border-orange-400 text-orange-400">downgrade</RowBadge>;
+};
+
+/** A centred message filling the page, for loading, empty and finished states. */
+export const Status = ({ children }: { children: React.ReactNode }) => (
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center" role="status">
+        {children}
+    </div>
 );
 
 type SettingsSwitchRowProps = RowTextProps & {
