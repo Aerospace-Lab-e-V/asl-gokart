@@ -8,7 +8,7 @@ export enum FlowState {
 // Calculate flow state based on battery current, throttle, and rpm
 // Battery current > 0 means power consumption (discharge)
 // Battery current < 0 means regeneration (charge)
-export const calculateFlowState = (batteryCurrent: number, throttle: number, rpm: number): FlowState => {
+export const calculateFlowState = (batteryCurrent: number, _throttle: number, _rpm: number): FlowState => {
     // If battery current magnitude is below threshold, consider idle
     if (Math.abs(batteryCurrent) < 5) {
         return FlowState.IDLE;

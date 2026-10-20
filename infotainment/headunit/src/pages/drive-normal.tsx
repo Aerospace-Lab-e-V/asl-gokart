@@ -34,12 +34,9 @@ const DriveNormalPage = () => {
     return () => observer.disconnect();
   }, []);
 
-  const { gear, rawThrottle, throttle, showRawThrottle, rpm, speed, rpmBoundaries, batteryPercentage, turnSignalRight, turnSignalLeft, hazardLights, headlights, highBeams, tailLights, avgBatteryTemp, leftMotorData, rightMotorData } = useStore(
+  const { gear, rpm, speed, rpmBoundaries, batteryPercentage, turnSignalRight, turnSignalLeft, hazardLights, headlights, highBeams, tailLights, avgBatteryTemp, leftMotorData, rightMotorData } = useStore(
     useShallow((state) => ({
       gear: state.gear,
-      rawThrottle: state.rawThrottle,
-      throttle: state.throttle,
-      showRawThrottle: state.showRawThrottle,
       rpm: state.rpm,
       speed: state.speed,
       rpmBoundaries: state.rpmBoundaries,

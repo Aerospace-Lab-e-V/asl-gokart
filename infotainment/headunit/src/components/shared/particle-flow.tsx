@@ -3,7 +3,6 @@ import { useFrame, extend } from "@react-three/fiber";
 import * as THREE from "three";
 import { shaderMaterial } from "@react-three/drei";
 import { useStore } from "@/stores/useStore";
-import { FlowState } from "@/stores/motorSlice";
 
 // Custom spark shader material
 const SparkMaterial = shaderMaterial(
@@ -156,16 +155,6 @@ interface Particle {
     phase: number;
     freqX: number;
     freqY: number;
-}
-
-// Generate random point within a circle
-function randomPointInCircle(center: Position2D, radius: number): Position2D {
-    const angle = Math.random() * Math.PI * 2;
-    const r = Math.sqrt(Math.random()) * radius; // sqrt for uniform distribution
-    return {
-        x: center.x + Math.cos(angle) * r,
-        y: center.y + Math.sin(angle) * r,
-    };
 }
 
 // Generate target offset within circular area

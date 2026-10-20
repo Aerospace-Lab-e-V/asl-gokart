@@ -6,7 +6,7 @@ import {
 import log from "@/lib/logger";
 import { ipcMain } from "electron";
 import os from "os";
-import { getStoredMac, setStoredMac, getCurrentInterface, resolveInterfaceByMac } from "./network-config";
+import { setStoredMac, getCurrentInterface, resolveInterfaceByMac } from "./network-config";
 import { restartWebSocketServer } from "@/helpers/ipc/websocket/ws-server";
 import { restartSeroService } from "@/helpers/ipc/sero/sero-service";
 import { restartFirmwareServer } from "@/helpers/ipc/firmware/firmware-server";

@@ -1,4 +1,4 @@
-import { IncomingPacket, OutgoingPacket } from "./packets";
+import { OutgoingPacket } from "./packets";
 import { DriveModes } from "../controlling_models/drivetrain";
 import { WebSocket } from "ws";
 

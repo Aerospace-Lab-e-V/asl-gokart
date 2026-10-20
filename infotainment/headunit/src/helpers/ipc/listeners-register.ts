@@ -1,8 +1,8 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { BrowserWindow, ipcMain } from "electron";
 import log from "electron-log/main";
 import { addThemeEventListeners } from "./theme/theme-listeners";
 import { addWindowEventListeners } from "./window/window-listeners";
-import { WEBSOCKET_SEND_CHANNEL, WEBSOCKET_THROTTLE_MESSAGE_CHANNEL } from "./websocket/ws-channels";
+import { WEBSOCKET_SEND_CHANNEL } from "./websocket/ws-channels";
 import { connected_zonecontrollers, startWebSocketServer } from "./websocket/ws-server";
 import { OutgoingPacket } from "@/data/zonecontrollers/packets";
 import { Zones } from "@/data/zonecontrollers/zonecontrollers";

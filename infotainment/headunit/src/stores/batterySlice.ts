@@ -1,6 +1,6 @@
 import { StateCreator } from 'zustand'
 import { MotorSlice } from './motorSlice'
-import { FlowState, calculateFlowState } from '@/lib/utils/flow-state'
+import { calculateFlowState } from '@/lib/utils/flow-state'
 import { BATTERY_MIN_VOLTAGE, BATTERY_MAX_VOLTAGE } from '@/data/battery-config'
 
 export interface BatterySlice {

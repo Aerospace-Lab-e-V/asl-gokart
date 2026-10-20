@@ -1,7 +1,7 @@
 import { BrowserWindow } from 'electron';
 import log from 'electron-log/main';
 import { BatteryContoller, ThrottleController, ZoneController, Zones } from '@/data/zonecontrollers/zonecontrollers';
-import { WEBSOCKET_BATTERY_MESSAGE_CHANNEL, WEBSOCKET_THROTTLE_MESSAGE_CHANNEL, WEBSOCKET_BUTTONS_MESSAGE_CHANNEL, WEBSOCKET_LIGHTS_MESSAGE_CHANNEL } from './ws-channels';
+import { WEBSOCKET_BATTERY_MESSAGE_CHANNEL, WEBSOCKET_THROTTLE_MESSAGE_CHANNEL, WEBSOCKET_LIGHTS_MESSAGE_CHANNEL } from './ws-channels';
 import * as http from 'http';
 import { ButtonHandler } from './handlers/button-handler';
 import { defaultButtonMappings } from './handlers/default-mapping';

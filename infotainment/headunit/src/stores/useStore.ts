@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { MotorSlice, createMotorSlice, FlowState } from './motorSlice'
+import { MotorSlice, createMotorSlice } from './motorSlice'
 import { SystemSlice, createSystemSlice } from './systemSlice'
 import { BatterySlice, createBatterySlice } from './batterySlice'
 import { SharedSlice, createSharedSlice } from './sharedSlice'

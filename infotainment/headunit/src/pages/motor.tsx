@@ -140,7 +140,7 @@ const MotorPage = () => {
             } else {
                 toast.error("Failed to toggle Relay 1");
             }
-        } catch (err) {
+        } catch {
             toast.error("Error communicating with motor controller");
         } finally {
             setRelay1Pending(false);
@@ -157,7 +157,7 @@ const MotorPage = () => {
             } else {
                 toast.error("Failed to toggle Relay 2");
             }
-        } catch (err) {
+        } catch {
             toast.error("Error communicating with motor controller");
         } finally {
             setRelay2Pending(false);
