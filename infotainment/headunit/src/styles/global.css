@@ -19,6 +19,55 @@ input, button, textarea, :focus {
     outline: none;
 }
 
+/* Boot splash (index.html). Plain CSS, no theme class yet: prefers-color-scheme follows the theme main
+   applied before opening the window. Colours match --background/--foreground. */
+#splash {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    place-items: center;
+    background: #ffffff;
+    color: #020817;
+    transition: opacity 300ms ease-out;
+}
+
+#splash[data-done] {
+    opacity: 0;
+    pointer-events: none;
+}
+
+#splash svg {
+    width: 160px;
+}
+
+.splash-ring {
+    animation: splash-breathe 2.4s ease-in-out infinite;
+}
+
+@media (prefers-color-scheme: dark) {
+    #splash {
+        background: #020817;
+        color: #f8fafc;
+    }
+
+    .splash-ring {
+        filter: drop-shadow(0 0 6px #00adef);
+    }
+}
+
+@keyframes splash-breathe {
+    50% {
+        opacity: 0.45;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .splash-ring {
+        animation: none;
+    }
+}
+
 /* +++++++++++++++++++++++++++++++++++++++++++++ */
 
 @layer base {

@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import log from "electron-log/main";
+import type { ThemeMode } from "@/lib/types/theme-mode";
 
 interface SystemConfigData {
     autoStart: boolean;
@@ -10,6 +11,8 @@ interface SystemConfigData {
     devToolsEnabled: boolean;
     /** Hex sha256 of the admin PIN. Edit it in the config file; there is no UI to change it. */
     adminPinHash: string;
+    /** Last theme chosen in the app, applied before the window opens so the boot splash matches it. */
+    theme: ThemeMode;
 }
 
 // TODO: set a kart-specific PIN hash in the config file. This default is sha256 of the old hard-coded "69420".
@@ -20,7 +23,10 @@ const DEFAULTS: SystemConfigData = {
     fullscreenOnStartup: false,
     devToolsEnabled: true,
     adminPinHash: DEFAULT_ADMIN_PIN_HASH,
+    theme: "system",
 };
+
+const THEMES: ThemeMode[] = ["dark", "light", "system"];
 
 const CONFIG_FILE = path.join(app.getPath("userData"), "system-config.json");
 
@@ -36,6 +42,7 @@ function readConfig(): SystemConfigData {
             fullscreenOnStartup: parsed.fullscreenOnStartup ?? false,
             devToolsEnabled: parsed.devToolsEnabled ?? true,
             adminPinHash: parsed.adminPinHash ?? DEFAULT_ADMIN_PIN_HASH,
+            theme: THEMES.includes(parsed.theme) ? parsed.theme : "system",
         };
     } catch (e) {
         log.error("[system-config] Failed to read system config:", e);
@@ -122,6 +129,16 @@ export function setDevToolsEnabled(enabled: boolean): boolean {
     config.devToolsEnabled = enabled;
     writeConfig(config);
     return getDevToolsEnabled();
+}
+
+export function getTheme(): ThemeMode {
+    return readConfig().theme;
+}
+
+export function setTheme(theme: ThemeMode): void {
+    const config = readConfig();
+    config.theme = theme;
+    writeConfig(config);
 }
 
 export function getAdminPinHash(): string {

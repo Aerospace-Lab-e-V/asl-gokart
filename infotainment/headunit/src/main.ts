@@ -1,10 +1,10 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, nativeTheme } from "electron";
 import log from "electron-log/main";
 import registerListeners from "./helpers/ipc/listeners-register";
 import path from "path";
 import { stopSeroAdapter } from "./main/adapters/sero";
 import { stopKartAgent } from "./main/kart-agent";
-import { getFullscreenOnStartup, getDevToolsEnabled } from "./helpers/ipc/application/system-config";
+import { getFullscreenOnStartup, getDevToolsEnabled, getTheme } from "./helpers/ipc/application/system-config";
 
 // Initialize electron-log before anything else
 log.initialize();
@@ -20,10 +20,14 @@ function createWindow() {
     const isFullscreen = getFullscreenOnStartup();
     // Read once: DevTools can only be opened in a window created with them enabled.
     const devToolsEnabled = getDevToolsEnabled();
+    // The saved theme drives prefers-color-scheme, so the window and the boot splash in index.html
+    // paint in it before the renderer has loaded. Colours are --background from global.css.
+    nativeTheme.themeSource = getTheme();
     const mainWindow = new BrowserWindow({
-        width: 1024,
+        width: 1000,
         height: 600,
         fullscreen: isFullscreen,
+        backgroundColor: nativeTheme.shouldUseDarkColors ? "#020817" : "#ffffff",
         webPreferences: {
             devTools: devToolsEnabled,
             contextIsolation: true,

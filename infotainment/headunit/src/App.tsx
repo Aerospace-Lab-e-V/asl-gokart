@@ -114,8 +114,19 @@ export default function App() {
         return networkGate.onStatus(setGate);
     }, []);
 
-    if (!themeReady || gate === null) {
-        // Blank while fetching theme and status, preventing a flash of the wrong screen or theme
+    const loading = !themeReady || gate === null;
+
+    // Fades out the boot splash from index.html once the first real screen can render.
+    useEffect(() => {
+        const splash = document.getElementById("splash");
+        if (loading || !splash) return;
+        splash.dataset.done = "";
+        // Matches the 300 ms fade in global.css; a timer, as transitionend never fires in a window that isn't painting.
+        setTimeout(() => splash.remove(), 300);
+    }, [loading]);
+
+    if (loading) {
+        // Blank under the splash while fetching theme and status, preventing a flash of the wrong screen or theme
         return <div className="bg-background h-full w-full" />;
     }
 
