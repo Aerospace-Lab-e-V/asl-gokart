@@ -1,14 +1,31 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import https from 'https';
-import http from 'http';
+import { pipeline } from 'stream/promises';
 import { app } from 'electron';
 import log from 'electron-log/main';
-import { EcuId } from '@/data/ecu/ecu-types';
+import { EcuDefinition, EcuId } from '@/data/ecu/ecu-types';
+import { ECU_DEFINITIONS } from '@/data/ecu/ecu-definitions';
 import { getBindAddress } from '@/helpers/ipc/hardware/network-config';
 import { FIRMWARE_SERVER_PORT } from '@/data/config';
+import { httpsGet } from '@/main/https-get';
+
+/** Release tags become directory names: word characters, dots and dashes, not starting with a dot. */
+const SAFE_TAG = /^(?!\.)[\w.-]+$/;
+
+export function getEcuDefinition(ecuId: EcuId): EcuDefinition {
+    const def = ECU_DEFINITIONS.find((d) => d.id === ecuId);
+    if (!def) throw new Error(`Unknown ECU id: ${ecuId}`);
+    return def;
+}
+
+/** Throws unless ecuId and tag are safe to use as path segments. */
+export function assertSafeFirmwareId(ecuId: EcuId, tag: string): void {
+    getEcuDefinition(ecuId);
+    if (typeof tag !== 'string' || !SAFE_TAG.test(tag)) throw new Error(`Invalid firmware tag: ${tag}`);
+}
 
 export function getFirmwarePath(ecuId: EcuId, tag: string): string {
+    assertSafeFirmwareId(ecuId, tag);
     return path.join(app.getPath('userData'), 'firmware', ecuId, tag, 'fw.bin');
 }
 
@@ -16,54 +33,22 @@ export function isDownloaded(ecuId: EcuId, tag: string): boolean {
     return fs.existsSync(getFirmwarePath(ecuId, tag));
 }
 
-export function downloadFirmware(ecuId: EcuId, tag: string, downloadUrl: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-        const filePath = getFirmwarePath(ecuId, tag);
-        const dir = path.dirname(filePath);
+export async function downloadFirmware(ecuId: EcuId, tag: string, downloadUrl: string): Promise<void> {
+    const filePath = getFirmwarePath(ecuId, tag);
+    // Written next to fw.bin and renamed when complete, so a cut download is never served as firmware.
+    const partPath = `${filePath}.part`;
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
 
-        fs.mkdirSync(dir, { recursive: true });
-
-        const file = fs.createWriteStream(filePath);
-        const protocol = downloadUrl.startsWith('https') ? https : http;
-
-        log.info(`[firmware-manager] Downloading ${ecuId} ${tag} from ${downloadUrl}`);
-
-        const request = protocol.get(downloadUrl, (res) => {
-            if (res.statusCode === 302 || res.statusCode === 301) {
-                // Follow redirect (GitHub release assets redirect to S3)
-                file.close();
-                fs.unlinkSync(filePath);
-                downloadFirmware(ecuId, tag, res.headers.location!).then(resolve).catch(reject);
-                return;
-            }
-
-            if (res.statusCode !== 200) {
-                file.close();
-                fs.unlinkSync(filePath);
-                reject(new Error(`Download failed with status ${res.statusCode}`));
-                return;
-            }
-
-            res.pipe(file);
-            file.on('finish', () => {
-                file.close(() => {
-                    log.info(`[firmware-manager] Downloaded ${ecuId} ${tag} to ${filePath}`);
-                    resolve();
-                });
-            });
-        });
-
-        request.on('error', (err) => {
-            file.close();
-            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-            reject(err);
-        });
-
-        request.setTimeout(60_000, () => {
-            request.destroy();
-            reject(new Error('Download timed out'));
-        });
-    });
+    log.info(`[firmware-manager] Downloading ${ecuId} ${tag} from ${downloadUrl}`);
+    const res = await httpsGet(downloadUrl, 60_000);
+    try {
+        await pipeline(res, fs.createWriteStream(partPath));
+        fs.renameSync(partPath, filePath);
+    } catch (err) {
+        fs.rmSync(partPath, { force: true });
+        throw err;
+    }
+    log.info(`[firmware-manager] Downloaded ${ecuId} ${tag} to ${filePath}`);
 }
 
 export function getCachedVersions(): Record<string, string[]> {
@@ -84,6 +69,7 @@ export function getCachedVersions(): Record<string, string[]> {
 }
 
 export function getFirmwareLocalUrl(ecuId: EcuId, tag: string): string {
+    assertSafeFirmwareId(ecuId, tag);
     const bindAddress = getBindAddress();
     return `http://${bindAddress}:${FIRMWARE_SERVER_PORT}/firmware/${ecuId}/${tag}/fw.bin`;
 }

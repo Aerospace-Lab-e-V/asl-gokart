@@ -4,12 +4,16 @@ import type { GateInterface, NetworkGateStatus } from "@/helpers/ipc/network-gat
 import { AslLogo } from "@/components/shared/asl-logo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { networkGate } from "@/services/app";
+import { closeWindow } from "@/services/window";
 
 /** After this long the crew gets a hint that something is wrong. */
 const SLOW_AFTER_MS = 30_000;
 /** How long Skip and Quit stay armed after the first tap, same as on the Power page. */
 const CONFIRM_MS = 3000;
 const PANEL_ID = "network-gate-engineer-info";
+/** Staggered entrance once the boot splash hands over the logo. */
+const RISE_IN = "animate-rise-in motion-reduce:animate-none";
 
 /**
  * Shown on boot until the car network interface is up. Drivers and pit crew only see the logo
@@ -22,37 +26,59 @@ export default function NetworkGateScreen({ status }: { status: NetworkGateStatu
 
     return (
         <main className="bg-background text-foreground relative flex h-full w-full flex-col items-center justify-center overflow-hidden">
-            {/* Moves up and shrinks so the status stays visible above the open engineer info */}
+            {/* The logo sits dead centre at the boot splash's size, so the splash fades out right over it
+                and only the rest rises in. Moves up and shrinks so the status stays visible above the open engineer info. */}
             <div
                 className={cn(
-                    "flex flex-col items-center gap-10 px-8 text-center",
+                    "absolute inset-0 grid grid-rows-[1fr_auto_1fr] justify-items-center px-8 text-center",
                     "transition-transform duration-300 ease-out motion-reduce:transition-none",
-                    engineerOpen && "-translate-y-36 scale-75"
+                    engineerOpen && "-translate-y-51 scale-75"
                 )}
             >
-                <AslLogo className="h-28 w-auto" />
+                <AslLogo className="row-start-2 h-28 w-auto" />
 
-                <div className="flex flex-col items-center gap-3">
-                    <h1 className="text-3xl font-semibold">Connecting to car</h1>
-                    <p className="text-muted-foreground text-lg" aria-live="polite">
-                        {slow
-                            ? "Taking longer than usual. Check the car network cable."
-                            : "The dashboard starts automatically once the car network is up."}
-                    </p>
-                </div>
+                <div className="row-start-3 flex flex-col items-center gap-10 pt-10">
+                    <div className="flex flex-col items-center gap-3">
+                        <h1
+                            className={cn(
+                                "text-3xl font-semibold [animation-delay:150ms]",
+                                RISE_IN
+                            )}
+                        >
+                            Connecting to car
+                        </h1>
+                        <p
+                            className={cn(
+                                "text-muted-foreground text-lg [animation-delay:300ms]",
+                                RISE_IN
+                            )}
+                            aria-live="polite"
+                        >
+                            {slow
+                                ? "Taking longer than usual. Check the car network cable."
+                                : "The dashboard starts automatically once the car network is up."}
+                        </p>
+                    </div>
 
-                <div
-                    role="progressbar"
-                    aria-label="Connecting to car"
-                    className="bg-muted h-1 w-56 overflow-hidden rounded-full"
-                >
-                    <div className="bg-foreground/70 animate-indeterminate h-full w-1/3 rounded-full motion-reduce:animate-none" />
+                    <div
+                        role="progressbar"
+                        aria-label="Connecting to car"
+                        className={cn(
+                            "bg-muted h-1 w-56 overflow-hidden rounded-full [animation-delay:450ms]",
+                            RISE_IN
+                        )}
+                    >
+                        <div className="bg-foreground/70 animate-indeterminate h-full w-1/3 rounded-full motion-reduce:animate-none" />
+                    </div>
                 </div>
             </div>
 
             <Button
                 variant="ghost"
-                className="text-muted-foreground absolute bottom-4 h-12 gap-2 px-6 text-base"
+                className={cn(
+                    "text-muted-foreground absolute bottom-4 h-12 gap-2 px-6 text-base [animation-delay:700ms]",
+                    RISE_IN
+                )}
                 aria-expanded={engineerOpen}
                 aria-controls={PANEL_ID}
                 onClick={() => setEngineerOpen(true)}
@@ -134,14 +160,14 @@ const EngineerPanel = ({ open, onClose, status, now }: EngineerPanelProps) => (
                 icon={SkipForward}
                 label="Skip network check"
                 armedLabel="Tap again to skip"
-                onConfirm={() => window.app.skipNetworkGate()}
+                onConfirm={networkGate.skip}
             />
             <ConfirmButton
                 icon={Power}
                 label="Quit app"
                 armedLabel="Tap again to quit"
                 destructive
-                onConfirm={() => window.electronWindow.close()}
+                onConfirm={closeWindow}
             />
         </div>
     </section>

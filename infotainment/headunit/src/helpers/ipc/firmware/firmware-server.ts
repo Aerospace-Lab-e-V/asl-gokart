@@ -5,6 +5,17 @@ import { app } from 'electron';
 import log from 'electron-log/main';
 import { getBindAddress } from '@/helpers/ipc/hardware/network-config';
 import { FIRMWARE_SERVER_PORT } from '@/data/config';
+import { EcuId } from '@/data/ecu/ecu-types';
+import { assertSafeFirmwareId } from './firmware-manager';
+
+function isSafeFirmwareId(ecuId: string, tag: string): boolean {
+    try {
+        assertSafeFirmwareId(ecuId as EcuId, tag);
+        return true;
+    } catch {
+        return false;
+    }
+}
 
 let currentServer: http.Server | null = null;
 
@@ -51,7 +62,7 @@ export function startFirmwareServer(): void {
         const [, ecuId, tag] = match;
         const filePath = path.join(cacheRoot, ecuId, tag, 'fw.bin');
 
-        if (!fs.existsSync(filePath)) {
+        if (!isSafeFirmwareId(ecuId, tag) || !fs.existsSync(filePath)) {
             res.writeHead(404);
             res.end('Firmware not found');
             return;

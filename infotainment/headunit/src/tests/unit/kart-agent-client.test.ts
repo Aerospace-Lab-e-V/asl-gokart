@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { AgentStatusSchema } from "@/services/kart-agent/schema";
-import { getStatus, KartAgentError, putConfig } from "@/services/kart-agent/client";
+import { getStatus, KartAgentError, putConfig } from "@/main/kart-agent-client";
 import { formPatch } from "@/components/telemetry/telemetry-config-dialog";
 import { carNetwork, overall, recording, uplink } from "@/services/kart-agent/health";
 

@@ -1,3 +1,3 @@
-import exposeContexts from "./helpers/ipc/context-exposer";
+import { exposeApi } from "./ipc/api";
 
-exposeContexts();
+exposeApi();

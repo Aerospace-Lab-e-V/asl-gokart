@@ -1,4 +1,5 @@
 import * as https from 'https';
+import * as path from 'path';
 import log from 'electron-log/main';
 import { AppRelease } from '@/data/updater/updater-types';
 
@@ -96,6 +97,20 @@ export async function fetchAppReleases(): Promise<AppRelease[]> {
     releaseCache = { releases, fetchedAt: Date.now() };
     log.info(`[updater-github-releases] Found ${releases.length} release(s) for arch ${arch}`);
     return releases;
+}
+
+/**
+ * The release to install for `tag`, from the GitHub list (never from the renderer). Its asset name
+ * becomes a file name, so it must be exactly the expected .deb name with no path in it.
+ */
+export async function resolveAppRelease(tag: string): Promise<AppRelease> {
+    const release = (await fetchAppReleases()).find((r) => r.tag === tag);
+    if (!release) throw new Error(`Release ${tag} not found`);
+    const { assetName } = release;
+    if (assetName !== debAssetName(release.tag) || path.basename(assetName) !== assetName || assetName.includes('\\')) {
+        throw new Error(`Refusing unexpected asset name: ${assetName}`);
+    }
+    return release;
 }
 
 export function invalidateAppReleaseCache(): void {

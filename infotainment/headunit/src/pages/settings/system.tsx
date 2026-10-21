@@ -1,9 +1,8 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { useShallow } from "zustand/react/shallow";
 import { Subpage } from "@/components/shared/subpage";
 import { SegmentedControl, SettingsRow, SettingsSection, SettingsSwitchRow } from "@/components/settings/settings-list";
-import { useStore } from "@/stores/useStore";
+import { app } from "@/services/app";
 import log, { setRendererLogLevel, type LogLevel } from "@/lib/logger";
 
 const LOG_LEVELS: { value: LogLevel; label: string }[] = [
@@ -13,61 +12,53 @@ const LOG_LEVELS: { value: LogLevel; label: string }[] = [
     { value: "debug", label: "Debug" },
 ];
 
-/** Applies a startup option in the main process and stores what it reports back. */
-const applyOption = (name: string, set: (enabled: boolean) => Promise<boolean>, store: (enabled: boolean) => void) =>
+const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/** Applies a startup option in the main process and shows what it reports back. */
+const applyOption = (name: string, set: (enabled: boolean) => Promise<boolean>, show: (enabled: boolean) => void) =>
     (enabled: boolean) =>
         set(enabled)
             .then((result) => {
-                store(result);
+                show(result);
                 toast(`${name} ${result ? "enabled" : "disabled"}!`);
             })
             .catch((e) => {
                 log.error(e);
-                toast.error(`Failed to change ${name}!`);
+                toast.error(`Failed to change ${name}: ${errorText(e)}`);
             });
 
+/** Main owns these settings; the page shows what main reports, read on every visit. */
 const SystemPage = () => {
-    const {
-        logLevel,
-        autoStart,
-        fullscreenOnStartup,
-        devToolsEnabled,
-        setLogLevel,
-        setAutoStart,
-        setFullscreenOnStartup,
-        setDevToolsEnabled,
-    } = useStore(
-        useShallow((state) => ({
-            logLevel: state.logLevel,
-            autoStart: state.autoStart,
-            fullscreenOnStartup: state.fullscreenOnStartup,
-            devToolsEnabled: state.devToolsEnabled,
-            setLogLevel: state.setLogLevel,
-            setAutoStart: state.setAutoStart,
-            setFullscreenOnStartup: state.setFullscreenOnStartup,
-            setDevToolsEnabled: state.setDevToolsEnabled,
-        }))
-    );
+    const [logLevel, setLogLevel] = useState<LogLevel>("info");
+    const [autoStart, setAutoStart] = useState(false);
+    const [fullscreenOnStartup, setFullscreenOnStartup] = useState(false);
+    const [devToolsEnabled, setDevToolsEnabled] = useState(false);
 
     useEffect(() => {
-        const fetchOption = async (get: () => Promise<boolean>, store: (enabled: boolean) => void) => {
+        const fetchOption = async <T,>(get: () => Promise<T>, show: (value: T) => void) => {
             try {
-                store(await get());
+                show(await get());
             } catch (e) {
                 log.error(e);
             }
         };
-        fetchOption(window.app.getAutoStart, setAutoStart);
-        fetchOption(window.app.getFullscreenOnStartup, setFullscreenOnStartup);
-        fetchOption(window.app.getDevToolsEnabled, setDevToolsEnabled);
-    }, [setAutoStart, setFullscreenOnStartup, setDevToolsEnabled]);
+        fetchOption(app.getLogLevel, setLogLevel);
+        fetchOption(app.getAutoStart, setAutoStart);
+        fetchOption(app.getFullscreenOnStartup, setFullscreenOnStartup);
+        fetchOption(app.getDevToolsEnabled, setDevToolsEnabled);
+    }, []);
 
     const handleLogLevelChange = async (level: LogLevel) => {
-        setLogLevel(level);
-        setRendererLogLevel(level);
-        await window.app.setLogLevel(level);
-        toast(`Log level set to ${level}`);
-        log.info(`Log level changed to: ${level}`);
+        try {
+            const applied = await app.setLogLevel(level);
+            setLogLevel(applied);
+            setRendererLogLevel(applied);
+            toast(`Log level set to ${applied}`);
+            log.info(`Log level changed to: ${applied}`);
+        } catch (e) {
+            log.error(e);
+            toast.error(`Failed to change the log level: ${errorText(e)}`);
+        }
     };
 
     return (
@@ -83,19 +74,19 @@ const SystemPage = () => {
                     id="auto-start"
                     title="Auto-start on boot"
                     checked={autoStart}
-                    onCheckedChange={applyOption("Auto-start", window.app.setAutoStart, setAutoStart)}
+                    onCheckedChange={applyOption("Auto-start", app.setAutoStart, setAutoStart)}
                 />
                 <SettingsSwitchRow
                     id="fullscreen-on-startup"
                     title="Start in fullscreen"
                     checked={fullscreenOnStartup}
-                    onCheckedChange={applyOption("Start in fullscreen", window.app.setFullscreenOnStartup, setFullscreenOnStartup)}
+                    onCheckedChange={applyOption("Start in fullscreen", app.setFullscreenOnStartup, setFullscreenOnStartup)}
                 />
                 <SettingsSwitchRow
                     id="devtools-enabled"
                     title="Developer tools"
                     checked={devToolsEnabled}
-                    onCheckedChange={applyOption("Developer tools", window.app.setDevToolsEnabled, setDevToolsEnabled)}
+                    onCheckedChange={applyOption("Developer tools", app.setDevToolsEnabled, setDevToolsEnabled)}
                 />
             </SettingsSection>
         </Subpage>

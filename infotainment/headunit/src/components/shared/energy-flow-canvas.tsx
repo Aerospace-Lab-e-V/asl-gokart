@@ -1,6 +1,6 @@
 import React, { Suspense } from "react";
 import { Canvas } from "@react-three/fiber";
-import { useStore } from "@/stores/useStore";
+import { useSession } from "@/stores/session";
 import { ParticleFlow } from "./particle-flow";
 
 interface EnergyFlowCanvasProps {
@@ -16,7 +16,7 @@ const EnergyFlowCanvas: React.FC<EnergyFlowCanvasProps> = ({
     containerWidth,
     containerHeight,
 }) => {
-    const showParticleEffects = useStore((state) => state.showParticleEffects);
+    const showParticleEffects = useSession((state) => state.showParticleEffects);
 
     if (!showParticleEffects) {
         return null;

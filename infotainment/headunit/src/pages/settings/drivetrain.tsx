@@ -1,52 +1,17 @@
 import React from "react";
-import { useShallow } from "zustand/react/shallow";
 import { Subpage } from "@/components/shared/subpage";
-import { SettingsSection, SettingsSliderRow } from "@/components/settings/settings-list";
-import { useStore } from "@/stores/useStore";
 
-const DrivetrainPage = () => {
-    const {
-        maxSettableSpeed,
-        minSettableSpeed,
-        setMaxSettableSpeed,
-        setMinSettableSpeed,
-    } = useStore(
-        useShallow((state) => ({
-            maxSettableSpeed: state.maxSettableSpeed,
-            minSettableSpeed: state.minSettableSpeed,
-            setMaxSettableSpeed: state.setMaxSettableSpeed,
-            setMinSettableSpeed: state.setMinSettableSpeed,
-        }))
-    );
-
-    return (
-        <Subpage title="Drivetrain" description="Limits the driver can choose from" backTo="/settings">
-            <SettingsSection title="Speed limits">
-                <SettingsSliderRow
-                    title="Max. settable speed"
-                    unit="km/h"
-                    value={maxSettableSpeed}
-                    min={0}
-                    max={120}
-                    step={5}
-                    onCommit={setMaxSettableSpeed}
-                >
-                    {(speed) =>
-                        speed === 0 && <p className="text-lg text-red-500">The kart won't drive in this configuration!</p>
-                    }
-                </SettingsSliderRow>
-                <SettingsSliderRow
-                    title="Min. settable speed"
-                    unit="km/h"
-                    value={minSettableSpeed}
-                    min={0}
-                    max={120}
-                    step={5}
-                    onCommit={setMinSettableSpeed}
-                />
-            </SettingsSection>
-        </Subpage>
-    );
-};
+/*
+ * TODO(firmware): zc_throttle WebSocket path removed; re-add when settings move to Sero.
+ * The controls that went over it: max/min settable speed, pedal multiplier, pipe-through raw
+ * throttle, show raw throttle and the controller UART reconnect (see git history of this file).
+ */
+const DrivetrainPage = () => (
+    <Subpage title="Drivetrain" description="Limits the driver can choose from" backTo="/settings">
+        <p className="text-muted-foreground flex flex-1 items-center justify-center text-xl">
+            Not available until the throttle controller talks SERO
+        </p>
+    </Subpage>
+);
 
 export default DrivetrainPage;

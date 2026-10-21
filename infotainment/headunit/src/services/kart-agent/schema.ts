@@ -95,3 +95,9 @@ export type ConfigPatch = {
     live?: Partial<{ enabled: boolean | null; broker_url: string | null; batch_ms: number | null }>;
     sero?: Partial<{ interface: string | null; client_id: number | null; port: number | null }>;
 };
+
+/** What main pushes after each poll: the last status read (kept while unreachable) and why the last poll failed. */
+export interface AgentState {
+    status: AgentStatus | null;
+    error: string | null;
+}

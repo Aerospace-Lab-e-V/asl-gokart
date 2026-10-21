@@ -1,8 +1,11 @@
-import React, { useRef, useMemo, useEffect, useState } from "react";
+import React, { useRef, useMemo } from "react";
 import { useFrame, extend } from "@react-three/fiber";
 import * as THREE from "three";
 import { shaderMaterial } from "@react-three/drei";
-import { useStore } from "@/stores/useStore";
+import { FlowState } from "@/domain/signals";
+import { readSignal } from "@/stores/signals";
+import { useSession } from "@/stores/session";
+import { useIsDark } from "@/hooks/use-is-dark";
 
 // Custom spark shader material
 const SparkMaterial = shaderMaterial(
@@ -75,6 +78,17 @@ const COLORS = {
         idle: { primary: "#9CA3AF", secondary: "#D1D5DB" },
     },
 };
+
+const PALETTE_KEY = {
+    [FlowState.POWER]: "power",
+    [FlowState.REGEN]: "regen",
+    [FlowState.IDLE]: "idle",
+} as const;
+
+/** Read per frame, not per render: battery current updates far faster than React should re-render. */
+function currentFlowState(): FlowState {
+    return useSession.getState().flowStateOverride ?? (readSignal("drive.flow_state") as FlowState | null) ?? FlowState.IDLE;
+}
 
 // Particle counts optimized for Raspberry Pi 4
 const PARTICLES_PER_MOTOR = 80;
@@ -178,35 +192,12 @@ const ParticleFlow: React.FC<ParticleFlowProps> = ({
     containerHeight,
 }) => {
     const pointsRef = useRef<THREE.Points>(null);
-    const batteryCurrent = useStore((state) => state.batteryCurrent);
-    const flowState = useStore((state) => state.flowState);
-    
+
     // Scale factor for control point variance (based on screen size)
     const pathVariance = Math.min(containerWidth, containerHeight) * 0.1;
 
-    const [isDarkMode, setIsDarkMode] = useState(
-        document.documentElement.classList.contains("dark")
-    );
-
-    // Listen for theme changes
-    useEffect(() => {
-        const observer = new MutationObserver(() => {
-            setIsDarkMode(document.documentElement.classList.contains("dark"));
-        });
-
-        observer.observe(document.documentElement, {
-            attributes: true,
-            attributeFilter: ["class"],
-        });
-
-        return () => observer.disconnect();
-    }, []);
-
-    // Get colors based on theme and flow state
-    const colors = useMemo(() => {
-        const palette = isDarkMode ? COLORS.dark : COLORS.light;
-        return palette[flowState];
-    }, [isDarkMode, flowState]);
+    const isDarkMode = useIsDark();
+    const palette = isDarkMode ? COLORS.dark : COLORS.light;
 
     // Initialize particles - always create max count to avoid buffer resize
     const particles = useMemo(() => {
@@ -288,8 +279,11 @@ const ParticleFlow: React.FC<ParticleFlowProps> = ({
         const colorAttr = geometry.getAttribute("color") as THREE.BufferAttribute;
         const sizeAttr = geometry.getAttribute("size") as THREE.BufferAttribute;
 
+        const flowState = currentFlowState();
+        const colors = palette[PALETTE_KEY[flowState] ?? "idle"];
+
         // Speed multiplier based on current magnitude
-        const currentMagnitude = Math.min(Math.abs(batteryCurrent) / 100, 1);
+        const currentMagnitude = Math.min(Math.abs(readSignal("battery.current") ?? 0) / 100, 1);
         const baseSpeed = 0.2 + currentMagnitude * 0.6;
 
         // Parse colors
@@ -297,7 +291,7 @@ const ParticleFlow: React.FC<ParticleFlowProps> = ({
         const secondaryColor = new THREE.Color(colors.secondary);
 
         // Determine active particle count per motor based on flow state
-        const activePerMotor = flowState === "idle" ? IDLE_PARTICLES_PER_MOTOR : PARTICLES_PER_MOTOR;
+        const activePerMotor = flowState === FlowState.IDLE ? IDLE_PARTICLES_PER_MOTOR : PARTICLES_PER_MOTOR;
 
         const allParticles = [...particles.left, ...particles.right];
         const isLeftMotor = (index: number) => index < particles.left.length;
@@ -350,7 +344,7 @@ const ParticleFlow: React.FC<ParticleFlowProps> = ({
                 y: motorPos.y + particle.targetOffset.y,
             };
 
-            if (flowState === "idle") {
+            if (flowState === FlowState.IDLE) {
                 // Lissajous orbit around motor
                 pos = lissajousPoint(
                     state.clock.elapsedTime * 0.5 + particle.phase,
@@ -367,7 +361,7 @@ const ParticleFlow: React.FC<ParticleFlowProps> = ({
                 // REGEN mode: motor -> branching -> source (energy flows FROM motors)
                 
                 const t = particle.t;
-                const isRegen = flowState === "regen";
+                const isRegen = flowState === FlowState.REGEN;
                 
                 // Define path endpoints based on flow direction
                 const pathStart = isRegen ? targetPos : sourcePosition;
@@ -403,7 +397,7 @@ const ParticleFlow: React.FC<ParticleFlowProps> = ({
 
             // Size with slight pulsing - smaller for idle mode
             const pulse = 1 + Math.sin(state.clock.elapsedTime * 3 + particle.phase) * 0.2;
-            const sizeMultiplier = flowState === "idle" ? 0.6 : 1.0;
+            const sizeMultiplier = flowState === FlowState.IDLE ? 0.6 : 1.0;
             sizeAttr.setX(i, particle.size * pulse * sizeMultiplier);
         });
 

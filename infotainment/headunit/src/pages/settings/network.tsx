@@ -5,6 +5,7 @@ import { Subpage } from "@/components/shared/subpage";
 import { Button } from "@/components/ui/button";
 import { RowBadge, SettingsRadioRow, SettingsSection } from "@/components/settings/settings-list";
 import { NetworkInterface, NetworkInterfaceFamily, NetworkInterfaceType, parseNetworkInterfaces } from "@/lib/types";
+import { hardware } from "@/services/hardware";
 import log from "@/lib/logger";
 
 /**
@@ -30,8 +31,8 @@ const NetworkInterfacePage = () => {
         const load = async () => {
             try {
                 const [raw, current] = await Promise.all([
-                    window.hardware.getAvailableNetworkInterfaces(),
-                    window.hardware.getNetworkInterface(),
+                    hardware.getAvailableNetworkInterfaces(),
+                    hardware.getNetworkInterface(),
                 ]);
                 setInterfaces(selectable(parseNetworkInterfaces(raw)));
                 setCurrentMac(current?.mac ?? null);
@@ -50,7 +51,7 @@ const NetworkInterfacePage = () => {
         if (!changed) return;
         setSaving(true);
         try {
-            const result = await window.hardware.setNetworkInterface(selectedMac);
+            const result = await hardware.setNetworkInterface(selectedMac);
             log.info("Background network interface changed:", result);
             setCurrentMac(result?.mac ?? null);
             setSelectedMac(result?.mac ?? null);

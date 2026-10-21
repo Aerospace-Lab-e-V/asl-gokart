@@ -74,11 +74,16 @@ module.exports = {
                     from: { transform: "translateX(-100%)" },
                     to: { transform: "translateX(300%)" },
                 },
+                "rise-in": {
+                    from: { opacity: "0", transform: "translateY(12px)" },
+                },
             },
             animation: {
                 "accordion-down": "accordion-down 0.2s ease-out",
                 "accordion-up": "accordion-up 0.2s ease-out",
                 indeterminate: "indeterminate 1.6s ease-in-out infinite",
+                // Delay with [animation-delay:…]; "both" keeps it hidden until then
+                "rise-in": "rise-in 900ms cubic-bezier(0.16, 1, 0.3, 1) both",
             },
         },
     },

@@ -3,7 +3,7 @@ import React from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import EcuControllerPage from "@/pages/ecu-controller";
 import { EcuPresence, EcuStatusMap, OtaPhase, OtaProgress } from "@/data/ecu/ecu-types";
-import { useStore } from "@/stores/useStore";
+import { useSignals } from "@/stores/signals";
 
 const online: EcuPresence = { online: true, ip: "192.168.1.21", changedAt: 0 };
 const offline: EcuPresence = { online: false, changedAt: 0 };
@@ -37,14 +37,14 @@ const firmware = (status: EcuStatusMap) => ({
         pushProgress = cb;
         return () => {};
     }),
-    downloadFirmware: jest.fn(),
+    download: jest.fn(),
     triggerOta: jest.fn().mockResolvedValue({ success: true, url: "" }),
 });
 
-const renderPage = async (status: EcuStatusMap, speed = 0) => {
+const renderPage = async (status: EcuStatusMap, speed = 0, stale = false) => {
     const api = firmware(status);
-    Object.assign(window, { firmware: api, sero: { onBatteryMessage: () => () => {} } });
-    useStore.setState({ speed });
+    Object.assign(window, { api: { firmware: api } });
+    useSignals.setState({ "drive.speed": { value: speed, ts: 0, stale } }, true);
     render(
         <MemoryRouter initialEntries={["/ecu-manager/zc_lights"]}>
             <Routes>
@@ -65,6 +65,7 @@ test("an online controller of a stationary kart can be flashed after confirming"
     expect(screen.getByText("Flash the Lights Controller")).toBeInTheDocument();
     expect(api.triggerOta).not.toHaveBeenCalled();
     await act(async () => fireEvent.click(screen.getByRole("button", { name: /Flash now/ })));
+    expect(api.getReleases).toHaveBeenCalledWith("zc_lights");
     expect(api.triggerOta).toHaveBeenCalledWith("zc_lights", "v0.4.17");
 
     act(() => pushProgress({ ecuId: "zc_lights", tag: "v0.4.17", phase: OtaPhase.Online }));
@@ -77,15 +78,25 @@ test("an offline controller cannot be flashed", async () => {
     expect(screen.getByText("ECU offline")).toBeInTheDocument();
 });
 
-test("a moving kart cannot flash, unless the motor controller is offline", async () => {
+test("a moving kart cannot flash", async () => {
     await renderPage(statusMap(), 12);
     expect(flashButton()).toBeDisabled();
     expect(screen.getByText("Stop the kart to flash")).toBeInTheDocument();
 });
 
-test("speed is ignored while the motor controller is offline", async () => {
-    await renderPage(statusMap({ zc_motor: offline }), 12);
+test("a stale speed does not block; main has the last word", async () => {
+    await renderPage(statusMap(), 12, true);
     expect(flashButton()).toBeEnabled();
+});
+
+test("shows why main refused to flash", async () => {
+    const api = await renderPage(statusMap());
+    api.triggerOta.mockRejectedValue(new Error("The kart is moving"));
+    fireEvent.click(flashButton());
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: /Flash now/ })));
+
+    expect(await screen.findByText("The kart is moving")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Try again/ })).toBeInTheDocument();
 });
 
 test("a failed flash shows the error at the step that failed", async () => {

@@ -1,209 +1,182 @@
-import TabsSelector from "@/components/shared/tabs-selector";
-import { Progress } from "@/components/ui/progress";
-import { useStore } from "@/stores/useStore";
-import { useShallow } from "zustand/react/shallow";
-import { tabsSelectorStates } from "@/data/controlling_models/drivetrain";
-import {
-  CircularProgressbarWithChildren,
-  buildStyles,
-} from "react-circular-progressbar";
-import "react-circular-progressbar/dist/styles.css";
+import { Gears } from "@/data/controlling_models/drivetrain";
 import { HeaderBar } from "@/components/shared/header-bar";
-import ResetDailyDistanceDialog from "@/components/shared/reset-daily-distance-dialog";
-import React, { useState, useEffect } from "react";
-import { LightsCommands } from "@/data/zonecontrollers/zonecontrollers";
-import { Construction, Lightbulb, OctagonAlert, Spotlight, SquareArrowLeft, SquareArrowRight, TriangleAlert } from "lucide-react";
-import { THROTTLE_BOUNDARIES, THROTTLE_SEGMENTS, RPM_SEGMENTS } from "@/data/gauge-config";
+import React from "react";
+import { DaytimeRunningLights, HazardLights, HighBeam, HvBatteryFault, InverterFault, MotorFault, ParkingLights, TurnSignalLeft, TurnSignalRight } from "@/components/icons/telltale";
+import { THROTTLE_BOUNDARIES, RPM_BOUNDARIES, throttleSegments, rpmSegments, Segment } from "@/data/gauge-config";
 import { interpolateColor } from "@/lib/utils/gauge-utils";
-import TemperatureBox from "@/components/shared/temperature-scale/temperature-box";
+import { LightToggle } from "@/components/drive/light-toggle";
+import { avg, fmt } from "@/components/drive/format";
+import { useSignal } from "@/stores/signals";
+import { useIsDark } from "@/hooks/use-is-dark";
+import { cn } from "@/lib/utils";
 
-const DriveNormalPage = () => {
+/*
+ * Both arcs are drawn on one ellipse spanning the gauge area (viewBox units, stretched to fit),
+ * each covering ±ARC_HALF degrees around its side and filling bottom to top.
+ */
+const VIEW = { w: 1000, h: 400 };
+const ARC_HALF = 55;
+const arcPath = (side: "left" | "right") => {
+  const rx = VIEW.w / 2 - 20, ry = VIEW.h / 2 - 20, cx = VIEW.w / 2, cy = VIEW.h / 2;
+  const at = (deg: number) => `${cx + rx * Math.cos((deg * Math.PI) / 180)} ${cy + ry * Math.sin((deg * Math.PI) / 180)}`;
+  return side === "left"
+    ? `M ${at(180 - ARC_HALF)} A ${rx} ${ry} 0 0 1 ${at(180 + ARC_HALF)}`
+    : `M ${at(ARC_HALF)} A ${rx} ${ry} 0 0 0 ${at(-ARC_HALF)}`;
+};
 
-  const [isDarkMode, setIsDarkMode] = useState(
-    document.documentElement.classList.contains("dark")
-  );
-
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setIsDarkMode(document.documentElement.classList.contains("dark"));
-    });
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-    return () => observer.disconnect();
-  }, []);
-
-  const { gear, rpm, speed, rpmBoundaries, batteryPercentage, turnSignalRight, turnSignalLeft, hazardLights, headlights, highBeams, tailLights, avgBatteryTemp, leftMotorData, rightMotorData } = useStore(
-    useShallow((state) => ({
-      gear: state.gear,
-      rpm: state.rpm,
-      speed: state.speed,
-      rpmBoundaries: state.rpmBoundaries,
-      batteryPercentage: state.batteryPercentage,
-      turnSignalRight: state.turnSignalRight,
-      turnSignalLeft: state.turnSignalLeft,
-      hazardLights: state.hazardLights,
-      headlights: state.headlights,
-      highBeams: state.highBeams,
-      tailLights: state.tailLights,
-      avgBatteryTemp: state.avgBatteryTemp,
-      leftMotorData: state.leftMotorData,
-      rightMotorData: state.rightMotorData,
-    }))
-  );
-
-  const leftMotorTemp = leftMotorData?.motorTemp ?? 0;
-  const rightMotorTemp = rightMotorData?.motorTemp ?? 0;
-  const avgMotorTemp = leftMotorData && rightMotorData ? (leftMotorTemp + rightMotorTemp) / 2 : (leftMotorTemp || rightMotorTemp || 0);
-
-  const leftThrottle = leftMotorData?.throttle ?? 0;
-  const rightThrottle = rightMotorData?.throttle ?? 0;
-  const avgThrottleRaw = leftMotorData && rightMotorData ? (leftThrottle + rightThrottle) / 2 : (leftThrottle || rightThrottle || 0);
-  const displayThrottle = (avgThrottleRaw / 255) * 100;
-
-  const controller1Temp = leftMotorData?.controllerTemp ?? 0;
-  const controller2Temp = rightMotorData?.controllerTemp ?? 0;
-
-  // TODO: Convert colors to tailwind-css colors
-  // TODO: Transfer color scaling boundaries to individual states (or only max. value) and multiply times 0.75 or 0.5 for the scale.
-
+/** Edge arc plus readout; null renders an empty track and "--". */
+const ArcGauge = ({ value, unit, label, bounds, segments, side }: { value: number | null; unit: string; label: string; bounds: [number, number]; segments: (fg: string) => Segment[]; side: "left" | "right" }) => {
+  const fg = useIsDark() ? "#f8fafc" : "#020817";
+  const v = Math.max(bounds[0], Math.min(value ?? bounds[0], bounds[1]));
+  const pct = ((v - bounds[0]) / (bounds[1] - bounds[0])) * 100;
+  const d = arcPath(side);
+  const color = interpolateColor(v, bounds[0], bounds[1], segments(fg));
   return (
-    <div className="w-full flex flex-col">
-      
-      <HeaderBar />
+    <div className={cn("flex flex-col", side === "left" ? "items-start pl-16" : "items-end pr-16")}>
+      {/* Positioned against the gauge area, not this column, so both arcs share one ellipse. */}
+      <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${VIEW.w} ${VIEW.h}`} preserveAspectRatio="none" fill="none">
+        <path d={d} className="stroke-foreground/20" strokeWidth={12} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        {value !== null && (
+          <path
+            d={d}
+            pathLength={100}
+            strokeDasharray={`${pct} 100`}
+            stroke="currentColor"
+            strokeWidth={12}
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+            className="transition-[stroke-dasharray] duration-150 dark:drop-shadow-[0_0_4px_currentColor]"
+            style={{ color }}
+          />
+        )}
+      </svg>
+      <p className="text-5xl tabular-nums">
+        {fmt(value)}
+        <span className="text-2xl text-muted-foreground">{unit}</span>
+      </p>
+      <p className="text-lg text-muted-foreground">{label}</p>
+    </div>
+  );
+};
 
-      <div className="flex flex-col items-center justify-center gap-y-2 pt-10">
-        <div className="flex flex-row items-center justify-center gap-x-2">
-          { (hazardLights && turnSignalLeft && turnSignalRight) ?
-            <TriangleAlert size={36} className="text-green-400" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_HAZARD_LIGHTS)} />
-            :
-            <TriangleAlert size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_HAZARD_LIGHTS)} />
-          }
-        </div>
-        <div className="grid grid-cols-3 w-full">
-          <div className="flex flex-col items-center justify-center">
-            <div className="w-50">
-              <CircularProgressbarWithChildren
-                value={displayThrottle}
-                circleRatio={0.75}
-                styles={buildStyles({
-                  pathColor: interpolateColor(
-                    displayThrottle,
-                    THROTTLE_BOUNDARIES[0],
-                    THROTTLE_BOUNDARIES[1],
-                    THROTTLE_SEGMENTS
-                  ),
-                  rotation: 1 / 2 + 1 / 8,
-                  strokeLinecap: "butt",
-                  trailColor: isDarkMode ? "#374151" : "#eee",
-                })}
-              >
-                <p className="font-semibold text-4xl">{displayThrottle.toFixed(0)}%</p>
-                <p>Throttle</p>
-              </CircularProgressbarWithChildren>
-            </div>
-          </div>
-          <div className="flex flex-col items-center justify-center">
-            <div className="flex flex-row items-center gap-x-4">
-              { (turnSignalLeft) ?
-                <SquareArrowLeft size={36} className="text-green-400" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TURN_SIGNAL_LEFT)} />
-                :
-                <SquareArrowLeft size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TURN_SIGNAL_LEFT)} />
-              }
-              <TabsSelector 
-                label="" 
-                options={tabsSelectorStates().gears}
-                defaultValue={gear}  
-                value={gear}
-                readOnly={true}
-                  />
-              { (turnSignalRight) ?
-                <SquareArrowRight size={36} className="text-green-400" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TURN_SIGNAL_RIGHT)} />
-                :
-                <SquareArrowRight size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TURN_SIGNAL_RIGHT)} />
-              }
-            </div>
-            <p className="font-semibold text-9xl">{speed.toFixed(0)}</p>
-            <p className="font">km/h</p>
-          </div>
-          <div className="flex flex-col items-center justify-center">
-            <div className="w-50">
-              <CircularProgressbarWithChildren
-                value={rpm}
-                circleRatio={0.75}
-                minValue={rpmBoundaries[0]}
-                maxValue={rpmBoundaries[1]}
-                styles={buildStyles({
-                  pathColor: interpolateColor(
-                    rpm,
-                    rpmBoundaries[0],
-                    rpmBoundaries[1],
-                    RPM_SEGMENTS
-                  ),
-                  rotation: 1 / 2 + 1 / 8,
-                  strokeLinecap: "butt",
-                  trailColor: isDarkMode ? "#374151" : "#eee",
-                })}
-              >
-                <p className="font-semibold text-4xl">{rpm}</p>
-                <p>RPM</p>
-              </CircularProgressbarWithChildren>
-            </div>
-          </div>
-        </div>
-        <div className="grid grid-cols-3 w-full">
-          <div className="flex flex-row items-start gap-x-6 justify-evenly">
-                {/* Use color text-red-500 if critical or text-orange-400 if warning */}
+const ThrottleGauge = () => (
+  <ArcGauge value={useSignal("drive.throttle")} unit="%" label="Throttle" bounds={THROTTLE_BOUNDARIES} segments={throttleSegments} side="left" />
+);
 
-                {(headlights[0] || headlights[1]) ?
-                  <Lightbulb size={36} className="text-green-600" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_DRL)} />
-                  :
-                  <Lightbulb size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_DRL)} />
-                }
-                {(highBeams[0] || highBeams[1]) ?
-                  <Spotlight size={36} className="text-blue-600" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_HIGH_BEAMS)} />
-                  :
-                  <Spotlight size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_HIGH_BEAMS)} />
-                }
-                {
-                  (tailLights) ?
-                  <Construction size={36} className="text-green-600" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TAIL_LIGHT)} />
-                  :
-                  <Construction size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TAIL_LIGHT)} />
-                }
+const RpmGauge = () => {
+  const rpm = avg(useSignal("drive.rpm_left"), useSignal("drive.rpm_right"));
+  return <ArcGauge value={rpm} unit="" label="RPM" bounds={RPM_BOUNDARIES} segments={rpmSegments} side="right" />;
+};
 
-          </div>
-          <div className="flex flex-row justify-evenly">
-            <ResetDailyDistanceDialog />
-          </div>
-          <div className="flex flex-row items-end gap-x-6 justify-evenly">
-                {/* <OctagonAlert size={36} className="text-orange-400" /> */}
-                <OctagonAlert size={36} className="text-gray-700" />
-                {/* <OctagonAlert size={36} className="text-green-500" /> */}
-                <OctagonAlert size={36} className="text-gray-700" />
-                {/* <OctagonAlert size={36} className="text-blue-500" /> */}
-                <OctagonAlert size={36} className="text-gray-700" />
-          </div>
-        </div>
-        <div className="w-full flex flex-row justify-center gap-x-4 pt-8">
-          <div className="w-1/3 flex flex-col justify-center">
-            <TemperatureBox label="Battery" currentTemp={avgBatteryTemp} minTemp={-10} maxTemp={45}></TemperatureBox>
-            <TemperatureBox label="Motor" currentTemp={avgMotorTemp} minTemp={-20} maxTemp={50}></TemperatureBox>
-          </div>
-          <div className="w-1/3 flex flex-col items-center justify-center pt-4">
-            <p>Battery</p>
-            <Progress className="rounded-md w-full h-10" value={batteryPercentage*100} />
-              <p>{(batteryPercentage*100).toFixed(1)}%</p>
-          </div>
-          <div className="w-1/3 flex flex-col justify-center">
-            <TemperatureBox label="Controller 1" currentTemp={controller1Temp} minTemp={-10} maxTemp={50}></TemperatureBox>
-            <TemperatureBox label="Controller 2" currentTemp={controller2Temp} minTemp={-10} maxTemp={50}></TemperatureBox>
-          </div>
-        </div>
+const GEAR_ORDER: [Gears, string][] = [[Gears.p, "P"], [Gears.r, "R"], [Gears.n, "N"], [Gears.d, "D"]];
+
+const GearIndicator = () => {
+  const reverse = useSignal("drive.reverse");
+  // Nothing lit while unknown.
+  const gear = reverse === null ? null : reverse === 1 ? Gears.r : Gears.d;
+  return (
+    <div className="flex gap-x-5 text-4xl">
+      {GEAR_ORDER.map(([g, label]) => (
+        <span key={g} className={g === gear ? "font-semibold text-foreground" : "text-muted-foreground/60"}>{label}</span>
+      ))}
+    </div>
+  );
+};
+
+const Speed = () => {
+  const speed = useSignal("drive.speed");
+  return (
+    <div className="flex flex-col items-center">
+      <p className="text-[10rem] leading-none tracking-tight tabular-nums">{fmt(speed)}</p>
+      <p className="text-2xl text-muted-foreground">km/h</p>
+    </div>
+  );
+};
+
+const BatteryBar = () => {
+  const soc = useSignal("battery.soc");
+  const tone = soc !== null && soc <= 10 ? "bg-red-500" : soc !== null && soc <= 25 ? "bg-amber-500" : "bg-foreground";
+  return (
+    <div className="flex w-96 items-center gap-x-3 text-lg text-muted-foreground">
+      <span>Battery</span>
+      <div className="h-3 flex-1 overflow-hidden rounded-full bg-foreground/20">
+        <div className={cn("h-full rounded-full transition-[width] duration-300", tone)} style={{ width: `${soc ?? 0}%` }} />
+      </div>
+      <span className="w-16 text-right tabular-nums">{fmt(soc, 1)}%</span>
+    </div>
+  );
+};
+
+/** Label, value and a cold-to-hot bar; null shows "--" and no marker. */
+const TempReadout = ({ label, value, min, max }: { label: string; value: number | null; min: number; max: number }) => {
+  const pct = value === null ? null : ((Math.max(min, Math.min(value, max)) - min) / (max - min)) * 100;
+  return (
+    <div className="flex flex-col gap-y-2">
+      <div className="flex items-baseline justify-between">
+        <span className="text-lg text-muted-foreground">{label}</span>
+        <span className="text-2xl font-medium tabular-nums">{fmt(value)}°C</span>
+      </div>
+      <div className="relative h-2 rounded-full bg-gradient-to-r from-blue-500/70 via-foreground/20 to-red-500/70">
+        {pct !== null && (
+          <div className="bg-foreground ring-background absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 transition-[left] duration-300" style={{ left: `${pct}%` }} />
+        )}
       </div>
     </div>
   );
 };
+
+const BatteryTemp = () => <TempReadout label="Battery" value={useSignal("battery.temp_avg")} min={-10} max={45} />;
+
+const MotorTemp = () => {
+  const temp = avg(useSignal("temp.motor_left"), useSignal("temp.motor_right"));
+  return <TempReadout label="Motor" value={temp} min={-20} max={50} />;
+};
+
+const ControllerTemp = ({ label, signal }: { label: string; signal: "temp.esc_left" | "temp.esc_right" }) => (
+  <TempReadout label={label} value={useSignal(signal)} min={-10} max={50} />
+);
+
+const DriveNormalPage = () => (
+  <div className="flex h-full w-full flex-col">
+    <HeaderBar />
+
+    <div className="flex items-center justify-center gap-x-10">
+      <div className="flex gap-x-2">
+        <LightToggle signal="lights.drl" light="drl" label="daytime running lights" icon={DaytimeRunningLights} onClassName="text-green-600 dark:text-green-500" />
+        <LightToggle signal="lights.high_beam_left" orSignal="lights.high_beam_right" light="high_beam" label="high beams" icon={HighBeam} onClassName="text-blue-600 dark:text-blue-500" />
+        <LightToggle signal="lights.tail" light="tail" label="tail lights" icon={ParkingLights} onClassName="text-green-600 dark:text-green-500" />
+        <LightToggle signal="lights.hazard" light="hazard" label="hazard lights" icon={HazardLights} onClassName="text-green-600 dark:text-green-500" />
+      </div>
+      {/* Unwired warning slots: light as text-orange-400 (warning) or text-red-500 (critical) once an ECU reports them. */}
+      <div className="flex gap-x-2 text-muted-foreground/60">
+        <HvBatteryFault size={48} className="m-2" />
+        <MotorFault size={48} className="m-2" />
+        <InverterFault size={48} className="m-2" />
+      </div>
+    </div>
+
+    <div className="relative grid flex-1 grid-cols-[1fr_auto_1fr] items-center">
+      <ThrottleGauge />
+      <div className="flex flex-col items-center gap-y-4">
+        <div className="flex items-center gap-x-6">
+          <LightToggle signal="lights.turn_left" light="turn_left" label="left turn signal" icon={TurnSignalLeft} onClassName="text-green-600 dark:text-green-500" />
+          <GearIndicator />
+          <LightToggle signal="lights.turn_right" light="turn_right" label="right turn signal" icon={TurnSignalRight} onClassName="text-green-600 dark:text-green-500" />
+        </div>
+        <Speed />
+        <BatteryBar />
+        {/* TODO(firmware): no ECU publishes trip distance; re-mount <ResetDailyDistanceDialog /> when one does. */}
+      </div>
+      <RpmGauge />
+    </div>
+
+    <div className="grid grid-cols-4 gap-x-10 px-10 pt-2 pb-6">
+      <BatteryTemp />
+      <MotorTemp />
+      <ControllerTemp label="Controller 1" signal="temp.esc_left" />
+      <ControllerTemp label="Controller 2" signal="temp.esc_right" />
+    </div>
+  </div>
+);
 
 export default DriveNormalPage;

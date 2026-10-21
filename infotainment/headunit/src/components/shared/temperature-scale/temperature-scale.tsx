@@ -3,7 +3,7 @@ import * as  Progress from '@radix-ui/react-progress';
 import React from 'react';
 
 interface TemperatureScaleProps {
-    currentTemp: number;
+    currentTemp: number | null;
     minTemp: number;
     maxTemp: number;
 }
@@ -11,7 +11,7 @@ interface TemperatureScaleProps {
 
 
 const TemperatureScale = ({ currentTemp, minTemp, maxTemp }: TemperatureScaleProps) => {
-    const clampedTemp = Math.max(minTemp, Math.min(currentTemp, maxTemp));
+    const clampedTemp = Math.max(minTemp, Math.min(currentTemp ?? minTemp, maxTemp));
     const range = maxTemp - minTemp;
     const percentage = ((clampedTemp - minTemp) / range) * 100;
 
@@ -21,7 +21,7 @@ const TemperatureScale = ({ currentTemp, minTemp, maxTemp }: TemperatureScalePro
         {/*  */}
         <div className='flex w-full h-full'>
             {/*  */}
-            <div style={{ marginLeft: `${percentage}%` }} className='temperature-indicator-container flex justify-center items-center relative w-5 h-full -left-1 ease-in-out z-0'>
+            {currentTemp !== null && <div style={{ marginLeft: `${percentage}%` }} className='temperature-indicator-container flex justify-center items-center relative w-5 h-full -left-1 ease-in-out z-0'>
                 <div
                     className='absolute w-1 h-4 bg-black rounded-lg z-20 ease-in-out'
                 />
@@ -29,7 +29,7 @@ const TemperatureScale = ({ currentTemp, minTemp, maxTemp }: TemperatureScalePro
                 <div 
                     className='absolute w-5 h-full z-10 bg-gradient-to-r from-transparent via-white to-transparent'
                 />
-            </div>
+            </div>}
         </div>
 
 

@@ -2,23 +2,20 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import log from 'electron-log/main';
-import {
-    UPDATER_GET_RELEASES_CHANNEL,
-    UPDATER_INSTALL_CHANNEL,
-    UPDATER_PROGRESS_CHANNEL,
-    UPDATER_RELAUNCH_CHANNEL,
-} from './updater-channels';
-import { fetchAppReleases } from './updater-github-releases';
+import { CH } from '@/ipc/channels';
+import { requireAdmin } from '@/main/admin';
+import { fetchAppReleases, resolveAppRelease } from './updater-github-releases';
 import { downloadDeb, installDeb } from './updater-manager';
 
 export function registerUpdaterListeners(mainWindow: BrowserWindow): void {
-    ipcMain.handle(UPDATER_GET_RELEASES_CHANNEL, async () => {
+    ipcMain.handle(CH.updater.getReleases, async () => {
         return fetchAppReleases();
     });
 
     ipcMain.handle(
-        UPDATER_INSTALL_CHANNEL,
-        async (_event, tag: string, downloadUrl: string, assetName: string) => {
+        CH.updater.install,
+        requireAdmin(async (_event, tag: string) => {
+            const { downloadUrl, assetName } = await resolveAppRelease(tag);
             const destPath = path.join(app.getPath('temp'), 'headunit-update', assetName);
 
             log.info(`[updater] Starting install of ${tag}`);
@@ -29,7 +26,7 @@ export function registerUpdaterListeners(mainWindow: BrowserWindow): void {
 
             try {
                 await downloadDeb(downloadUrl, destPath, (progress) => {
-                    mainWindow.webContents.send(UPDATER_PROGRESS_CHANNEL, progress);
+                    mainWindow.webContents.send(CH.updater.progress, progress);
                 });
 
                 await installDeb(destPath);
@@ -40,12 +37,15 @@ export function registerUpdaterListeners(mainWindow: BrowserWindow): void {
                     // best effort cleanup
                 }
             }
-        }
+        })
     );
 
-    ipcMain.handle(UPDATER_RELAUNCH_CHANNEL, () => {
-        log.info('[updater] Relaunching app after update');
-        app.relaunch();
-        app.quit();
-    });
+    ipcMain.handle(
+        CH.updater.relaunch,
+        requireAdmin(() => {
+            log.info('[updater] Relaunching app after update');
+            app.relaunch();
+            app.quit();
+        })
+    );
 }

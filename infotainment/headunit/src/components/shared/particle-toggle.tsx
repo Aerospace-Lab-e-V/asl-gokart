@@ -1,7 +1,7 @@
 import React from "react";
 import { Switch } from "@/components/ui/switch";
-import { useStore } from "@/stores/useStore";
-import { FlowState } from "@/stores/motorSlice";
+import { FlowState } from "@/domain/signals";
+import { setFlowStateOverride, setShowParticleEffects, useSession } from "@/stores/session";
 import { Sparkles, Zap, Battery, Circle } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
@@ -10,17 +10,12 @@ interface ParticleToggleProps {
 }
 
 const ParticleToggle: React.FC<ParticleToggleProps> = ({ className }) => {
-    const showParticleEffects = useStore((state) => state.showParticleEffects);
-    const setShowParticleEffects = useStore((state) => state.setShowParticleEffects);
-    const debugFlowStateOverride = useStore((state) => state.debugFlowStateOverride);
-    const setDebugFlowStateOverride = useStore((state) => state.setDebugFlowStateOverride);
+    const showParticleEffects = useSession((state) => state.showParticleEffects);
+    const flowStateOverride = useSession((state) => state.flowStateOverride);
 
+    // Toggle group values are strings; "auto" (or deselect) clears the override.
     const handleFlowStateChange = (value: string) => {
-        if (value === "" || value === "auto") {
-            setDebugFlowStateOverride(null);
-        } else {
-            setDebugFlowStateOverride(value as FlowState);
-        }
+        setFlowStateOverride(value === "" || value === "auto" ? null : (Number(value) as FlowState));
     };
 
     return (
@@ -28,20 +23,20 @@ const ParticleToggle: React.FC<ParticleToggleProps> = ({ className }) => {
             {/* Flow State Debug Selector */}
             <ToggleGroup
                 type="single"
-                value={debugFlowStateOverride ?? "auto"}
+                value={flowStateOverride === null ? "auto" : String(flowStateOverride)}
                 onValueChange={handleFlowStateChange}
                 className="h-8"
             >
                 <ToggleGroupItem value="auto" aria-label="Auto" className="h-8 px-2 text-xs">
                     Auto
                 </ToggleGroupItem>
-                <ToggleGroupItem value={FlowState.POWER} aria-label="Power" className="h-8 px-2">
+                <ToggleGroupItem value={String(FlowState.POWER)} aria-label="Power" className="h-8 px-2">
                     <Zap size={14} className="text-orange-500" />
                 </ToggleGroupItem>
-                <ToggleGroupItem value={FlowState.REGEN} aria-label="Regen" className="h-8 px-2">
+                <ToggleGroupItem value={String(FlowState.REGEN)} aria-label="Regen" className="h-8 px-2">
                     <Battery size={14} className="text-cyan-500" />
                 </ToggleGroupItem>
-                <ToggleGroupItem value={FlowState.IDLE} aria-label="Idle" className="h-8 px-2">
+                <ToggleGroupItem value={String(FlowState.IDLE)} aria-label="Idle" className="h-8 px-2">
                     <Circle size={14} className="text-gray-500" />
                 </ToggleGroupItem>
             </ToggleGroup>
