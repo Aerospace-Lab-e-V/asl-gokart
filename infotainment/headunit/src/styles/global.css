@@ -21,9 +21,13 @@ input, button, textarea, :focus {
 
 /* Boot splash (index.html). Plain CSS, no theme class yet: prefers-color-scheme follows the theme main
    applied before opening the window. Fades from the window's plain white/black to --background/--foreground.
-   The logo is centred at the size of the one on NetworkGateScreen (h-28), so the two overlap exactly. */
+   The logo is centred at the size of the one on NetworkGateScreen (h-28), so the two overlap exactly.
+   Intro, done by ~1150 ms so App's 1200 ms handover lands on the plain static logo:
+   planet settles in, the ring sweeps in left to right like a light trail, then a single sheen runs across it.
+   Transforms on the SVG parts are in the logo's own units (the ring is ~443 wide). */
 #splash {
     --splash-from: #ffffff;
+    --splash-glow: #00adef80;
     position: fixed;
     inset: 0;
     z-index: 100;
@@ -42,21 +46,36 @@ input, button, textarea, :focus {
 
 #splash svg {
     height: 7rem;
+    overflow: visible;
+}
+
+.splash-planet {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: splash-planet-in 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Resting state is the fully revealed ring, so reduced motion shows the plain logo */
+.splash-reveal {
+    transform: translateX(60px);
+    animation: splash-ring-in 650ms cubic-bezier(0.7, 0, 0.2, 1) 150ms both;
+}
+
+.splash-glint {
+    opacity: 0;
+    animation: splash-glint 450ms ease-in-out 700ms both;
 }
 
 .splash-ring {
-    animation: splash-breathe 2.4s ease-in-out infinite;
+    animation: splash-glow 550ms ease-in-out 650ms both;
 }
 
 @media (prefers-color-scheme: dark) {
     #splash {
         --splash-from: #000000;
+        --splash-glow: #00adef;
         background: #020817;
         color: #f8fafc;
-    }
-
-    .splash-ring {
-        filter: drop-shadow(0 0 6px #00adef);
     }
 }
 
@@ -66,15 +85,46 @@ input, button, textarea, :focus {
     }
 }
 
-@keyframes splash-breathe {
+@keyframes splash-planet-in {
+    from {
+        opacity: 0;
+        transform: scale(0.92);
+    }
+}
+
+@keyframes splash-ring-in {
+    from {
+        transform: translateX(-600px);
+    }
+}
+
+@keyframes splash-glint {
+    from {
+        transform: translateX(0) skewX(-25deg);
+    }
+    40%,
+    60% {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+        transform: translateX(600px) skewX(-25deg);
+    }
+}
+
+@keyframes splash-glow {
+    from,
+    to {
+        filter: drop-shadow(0 0 0 transparent);
+    }
     50% {
-        opacity: 0.45;
+        filter: drop-shadow(0 0 8px var(--splash-glow));
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
     #splash,
-    .splash-ring {
+    #splash * {
         animation: none;
     }
 }
