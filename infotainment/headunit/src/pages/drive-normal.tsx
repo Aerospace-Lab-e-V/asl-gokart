@@ -12,7 +12,7 @@ import { HeaderBar } from "@/components/shared/header-bar";
 import ResetDailyDistanceDialog from "@/components/shared/reset-daily-distance-dialog";
 import React, { useState, useEffect } from "react";
 import { LightsCommands } from "@/data/zonecontrollers/zonecontrollers";
-import { Construction, Lightbulb, OctagonAlert, Spotlight, SquareArrowLeft, SquareArrowRight, TriangleAlert } from "lucide-react";
+import { HazardLights, HighBeam, HvBatteryFault, InverterFault, LowBeam, MotorFault, ParkingLights, TurnSignalLeft, TurnSignalRight } from "@/components/icons/telltale";
 import { THROTTLE_BOUNDARIES, THROTTLE_SEGMENTS, RPM_SEGMENTS } from "@/data/gauge-config";
 import { interpolateColor } from "@/lib/utils/gauge-utils";
 import TemperatureBox from "@/components/shared/temperature-scale/temperature-box";
@@ -76,9 +76,9 @@ const DriveNormalPage = () => {
       <div className="flex flex-col items-center justify-center gap-y-2 pt-10">
         <div className="flex flex-row items-center justify-center gap-x-2">
           { (hazardLights && turnSignalLeft && turnSignalRight) ?
-            <TriangleAlert size={36} className="text-green-400" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_HAZARD_LIGHTS)} />
+            <HazardLights size={36} className="text-green-400" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_HAZARD_LIGHTS)} />
             :
-            <TriangleAlert size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_HAZARD_LIGHTS)} />
+            <HazardLights size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_HAZARD_LIGHTS)} />
           }
         </div>
         <div className="grid grid-cols-3 w-full">
@@ -107,9 +107,9 @@ const DriveNormalPage = () => {
           <div className="flex flex-col items-center justify-center">
             <div className="flex flex-row items-center gap-x-4">
               { (turnSignalLeft) ?
-                <SquareArrowLeft size={36} className="text-green-400" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TURN_SIGNAL_LEFT)} />
+                <TurnSignalLeft size={36} className="text-green-400" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TURN_SIGNAL_LEFT)} />
                 :
-                <SquareArrowLeft size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TURN_SIGNAL_LEFT)} />
+                <TurnSignalLeft size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TURN_SIGNAL_LEFT)} />
               }
               <TabsSelector 
                 label="" 
@@ -119,9 +119,9 @@ const DriveNormalPage = () => {
                 readOnly={true}
                   />
               { (turnSignalRight) ?
-                <SquareArrowRight size={36} className="text-green-400" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TURN_SIGNAL_RIGHT)} />
+                <TurnSignalRight size={36} className="text-green-400" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TURN_SIGNAL_RIGHT)} />
                 :
-                <SquareArrowRight size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TURN_SIGNAL_RIGHT)} />
+                <TurnSignalRight size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TURN_SIGNAL_RIGHT)} />
               }
             </div>
             <p className="font-semibold text-9xl">{speed.toFixed(0)}</p>
@@ -157,20 +157,20 @@ const DriveNormalPage = () => {
                 {/* Use color text-red-500 if critical or text-orange-400 if warning */}
 
                 {(headlights[0] || headlights[1]) ?
-                  <Lightbulb size={36} className="text-green-600" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_DRL)} />
+                  <LowBeam size={36} className="text-green-600" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_DRL)} />
                   :
-                  <Lightbulb size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_DRL)} />
+                  <LowBeam size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_DRL)} />
                 }
                 {(highBeams[0] || highBeams[1]) ?
-                  <Spotlight size={36} className="text-blue-600" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_HIGH_BEAMS)} />
+                  <HighBeam size={36} className="text-blue-600" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_HIGH_BEAMS)} />
                   :
-                  <Spotlight size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_HIGH_BEAMS)} />
+                  <HighBeam size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_HIGH_BEAMS)} />
                 }
                 {
                   (tailLights) ?
-                  <Construction size={36} className="text-green-600" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TAIL_LIGHT)} />
+                  <ParkingLights size={36} className="text-green-600" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TAIL_LIGHT)} />
                   :
-                  <Construction size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TAIL_LIGHT)} />
+                  <ParkingLights size={36} className="text-gray-700" onClick={() => window.sero.sendLightsCommand(LightsCommands.SET_TOGGLE_TAIL_LIGHT)} />
                 }
 
           </div>
@@ -178,12 +178,12 @@ const DriveNormalPage = () => {
             <ResetDailyDistanceDialog />
           </div>
           <div className="flex flex-row items-end gap-x-6 justify-evenly">
-                {/* <OctagonAlert size={36} className="text-orange-400" /> */}
-                <OctagonAlert size={36} className="text-gray-700" />
-                {/* <OctagonAlert size={36} className="text-green-500" /> */}
-                <OctagonAlert size={36} className="text-gray-700" />
-                {/* <OctagonAlert size={36} className="text-blue-500" /> */}
-                <OctagonAlert size={36} className="text-gray-700" />
+                {/* <HvBatteryFault size={36} className="text-orange-400" /> */}
+                <HvBatteryFault size={36} className="text-gray-700" />
+                {/* <MotorFault size={36} className="text-green-500" /> */}
+                <MotorFault size={36} className="text-gray-700" />
+                {/* <InverterFault size={36} className="text-blue-500" /> */}
+                <InverterFault size={36} className="text-gray-700" />
           </div>
         </div>
         <div className="w-full flex flex-row justify-center gap-x-4 pt-8">
