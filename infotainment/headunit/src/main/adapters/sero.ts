@@ -17,6 +17,7 @@ import {
     tempStats,
     throttlePercent,
 } from "@/main/derive";
+import { MockRuntime } from "@/main/adapters/mock";
 
 /*
  * Sero adapter: the only main module that knows the zone controllers' wire format. It decodes events into
@@ -27,7 +28,7 @@ import {
 // --- ids (zc/zc_*/src/config.hpp, ecu-sero `ids`). Event ids have bit 15 set. ---
 export const SERVICE = { LIGHTS: 0x0001, BUTTONS: 0x0002, BATTERY: 0x0003, MOTOR: 0x0004 } as const;
 
-const EVENT = {
+export const EVENT = {
     lights: { TURN: 0x8001, HIGH_BEAM: 0x8003, BRAKE: 0x8004, REVERSE: 0x8005, DRL: 0x8006, TAIL: 0x8007 },
     battery: { VOLTAGE: 0x8001, CURRENT: 0x8002, TEMPS: 0x8003 },
     motor: { TELEMETRY: 0x8001 },
@@ -72,7 +73,13 @@ const SWITCHES = ["brake_switch", "foot_switch", "forward_switch", "reverse_swit
 
 const RT_INTERVAL = 10; // Interval in milliseconds for processing SeroRuntime events
 
-let rt: SeroRuntime | null = null;
+/** The part of SeroRuntime this adapter uses, so MockRuntime can stand in for it. */
+export type Runtime = Pick<
+    SeroRuntime,
+    "process" | "destroy" | "getLocalAddress" | "findService" | "subscribeEvent" | "onServiceFound" | "onServiceLost" | "onSubscriptionAck" | "fireAndForget" | "request"
+>;
+
+let rt: Runtime | null = null;
 let rtInterval: ReturnType<typeof setInterval> | null = null;
 
 const on = (v: number) => (v ? 1 : 0);
@@ -182,7 +189,9 @@ function markAllLost(): void {
     ECU_DEFINITIONS.forEach((d) => markEcuLost(d.id));
 }
 
-function createRuntime(): SeroRuntime {
+function createRuntime(): Runtime {
+    // HEADUNIT_MOCK=1: a simulated kart instead of the car network, for development without hardware.
+    if (process.env.HEADUNIT_MOCK) return new MockRuntime();
     const bindIp = getBindAddress();
     return new SeroRuntime({
         port: SERO_UNICAST_PORT,
@@ -252,7 +261,7 @@ export function restartSeroAdapter(): void {
     startSeroAdapter();
 }
 
-function runtime(): SeroRuntime {
+function runtime(): Runtime {
     if (!rt) throw new Error("Sero runtime not started");
     return rt;
 }
