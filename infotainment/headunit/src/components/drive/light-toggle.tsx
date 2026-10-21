@@ -31,8 +31,8 @@ export function LightToggle({ signal, orSignal, light, label, icon: Icon, onClas
     };
 
     return (
-        <button type="button" aria-label={label} aria-pressed={on} disabled={pending} onClick={toggle} className="disabled:opacity-50">
-            <Icon size={36} className={on ? onClassName : "text-gray-700"} />
+        <button type="button" aria-label={label} aria-pressed={on} disabled={pending} onClick={toggle} className="p-2 disabled:opacity-50">
+            <Icon size={36} className={on ? `${onClassName} dark:drop-shadow-[0_0_6px_currentColor]` : "text-muted-foreground/30"} />
         </button>
     );
 }
