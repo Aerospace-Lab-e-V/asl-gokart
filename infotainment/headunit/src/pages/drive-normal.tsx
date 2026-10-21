@@ -35,14 +35,14 @@ const ArcGauge = ({ value, unit, label, bounds, segments, side }: { value: numbe
     <div className={cn("flex flex-col", side === "left" ? "items-start pl-16" : "items-end pr-16")}>
       {/* Positioned against the gauge area, not this column, so both arcs share one ellipse. */}
       <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${VIEW.w} ${VIEW.h}`} preserveAspectRatio="none" fill="none">
-        <path d={d} className="stroke-foreground/10" strokeWidth={6} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        <path d={d} className="stroke-foreground/20" strokeWidth={12} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
         {value !== null && (
           <path
             d={d}
             pathLength={100}
             strokeDasharray={`${pct} 100`}
             stroke="currentColor"
-            strokeWidth={6}
+            strokeWidth={12}
             strokeLinecap="round"
             vectorEffect="non-scaling-stroke"
             className="transition-[stroke-dasharray] duration-150 dark:drop-shadow-[0_0_4px_currentColor]"
@@ -50,11 +50,11 @@ const ArcGauge = ({ value, unit, label, bounds, segments, side }: { value: numbe
           />
         )}
       </svg>
-      <p className="text-4xl font-light tabular-nums">
+      <p className="text-5xl tabular-nums">
         {fmt(value)}
-        <span className="text-xl text-muted-foreground">{unit}</span>
+        <span className="text-2xl text-muted-foreground">{unit}</span>
       </p>
-      <p className="text-sm text-muted-foreground">{label}</p>
+      <p className="text-lg text-muted-foreground">{label}</p>
     </div>
   );
 };
@@ -75,9 +75,9 @@ const GearIndicator = () => {
   // Nothing lit while unknown.
   const gear = reverse === null ? null : reverse === 1 ? Gears.r : Gears.d;
   return (
-    <div className="flex gap-x-4 text-2xl">
+    <div className="flex gap-x-5 text-4xl">
       {GEAR_ORDER.map(([g, label]) => (
-        <span key={g} className={g === gear ? "font-semibold text-foreground" : "text-muted-foreground/40"}>{label}</span>
+        <span key={g} className={g === gear ? "font-semibold text-foreground" : "text-muted-foreground/60"}>{label}</span>
       ))}
     </div>
   );
@@ -87,8 +87,8 @@ const Speed = () => {
   const speed = useSignal("drive.speed");
   return (
     <div className="flex flex-col items-center">
-      <p className="text-[10rem] leading-none font-extralight tracking-tight tabular-nums">{fmt(speed)}</p>
-      <p className="text-lg text-muted-foreground">km/h</p>
+      <p className="text-[10rem] leading-none tracking-tight tabular-nums">{fmt(speed)}</p>
+      <p className="text-2xl text-muted-foreground">km/h</p>
     </div>
   );
 };
@@ -97,12 +97,12 @@ const BatteryBar = () => {
   const soc = useSignal("battery.soc");
   const tone = soc !== null && soc <= 10 ? "bg-red-500" : soc !== null && soc <= 25 ? "bg-amber-500" : "bg-foreground";
   return (
-    <div className="flex w-80 items-center gap-x-3 text-sm text-muted-foreground">
+    <div className="flex w-96 items-center gap-x-3 text-lg text-muted-foreground">
       <span>Battery</span>
-      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-foreground/10">
+      <div className="h-3 flex-1 overflow-hidden rounded-full bg-foreground/20">
         <div className={cn("h-full rounded-full transition-[width] duration-300", tone)} style={{ width: `${soc ?? 0}%` }} />
       </div>
-      <span className="w-14 text-right tabular-nums">{fmt(soc, 1)}%</span>
+      <span className="w-16 text-right tabular-nums">{fmt(soc, 1)}%</span>
     </div>
   );
 };
@@ -113,12 +113,12 @@ const TempReadout = ({ label, value, min, max }: { label: string; value: number 
   return (
     <div className="flex flex-col gap-y-2">
       <div className="flex items-baseline justify-between">
-        <span className="text-sm text-muted-foreground">{label}</span>
-        <span className="text-lg font-medium tabular-nums">{fmt(value)}°C</span>
+        <span className="text-lg text-muted-foreground">{label}</span>
+        <span className="text-2xl font-medium tabular-nums">{fmt(value)}°C</span>
       </div>
-      <div className="relative h-1 rounded-full bg-gradient-to-r from-blue-500/70 via-foreground/10 to-red-500/70">
+      <div className="relative h-2 rounded-full bg-gradient-to-r from-blue-500/70 via-foreground/20 to-red-500/70">
         {pct !== null && (
-          <div className="bg-foreground ring-background absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 transition-[left] duration-300" style={{ left: `${pct}%` }} />
+          <div className="bg-foreground ring-background absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 transition-[left] duration-300" style={{ left: `${pct}%` }} />
         )}
       </div>
     </div>
@@ -142,16 +142,16 @@ const DriveNormalPage = () => (
 
     <div className="flex items-center justify-center gap-x-10">
       <div className="flex gap-x-2">
-        <LightToggle signal="lights.drl" light="drl" label="daytime running lights" icon={DaytimeRunningLights} onClassName="text-green-500" />
-        <LightToggle signal="lights.high_beam_left" orSignal="lights.high_beam_right" light="high_beam" label="high beams" icon={HighBeam} onClassName="text-blue-500" />
-        <LightToggle signal="lights.tail" light="tail" label="tail lights" icon={ParkingLights} onClassName="text-green-500" />
-        <LightToggle signal="lights.hazard" light="hazard" label="hazard lights" icon={HazardLights} onClassName="text-green-500" />
+        <LightToggle signal="lights.drl" light="drl" label="daytime running lights" icon={DaytimeRunningLights} onClassName="text-green-600 dark:text-green-500" />
+        <LightToggle signal="lights.high_beam_left" orSignal="lights.high_beam_right" light="high_beam" label="high beams" icon={HighBeam} onClassName="text-blue-600 dark:text-blue-500" />
+        <LightToggle signal="lights.tail" light="tail" label="tail lights" icon={ParkingLights} onClassName="text-green-600 dark:text-green-500" />
+        <LightToggle signal="lights.hazard" light="hazard" label="hazard lights" icon={HazardLights} onClassName="text-green-600 dark:text-green-500" />
       </div>
       {/* Unwired warning slots: light as text-orange-400 (warning) or text-red-500 (critical) once an ECU reports them. */}
-      <div className="flex gap-x-2 text-muted-foreground/30">
-        <HvBatteryFault size={36} className="m-2" />
-        <MotorFault size={36} className="m-2" />
-        <InverterFault size={36} className="m-2" />
+      <div className="flex gap-x-2 text-muted-foreground/60">
+        <HvBatteryFault size={48} className="m-2" />
+        <MotorFault size={48} className="m-2" />
+        <InverterFault size={48} className="m-2" />
       </div>
     </div>
 
@@ -159,9 +159,9 @@ const DriveNormalPage = () => (
       <ThrottleGauge />
       <div className="flex flex-col items-center gap-y-4">
         <div className="flex items-center gap-x-6">
-          <LightToggle signal="lights.turn_left" light="turn_left" label="left turn signal" icon={TurnSignalLeft} onClassName="text-green-500" />
+          <LightToggle signal="lights.turn_left" light="turn_left" label="left turn signal" icon={TurnSignalLeft} onClassName="text-green-600 dark:text-green-500" />
           <GearIndicator />
-          <LightToggle signal="lights.turn_right" light="turn_right" label="right turn signal" icon={TurnSignalRight} onClassName="text-green-500" />
+          <LightToggle signal="lights.turn_right" light="turn_right" label="right turn signal" icon={TurnSignalRight} onClassName="text-green-600 dark:text-green-500" />
         </div>
         <Speed />
         <BatteryBar />
