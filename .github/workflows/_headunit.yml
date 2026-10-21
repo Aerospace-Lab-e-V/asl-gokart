@@ -39,14 +39,50 @@ jobs:
             - name: Install dependencies
               run: bun install
 
+            - name: Lint
+              run: bun run lint
+
             - name: Run unit tests
               run: bun run test:unit
 
+    # Pure headunit app changes skip the kart-agent build. Tags always build everything.
+    changes:
+        name: Detect changes
+        runs-on: ubuntu-latest
+        if: ${{ !inputs.is-tag }}
+        permissions:
+            contents: read
+            pull-requests: read
+        outputs:
+            kart-agent: ${{ steps.filter.outputs.kart-agent }}
+        steps:
+            - uses: actions/checkout@v6
+
+            # Everything the agent binary or its packaging depends on.
+            - uses: dorny/paths-filter@v4
+              id: filter
+              with:
+                  filters: |
+                      kart-agent:
+                          - 'analytics/crates/kart-agent/**'
+                          - 'analytics/crates/sero-sys/**'
+                          - 'analytics/crates/ecu-sero/**'
+                          - 'analytics/crates/kart-mqtt/**'
+                          - 'analytics/crates/telemetry-schema/**'
+                          - 'analytics/schema/**'
+                          - 'analytics/Cargo.toml'
+                          - 'analytics/Cargo.lock'
+                          - 'infotainment/headunit/packaging/**'
+                          - 'infotainment/headunit/forge.config.ts'
+                          - '.github/workflows/_headunit.yml'
+
     # kart-agent ships inside the headunit package (analytics/docs/adr/0001-kart-agent-integration.md).
+    # Pushes to main build it too, to save the Rust cache that PRs restore from.
     kart-agent:
         name: kart-agent (${{ matrix.arch }})
         runs-on: ubuntu-latest
-        if: inputs.is-pr || inputs.is-tag
+        needs: [changes]
+        if: ${{ !cancelled() && (inputs.is-tag || needs.changes.outputs.kart-agent == 'true') }}
         strategy:
             matrix:
                 include:
@@ -71,6 +107,8 @@ jobs:
               with:
                   workspaces: analytics
                   key: ${{ matrix.target }}
+                  # PR and tag caches are only visible to their own ref, so only main saves.
+                  save-if: ${{ github.ref == 'refs/heads/main' }}
 
             # zig cross-links against an old glibc (2.31: Raspberry Pi OS bullseye and later)
             # and compiles sero-sys's C++ shim, with no target toolchain to install.
@@ -104,6 +142,7 @@ jobs:
                   fi
 
             - name: Upload artifact
+              if: inputs.is-pr || inputs.is-tag
               uses: actions/upload-artifact@v7
               with:
                   name: kart-agent-${{ matrix.arch }}
@@ -114,7 +153,13 @@ jobs:
         name: Build (x86_64)
         runs-on: ubuntu-latest
         needs: [test, kart-agent]
-        if: inputs.is-pr || inputs.is-tag
+        # Runs without the agent when kart-agent was skipped (pure app change).
+        if: >-
+            ${{ !cancelled() && (inputs.is-pr || inputs.is-tag)
+            && needs.test.result == 'success'
+            && (needs.kart-agent.result == 'success' || (needs.kart-agent.result == 'skipped' && !inputs.is-tag)) }}
+        env:
+            WITH_AGENT: ${{ needs.kart-agent.result == 'success' }}
         defaults:
             run:
                 working-directory: infotainment/headunit
@@ -136,18 +181,24 @@ jobs:
               run: bun install
 
             - name: Download kart-agent
+              if: env.WITH_AGENT == 'true'
               uses: actions/download-artifact@v8
               with:
                   name: kart-agent-x64
                   path: ${{ runner.temp }}/kart-agent
 
             - name: Build (x86_64)
-              env:
-                  KART_AGENT_BIN: ${{ runner.temp }}/kart-agent/kart-agent
-              run: bun run make
+              run: |
+                  if [ "$WITH_AGENT" = true ]; then
+                      export KART_AGENT_BIN="$RUNNER_TEMP/kart-agent/kart-agent"
+                  else
+                      export KART_AGENT_OPTIONAL=1
+                  fi
+                  bun run make
 
             # Installs the package on this disposable runner (real systemd, no containers).
             - name: Test the kart-agent service lifecycle
+              if: env.WITH_AGENT == 'true'
               run: packaging/test/deb-systemd-test.sh out/make/deb/x64/*.deb
 
             - name: Upload artifact
@@ -161,7 +212,8 @@ jobs:
         name: Build (arm64)
         runs-on: ubuntu-latest
         needs: [test, kart-agent]
-        if: inputs.is-tag
+        # Explicit results: the skipped `changes` job would otherwise skip this one too.
+        if: ${{ !cancelled() && inputs.is-tag && needs.test.result == 'success' && needs.kart-agent.result == 'success' }}
         defaults:
             run:
                 working-directory: infotainment/headunit

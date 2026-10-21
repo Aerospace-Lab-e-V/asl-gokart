@@ -8,6 +8,9 @@ on:
 jobs:
     headunit:
         uses: ./.github/workflows/_headunit.yml
+        permissions:
+            contents: read
+            pull-requests: read # change detection (skipped on tags)
         with:
             is-tag: true
             is-pr: false

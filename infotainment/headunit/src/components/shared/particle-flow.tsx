@@ -171,16 +171,6 @@ interface Particle {
     freqY: number;
 }
 
-// Generate random point within a circle
-function randomPointInCircle(center: Position2D, radius: number): Position2D {
-    const angle = Math.random() * Math.PI * 2;
-    const r = Math.sqrt(Math.random()) * radius; // sqrt for uniform distribution
-    return {
-        x: center.x + Math.cos(angle) * r,
-        y: center.y + Math.sin(angle) * r,
-    };
-}
-
 // Generate target offset within circular area
 function generateTargetOffset(radius: number): Position2D {
     const angle = Math.random() * Math.PI * 2;

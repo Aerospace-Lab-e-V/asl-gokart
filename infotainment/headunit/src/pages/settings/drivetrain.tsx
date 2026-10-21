@@ -7,7 +7,7 @@ import { Subpage } from "@/components/shared/subpage";
  * throttle, show raw throttle and the controller UART reconnect (see git history of this file).
  */
 const DrivetrainPage = () => (
-    <Subpage title="Drivetrain" description="Limits the driver can choose from, and throttle handling" backTo="/settings">
+    <Subpage title="Drivetrain" description="Limits the driver can choose from" backTo="/settings">
         <p className="text-muted-foreground flex flex-1 items-center justify-center text-xl">
             Not available until the throttle controller talks SERO
         </p>

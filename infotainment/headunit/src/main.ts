@@ -11,8 +11,6 @@ log.initialize();
 log.transports.console.level = "info";
 log.transports.file.level = "info";
 
-const inDevelopment = process.env.NODE_ENV === "development";
-
 if (require("electron-squirrel-startup")) {
     app.quit();
 }

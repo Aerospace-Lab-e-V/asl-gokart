@@ -1,17 +1,34 @@
 name: CI — Zone Controllers
 
+# Only paths that reach a PlatformIO build: zc_throttle (and its protocoll_lib) is not
+# ported yet, zc_simulator is Python and zc/tools are standalone.
 on:
     pull_request:
         paths:
             - 'zc/**'
+            - '!zc/zc_throttle/**'
+            - '!zc/zc_simulator/**'
+            - '!zc/lib/protocoll_lib/**'
+            - '!zc/tools/**'
+            - '!zc/**/*.md'
             - '.github/workflows/_zc.yml'
             - '.github/workflows/ci-zc.yml'
     push:
         branches: [main]
         paths:
             - 'zc/**'
+            - '!zc/zc_throttle/**'
+            - '!zc/zc_simulator/**'
+            - '!zc/lib/protocoll_lib/**'
+            - '!zc/tools/**'
+            - '!zc/**/*.md'
             - '.github/workflows/_zc.yml'
             - '.github/workflows/ci-zc.yml'
+
+# A new push to a PR cancels its running build; pushes to main always run.
+concurrency:
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+    cancel-in-progress: true
 
 jobs:
     zc:

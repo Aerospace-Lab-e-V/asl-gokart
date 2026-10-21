@@ -1,9 +1,12 @@
 name: CI — Headunit
 
+# The kart-agent paths also trigger this workflow because the agent ships inside the
+# headunit package; _headunit.yml skips the agent build when only app code changed.
 on:
     pull_request:
         paths:
             - 'infotainment/headunit/**'
+            - '!infotainment/headunit/**/*.md'
             - 'analytics/crates/kart-agent/**'
             - 'analytics/crates/sero-sys/**'
             - 'analytics/crates/ecu-sero/**'
@@ -18,6 +21,7 @@ on:
         branches: [main]
         paths:
             - 'infotainment/headunit/**'
+            - '!infotainment/headunit/**/*.md'
             - 'analytics/crates/kart-agent/**'
             - 'analytics/crates/sero-sys/**'
             - 'analytics/crates/ecu-sero/**'
@@ -29,9 +33,17 @@ on:
             - '.github/workflows/_headunit.yml'
             - '.github/workflows/ci-headunit.yml'
 
+# A new push to a PR cancels its running build; pushes to main always run.
+concurrency:
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+    cancel-in-progress: true
+
 jobs:
     headunit:
         uses: ./.github/workflows/_headunit.yml
+        permissions:
+            contents: read
+            pull-requests: read # change detection
         with:
             is-tag: false
             is-pr: ${{ github.event_name == 'pull_request' }}

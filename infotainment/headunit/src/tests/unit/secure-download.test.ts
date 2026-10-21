@@ -86,8 +86,8 @@ test("a redirect to http or an endless redirect chain fails without leaving a fi
 test("firmware paths only take a known ECU and a plain tag", () => {
     for (const tag of ["../x", "..", ".hidden", "a/b", "a\\b", ""]) {
         expect(() => getFirmwarePath("zc_lights", tag)).toThrow("Invalid firmware tag");
-        expect(() => isDownloaded("zc_lights", tag)).toThrow();
-        expect(() => getFirmwareLocalUrl("zc_lights", tag)).toThrow();
+        expect(() => isDownloaded("zc_lights", tag)).toThrow("Invalid firmware tag");
+        expect(() => getFirmwareLocalUrl("zc_lights", tag)).toThrow("Invalid firmware tag");
     }
     expect(() => getFirmwarePath("../etc" as never, "v1.0.0")).toThrow("Unknown ECU id");
 });
