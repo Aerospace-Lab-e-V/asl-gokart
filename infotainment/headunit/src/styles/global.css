@@ -20,8 +20,10 @@ input, button, textarea, :focus {
 }
 
 /* Boot splash (index.html). Plain CSS, no theme class yet: prefers-color-scheme follows the theme main
-   applied before opening the window. Colours match --background/--foreground. */
+   applied before opening the window. Fades from the window's plain white/black to --background/--foreground.
+   The logo is centred at the size of the one on NetworkGateScreen (h-28), so the two overlap exactly. */
 #splash {
+    --splash-from: #ffffff;
     position: fixed;
     inset: 0;
     z-index: 100;
@@ -29,7 +31,8 @@ input, button, textarea, :focus {
     place-items: center;
     background: #ffffff;
     color: #020817;
-    transition: opacity 300ms ease-out;
+    animation: splash-from-plain 600ms ease-out;
+    transition: opacity 500ms ease-out;
 }
 
 #splash[data-done] {
@@ -38,7 +41,7 @@ input, button, textarea, :focus {
 }
 
 #splash svg {
-    width: 160px;
+    height: 7rem;
 }
 
 .splash-ring {
@@ -47,12 +50,19 @@ input, button, textarea, :focus {
 
 @media (prefers-color-scheme: dark) {
     #splash {
+        --splash-from: #000000;
         background: #020817;
         color: #f8fafc;
     }
 
     .splash-ring {
         filter: drop-shadow(0 0 6px #00adef);
+    }
+}
+
+@keyframes splash-from-plain {
+    from {
+        background-color: var(--splash-from);
     }
 }
 
@@ -63,6 +73,7 @@ input, button, textarea, :focus {
 }
 
 @media (prefers-reduced-motion: reduce) {
+    #splash,
     .splash-ring {
         animation: none;
     }

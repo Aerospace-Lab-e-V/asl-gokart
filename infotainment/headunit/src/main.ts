@@ -21,13 +21,13 @@ function createWindow() {
     // Read once: DevTools can only be opened in a window created with them enabled.
     const devToolsEnabled = getDevToolsEnabled();
     // The saved theme drives prefers-color-scheme, so the window and the boot splash in index.html
-    // paint in it before the renderer has loaded. Colours are --background from global.css.
+    // paint in it before the renderer has loaded. Plain black/white, the splash fades from it to --background.
     nativeTheme.themeSource = getTheme();
     const mainWindow = new BrowserWindow({
-        width: 1000,
+        width: 1024,
         height: 600,
         fullscreen: isFullscreen,
-        backgroundColor: nativeTheme.shouldUseDarkColors ? "#020817" : "#ffffff",
+        backgroundColor: nativeTheme.shouldUseDarkColors ? "#000000" : "#ffffff",
         webPreferences: {
             devTools: devToolsEnabled,
             contextIsolation: true,

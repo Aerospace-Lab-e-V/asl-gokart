@@ -102,27 +102,39 @@ function MainAppContent() {
     );
 }
 
+/** Screen time of the boot splash, counted from when the window started loading. */
+const SPLASH_MIN_MS = 1200;
+/** Matches the splash fade-out in global.css. */
+const SPLASH_FADE_MS = 500;
+
 export default function App() {
     const [gate, setGate] = useState<NetworkGateStatus | null>(null);
     const [themeReady, setThemeReady] = useState(false);
+    const [splashShown, setSplashShown] = useState(false);
 
     useEffect(() => {
         // Synced here, not in MainAppContent, so the gate screen follows the theme too
         syncThemeWithLocal().finally(() => setThemeReady(true));
         // An update that arrives before the initial status is newer, so it wins
         networkGate.getStatus().then((status) => setGate((current) => current ?? status));
-        return networkGate.onStatus(setGate);
+        const timer = setTimeout(() => setSplashShown(true), SPLASH_MIN_MS - performance.now());
+        const unsubscribe = networkGate.onStatus(setGate);
+        return () => {
+            clearTimeout(timer);
+            unsubscribe();
+        };
     }, []);
 
-    const loading = !themeReady || gate === null;
+    // The first screen mounts as the splash fades, so its own fade-in plays in view instead of under the splash
+    const loading = !themeReady || gate === null || !splashShown;
 
     // Fades out the boot splash from index.html once the first real screen can render.
     useEffect(() => {
         const splash = document.getElementById("splash");
         if (loading || !splash) return;
         splash.dataset.done = "";
-        // Matches the 300 ms fade in global.css; a timer, as transitionend never fires in a window that isn't painting.
-        setTimeout(() => splash.remove(), 300);
+        // A timer, as transitionend never fires in a window that isn't painting.
+        setTimeout(() => splash.remove(), SPLASH_FADE_MS);
     }, [loading]);
 
     if (loading) {
