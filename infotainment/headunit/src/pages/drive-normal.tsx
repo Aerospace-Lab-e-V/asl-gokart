@@ -1,7 +1,7 @@
 import { Gears } from "@/data/controlling_models/drivetrain";
 import { HeaderBar } from "@/components/shared/header-bar";
 import React from "react";
-import { Construction, Lightbulb, OctagonAlert, Spotlight, SquareArrowLeft, SquareArrowRight, TriangleAlert } from "lucide-react";
+import { DaytimeRunningLights, HazardLights, HighBeam, HvBatteryFault, InverterFault, MotorFault, ParkingLights, TurnSignalLeft, TurnSignalRight } from "@/components/icons/telltale";
 import { THROTTLE_BOUNDARIES, RPM_BOUNDARIES, throttleSegments, rpmSegments, Segment } from "@/data/gauge-config";
 import { interpolateColor } from "@/lib/utils/gauge-utils";
 import { LightToggle } from "@/components/drive/light-toggle";
@@ -142,16 +142,16 @@ const DriveNormalPage = () => (
 
     <div className="flex items-center justify-center gap-x-10">
       <div className="flex gap-x-2">
-        <LightToggle signal="lights.drl" light="drl" label="daytime running lights" icon={Lightbulb} onClassName="text-green-500" />
-        <LightToggle signal="lights.high_beam_left" orSignal="lights.high_beam_right" light="high_beam" label="high beams" icon={Spotlight} onClassName="text-blue-500" />
-        <LightToggle signal="lights.tail" light="tail" label="tail lights" icon={Construction} onClassName="text-green-500" />
-        <LightToggle signal="lights.hazard" light="hazard" label="hazard lights" icon={TriangleAlert} onClassName="text-green-500" />
+        <LightToggle signal="lights.drl" light="drl" label="daytime running lights" icon={DaytimeRunningLights} onClassName="text-green-500" />
+        <LightToggle signal="lights.high_beam_left" orSignal="lights.high_beam_right" light="high_beam" label="high beams" icon={HighBeam} onClassName="text-blue-500" />
+        <LightToggle signal="lights.tail" light="tail" label="tail lights" icon={ParkingLights} onClassName="text-green-500" />
+        <LightToggle signal="lights.hazard" light="hazard" label="hazard lights" icon={HazardLights} onClassName="text-green-500" />
       </div>
       {/* Unwired warning slots: light as text-orange-400 (warning) or text-red-500 (critical) once an ECU reports them. */}
       <div className="flex gap-x-2 text-muted-foreground/30">
-        <OctagonAlert size={36} className="m-2" />
-        <OctagonAlert size={36} className="m-2" />
-        <OctagonAlert size={36} className="m-2" />
+        <HvBatteryFault size={36} className="m-2" />
+        <MotorFault size={36} className="m-2" />
+        <InverterFault size={36} className="m-2" />
       </div>
     </div>
 
@@ -159,9 +159,9 @@ const DriveNormalPage = () => (
       <ThrottleGauge />
       <div className="flex flex-col items-center gap-y-4">
         <div className="flex items-center gap-x-6">
-          <LightToggle signal="lights.turn_left" light="turn_left" label="left turn signal" icon={SquareArrowLeft} onClassName="text-green-500" />
+          <LightToggle signal="lights.turn_left" light="turn_left" label="left turn signal" icon={TurnSignalLeft} onClassName="text-green-500" />
           <GearIndicator />
-          <LightToggle signal="lights.turn_right" light="turn_right" label="right turn signal" icon={SquareArrowRight} onClassName="text-green-500" />
+          <LightToggle signal="lights.turn_right" light="turn_right" label="right turn signal" icon={TurnSignalRight} onClassName="text-green-500" />
         </div>
         <Speed />
         <BatteryBar />

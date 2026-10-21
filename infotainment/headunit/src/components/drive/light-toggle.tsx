@@ -1,5 +1,5 @@
 import React from "react";
-import type { LucideIcon } from "lucide-react";
+import type { TelltaleIcon } from "@/components/icons/telltale";
 import { toast } from "sonner";
 import type { SignalName } from "@/domain/signals";
 import type { ToggleLight } from "@/domain/commands";
@@ -13,7 +13,7 @@ interface LightToggleProps {
     orSignal?: SignalName;
     light: ToggleLight;
     label: string;
-    icon: LucideIcon;
+    icon: TelltaleIcon;
     /** Text color class while on. */
     onClassName: string;
 }
