@@ -21,7 +21,7 @@ const DEFAULT_ADMIN_PIN_HASH = "441b7681786fefcf0b41c3952a0ffecb1221315407a031f6
 const DEFAULTS: SystemConfigData = {
     autoStart: false,
     fullscreenOnStartup: false,
-    devToolsEnabled: true,
+    devToolsEnabled: false,
     adminPinHash: DEFAULT_ADMIN_PIN_HASH,
     theme: "system",
 };
@@ -40,7 +40,7 @@ function readConfig(): SystemConfigData {
         return {
             autoStart: parsed.autoStart ?? false,
             fullscreenOnStartup: parsed.fullscreenOnStartup ?? false,
-            devToolsEnabled: parsed.devToolsEnabled ?? true,
+            devToolsEnabled: parsed.devToolsEnabled ?? false,
             adminPinHash: parsed.adminPinHash ?? DEFAULT_ADMIN_PIN_HASH,
             theme: THEMES.includes(parsed.theme) ? parsed.theme : "system",
         };
