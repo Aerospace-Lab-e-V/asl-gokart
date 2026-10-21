@@ -13,7 +13,7 @@ bun install
 bun run start
 ```
 
-Without a kart: `HEADUNIT_MOCK=1 bun run start` drives a simulated kart through a looping lap and answers light commands.
+Without a kart: `bun run start:mock` drives a simulated kart through a looping lap and answers light commands.
 
 ## Make `Pi4`/`ODROID` image
 
