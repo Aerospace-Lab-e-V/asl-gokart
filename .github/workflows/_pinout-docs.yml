@@ -21,7 +21,7 @@ jobs:
                   python-version: '3.x'
 
             - name: Generate pinout documentation
-              run: python zc/tools/gen_pinout_docs.py --output-dir docs/
+              run: python zc/tools/pinout_docs/gen_pinout_docs.py --output-dir docs/
 
             - name: Upload Pages artifact
               uses: actions/upload-pages-artifact@v5

@@ -4,7 +4,7 @@ on:
     push:
         branches: [main]
         paths:
-            - 'zc/tools/gen_pinout_docs.py'
+            - 'zc/tools/pinout_docs/**'
             - 'zc/**/pins*'
             - '.github/workflows/_pinout-docs.yml'
             - '.github/workflows/ci-pinout-docs.yml'
