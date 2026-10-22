@@ -18,7 +18,7 @@ import { useCommand } from "@/services/commands";
 import { useIsDark } from "@/hooks/use-is-dark";
 
 /** Shows the relay state the ECU reports; a flip asks the ECU to toggle it. */
-const RelaySwitch = ({ relay }: { relay: 0 | 1 }) => {
+const RelaySwitch = ({ relay, label }: { relay: 0 | 1; label: string }) => {
     const n = relay + 1;
     const on = useSignal(n === 1 ? "drive.relay_1" : "drive.relay_2");
     const { run, pending } = useCommand();
@@ -31,7 +31,7 @@ const RelaySwitch = ({ relay }: { relay: 0 | 1 }) => {
     return (
         <div className="flex items-center gap-4">
             <Label htmlFor={`relay-${n}-switch`} className="text-base font-medium select-none cursor-pointer">
-                Relay {n}{on === null && " (--)"}
+                {label}{on === null && " (--)"}
             </Label>
             <Switch
                 id={`relay-${n}-switch`}
@@ -152,8 +152,8 @@ const MotorPage = () => {
 
             {/* Relay Switches Control Panel */}
             <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 flex flex-row gap-12 bg-background/60 dark:bg-background/40 backdrop-blur-md px-8 py-5 rounded-2xl border border-border shadow-xl">
-                <RelaySwitch relay={0} />
-                <RelaySwitch relay={1} />
+                <RelaySwitch relay={0} label="Main Contactors" />
+                <RelaySwitch relay={1} label="Reverse Gear" />
             </div>
 
             {/* Settings toggle in top-right corner */}
