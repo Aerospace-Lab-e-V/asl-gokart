@@ -1,0 +1,19 @@
+[package]
+name = "headunit-slint"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+
+[dependencies]
+slint = "1.18.1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
+[build-dependencies]
+slint-build = "1.18.1"
+
+[features]
+# Pi kiosk: render straight to DRM/KMS, no X11/Wayland. Select at runtime with SLINT_BACKEND=linuxkms.
+kms = ["slint/backend-linuxkms"]
+
+[profile.release]
+strip = true

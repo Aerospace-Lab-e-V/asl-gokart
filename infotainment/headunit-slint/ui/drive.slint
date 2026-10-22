@@ -1,0 +1,305 @@
+// Port of headunit/src/pages/drive-normal.tsx. Sizes are the Tailwind classes there, in px.
+import "fonts/Geist-Regular.ttf";
+import "fonts/Geist-Medium.ttf";
+import "fonts/Geist-SemiBold.ttf";
+import "fonts/Geist-Bold.ttf";
+
+/** shadcn tokens from headunit/src/styles/global.css plus the Tailwind colors the page uses. */
+export global Theme {
+    in-out property <bool> dark: true;
+    out property <color> bg: dark ? #020817 : #ffffff;
+    out property <color> fg: dark ? #f8fafc : #020817;
+    out property <color> muted: dark ? #94a3b8 : #475569;
+    out property <color> off: muted.with-alpha(0.6);
+    out property <color> green: dark ? #22c55e : #16a34a;
+    out property <color> blue: dark ? #3b82f6 : #2563eb;
+
+    /** Electron's interpolateColor over [fg until a, amber at b, red at 1], all as fractions of the range. */
+    public pure function gauge-color(pct: float, a: float, b: float) -> color {
+        if pct < a { return fg; }
+        if pct < b { return #d97706.mix(fg, (pct - a) / (b - a)); }
+        return #dc2626.mix(#d97706, (pct - b) / (1 - b));
+    }
+}
+
+/** Part of the ellipse filling its parent (inset 20/1000 by 20/400, like the SVG viewBox), from deg to deg + span. */
+component Arc inherits Path {
+    in property <float> from-deg;
+    in property <float> span;
+    property <float> w: self.width / 1px;
+    property <float> h: self.height / 1px;
+    property <float> rx: w / 2 - w * 0.02;
+    property <float> ry: h / 2 - h * 0.05;
+    property <angle> to: (from-deg + span) * 1deg;
+    viewbox-width: w;
+    viewbox-height: h;
+    fit: fill;
+    stroke-line-cap: round;
+    commands: "M \{w / 2 + rx * cos(from-deg * 1deg)} \{h / 2 + ry * sin(from-deg * 1deg)} A \{rx} \{ry} 0 0 \{span > 0 ? 1 : 0} \{w / 2 + rx * cos(to)} \{h / 2 + ry * sin(to)}";
+}
+
+/** Track plus value arc, ±55° around one side, filling bottom to top. Sits on the whole gauge area. */
+component GaugeArc {
+    in property <float> pct;
+    in property <color> color;
+    in property <bool> is-left;
+    property <float> from: is-left ? 125 : 55;
+    property <float> dir: is-left ? 1 : -1;
+    property <float> shown: pct;
+    animate shown { duration: 150ms; }
+    width: 100%;
+    height: 100%;
+    Arc { from-deg: from; span: 110 * dir; stroke: Theme.fg.with-alpha(0.2); stroke-width: 12px; }
+    // ponytail: wide translucent stroke stands in for CSS drop-shadow glow; Path has no shadow.
+    if Theme.dark && shown > 0.001: Arc { from-deg: from; span: 110 * dir * shown; stroke: color.with-alpha(0.25); stroke-width: 20px; }
+    if shown > 0.001: Arc { from-deg: from; span: 110 * dir * shown; stroke: color; stroke-width: 12px; }
+}
+
+component Readout {
+    in property <string> value;
+    in property <string> unit;
+    in property <string> label;
+    in property <bool> is-left;
+    VerticalLayout {
+        alignment: center;
+        padding-left: is-left ? 64px : 0;
+        padding-right: is-left ? 0 : 64px;
+        HorizontalLayout {
+            alignment: is-left ? start : end;
+            Text { text: value; font-size: 48px; color: Theme.fg; vertical-alignment: bottom; }
+            Text { text: unit; font-size: 24px; color: Theme.muted; vertical-alignment: bottom; }
+        }
+        Text { text: label; font-size: 18px; color: Theme.muted; horizontal-alignment: is-left ? TextHorizontalAlignment.left : TextHorizontalAlignment.right; }
+    }
+}
+
+/** Light icon showing the kart's state; a tap asks the kart to toggle it. */
+component LightToggle {
+    in property <image> icon;
+    in property <bool> on;
+    in property <color> on-color: Theme.green;
+    callback clicked;
+    width: 64px;
+    height: 64px;
+    Image { x: 8px; y: 8px; width: 48px; height: 48px; source: icon; colorize: on ? on-color : Theme.off; }
+    TouchArea { clicked => { root.clicked(); } }
+}
+
+component Telltale inherits Image {
+    width: 48px;
+    height: 48px;
+    colorize: Theme.off;
+}
+
+/** Label, value and a cold-to-hot bar. */
+component TempReadout {
+    in property <string> label;
+    in property <float> value;
+    in property <float> min;
+    in property <float> max;
+    property <float> pct: (clamp(value, min, max) - min) / (max - min);
+    animate pct { duration: 300ms; }
+    VerticalLayout {
+        spacing: 8px;
+        alignment: end;
+        HorizontalLayout {
+            Text { text: label; font-size: 18px; color: Theme.muted; vertical-alignment: bottom; }
+            Text { text: round(value) + "°C"; font-size: 24px; font-weight: 500; color: Theme.fg; horizontal-alignment: right; }
+        }
+        Rectangle {
+            height: 16px;
+            Rectangle {
+                height: 8px;
+                border-radius: 4px;
+                background: @linear-gradient(90deg, #3b82f6b3 0%, Theme.fg.with-alpha(0.2) 50%, #ef4444b3 100%);
+            }
+            Rectangle {
+                x: parent.width * pct - 10px;
+                width: 20px;
+                height: 20px;
+                border-radius: 10px;
+                background: Theme.fg;
+                border-width: 2px;
+                border-color: Theme.bg;
+            }
+        }
+    }
+}
+
+export component DriveWindow inherits Window {
+    in property <float> speed;
+    in property <float> rpm;
+    in property <float> throttle;
+    in property <bool> reverse;
+    in property <float> soc;
+    in property <float> battery-temp;
+    in property <float> motor-temp;
+    in property <float> esc-left;
+    in property <float> esc-right;
+    in property <bool> drl;
+    in property <bool> high-beam;
+    in property <bool> tail;
+    in property <bool> hazard;
+    in property <bool> turn-left;
+    in property <bool> turn-right;
+    in property <string> clock: "00:00";
+    /** Electron's ToggleLight names: drl, high_beam, tail, hazard, turn_left, turn_right. */
+    callback toggle-light(string);
+
+    title: "headunit-slint";
+    preferred-width: 1024px;
+    preferred-height: 600px;
+    background: Theme.bg;
+    default-font-family: "Geist";
+
+    property <float> throttle-pct: clamp(throttle, 0, 100) / 100;
+    property <float> rpm-pct: clamp(rpm, 0, 1500) / 1500;
+    property <float> soc-shown: soc;
+    animate soc-shown { duration: 300ms; }
+
+    VerticalLayout {
+        // Header bar
+        HorizontalLayout {
+            vertical-stretch: 0;
+            padding-left: 16px;
+            padding-right: 16px;
+            padding-top: 8px;
+            padding-bottom: 8px;
+            HorizontalLayout {
+                min-width: 112px;
+                horizontal-stretch: 0;
+                spacing: 8px;
+                alignment: start;
+                Image { width: 32px; height: 32px; source: @image-url("icons/ethernet.svg"); colorize: Theme.green; }
+                Image { width: 32px; height: 32px; source: @image-url("icons/cloud.svg"); colorize: Theme.muted; }
+            }
+            Rectangle {
+                horizontal-stretch: 1;
+                Text { width: 100%; text: clock; font-size: 30px; font-weight: 700; color: Theme.fg; horizontal-alignment: center; }
+                TouchArea { clicked => { Theme.dark = !Theme.dark; } }
+            }
+            HorizontalLayout {
+                min-width: 112px;
+                horizontal-stretch: 0;
+                spacing: 8px;
+                alignment: end;
+                Image { width: 32px; height: 32px; source: @image-url("icons/lock.svg"); colorize: Theme.fg; }
+                Rectangle { width: 4px; }
+                Text { text: round(soc) + "%"; font-size: 30px; font-weight: 700; color: Theme.fg; vertical-alignment: center; }
+                Image {
+                    width: 30px;
+                    height: 30px;
+                   
+                    colorize: Theme.fg;
+                    source: soc > 85 ? @image-url("icons/battery_full.svg") : soc > 25 ? @image-url("icons/battery_medium.svg") : @image-url("icons/battery_low.svg");
+                }
+            }
+        }
+
+        // Telltales
+        HorizontalLayout {
+            vertical-stretch: 0;
+            alignment: center;
+            spacing: 40px;
+            HorizontalLayout {
+                spacing: 8px;
+                LightToggle { icon: @image-url("icons/drl.svg"); on: drl; clicked => { toggle-light("drl"); } }
+                LightToggle { icon: @image-url("icons/high_beam.svg"); on: high-beam; on-color: Theme.blue; clicked => { toggle-light("high_beam"); } }
+                LightToggle { icon: @image-url("icons/tail.svg"); on: tail; clicked => { toggle-light("tail"); } }
+                LightToggle { icon: @image-url("icons/hazard.svg"); on: hazard; clicked => { toggle-light("hazard"); } }
+            }
+            // Unwired warning slots, as in Electron: light as orange-400 / red-500 once an ECU reports them.
+            HorizontalLayout {
+                spacing: 8px;
+                padding: 8px;
+                Telltale { source: @image-url("icons/hv_battery_fault.svg"); }
+                Rectangle { width: 8px; }
+                Telltale { source: @image-url("icons/motor_fault.svg"); }
+                Rectangle { width: 8px; }
+                Telltale { source: @image-url("icons/inverter_fault.svg"); }
+            }
+        }
+
+        // Gauge area: both arcs share one ellipse over the whole area.
+        Rectangle {
+            vertical-stretch: 1;
+            GaugeArc { is-left: true; pct: throttle-pct; color: Theme.gauge-color(throttle-pct, 0.5, 0.7); }
+            GaugeArc { is-left: false; pct: rpm-pct; color: Theme.gauge-color(rpm-pct, 0.5, 2 / 3); }
+            HorizontalLayout {
+                // Side columns size from stretch only, center is fixed: changing readout text must not move the center.
+                Readout { horizontal-stretch: 1; min-width: 0; preferred-width: 0; is-left: true; value: round(throttle); unit: "%"; label: "Throttle"; }
+                VerticalLayout {
+                    width: 400px;
+                    alignment: center;
+                    spacing: 16px;
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 24px;
+                        LightToggle { icon: @image-url("icons/turn_left.svg"); on: turn-left; clicked => { toggle-light("turn_left"); } }
+                        // PRND; only R and D are known from the kart, nothing is lit while unknown.
+                        HorizontalLayout {
+                            spacing: 20px;
+                            for g in ["P", "R", "N", "D"]: Text {
+                                text: g;
+                                font-size: 36px;
+                                vertical-alignment: center;
+                                property <bool> lit: g == (reverse ? "R" : "D");
+                                font-weight: lit ? 600 : 400;
+                                color: lit ? Theme.fg : Theme.muted.with-alpha(0.6);
+                            }
+                        }
+                        LightToggle { icon: @image-url("icons/turn_right.svg"); on: turn-right; clicked => { toggle-light("turn_right"); } }
+                    }
+                    VerticalLayout {
+                        Text { text: round(speed); font-size: 160px; letter-spacing: -4px; color: Theme.fg; horizontal-alignment: center; height: 160px; vertical-alignment: center; }
+                        Text { text: "km/h"; font-size: 24px; color: Theme.muted; horizontal-alignment: center; }
+                    }
+                    // Battery bar
+                    HorizontalLayout {
+                        width: 384px;
+                        spacing: 12px;
+                        Text { text: "Battery"; font-size: 18px; color: Theme.muted; vertical-alignment: center; }
+                        Rectangle {
+                            horizontal-stretch: 1;
+                            Rectangle {
+                                height: 12px;
+                                border-radius: 6px;
+                                background: Theme.fg.with-alpha(0.2);
+                                clip: true;
+                                Rectangle {
+                                    x: 0;
+                                    width: parent.width * clamp(soc-shown, 0, 100) / 100;
+                                    border-radius: 6px;
+                                    background: soc <= 10 ? #ef4444 : soc <= 25 ? #f59e0b : Theme.fg;
+                                }
+                            }
+                        }
+                        Text {
+                            width: 64px;
+                            text: soc.to-fixed(1) + "%";
+                            font-size: 18px;
+                            color: Theme.muted;
+                            horizontal-alignment: right;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+                Readout { horizontal-stretch: 1; min-width: 0; preferred-width: 0; is-left: false; value: round(rpm); unit: ""; label: "RPM"; }
+            }
+        }
+
+        // Temperatures
+        HorizontalLayout {
+            vertical-stretch: 0;
+            spacing: 40px;
+            padding-left: 40px;
+            padding-right: 40px;
+            padding-top: 8px;
+            padding-bottom: 24px;
+            TempReadout { label: "Battery"; value: battery-temp; min: -10; max: 45; }
+            TempReadout { label: "Motor"; value: motor-temp; min: -20; max: 50; }
+            TempReadout { label: "Controller 1"; value: esc-left; min: -10; max: 50; }
+            TempReadout { label: "Controller 2"; value: esc-right; min: -10; max: 50; }
+        }
+    }
+}
