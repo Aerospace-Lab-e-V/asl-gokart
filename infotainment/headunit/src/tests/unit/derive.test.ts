@@ -1,5 +1,5 @@
 import { HAZARD_HOLD_MS, hazardFromTurn, powerKw, resetDerive, socFromVoltage, speedKmh, tempStats } from "@/main/derive";
-import { flowStateFor } from "@/lib/utils/flow-state";
+import { flowLevel, flowStateFor } from "@/lib/utils/flow-state";
 import { FlowState } from "@/domain/signals";
 
 afterEach(() => {
@@ -36,6 +36,16 @@ test("flow state keeps the current sign behavior (A1)", () => {
     expect(flowStateFor(2)).toBe(FlowState.IDLE);
     expect(flowStateFor(20)).toBe(FlowState.REGEN);
     expect(flowStateFor(-20)).toBe(FlowState.POWER);
+});
+
+test("flow level grows with the current magnitude, in smaller steps for regen", () => {
+    expect(flowLevel(null, null)).toBe(1);
+    expect(flowLevel(-29, FlowState.POWER)).toBe(1);
+    expect(flowLevel(-30, FlowState.POWER)).toBe(2);
+    expect(flowLevel(-90, FlowState.POWER)).toBe(3);
+    expect(flowLevel(9, FlowState.REGEN)).toBe(1);
+    expect(flowLevel(10, FlowState.REGEN)).toBe(2);
+    expect(flowLevel(30, FlowState.REGEN)).toBe(3);
 });
 
 test("hazard holds through the blink-off phase and drops after the hold", () => {

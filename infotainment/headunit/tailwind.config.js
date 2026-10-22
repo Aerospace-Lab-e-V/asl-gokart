@@ -77,6 +77,21 @@ module.exports = {
                 "rise-in": {
                     from: { opacity: "0", transform: "translateY(12px)" },
                 },
+                // Battery charging: a liquid-tall lane carries its bubble to the surface, where it fades
+                "bubble-rise": {
+                    from: { opacity: "0", transform: "translateY(0)" },
+                    "15%, 80%": { opacity: "1" },
+                    to: { opacity: "0", transform: "translateY(-100%)" },
+                },
+                "bubble-wobble": {
+                    from: { transform: "translateX(-3px)" },
+                    to: { transform: "translateX(3px)" },
+                },
+                // Battery discharging: a band a quarter of the liquid tall, from above the surface to below the bottom
+                "band-sink": {
+                    from: { transform: "translateY(-100%)" },
+                    to: { transform: "translateY(400%)" },
+                },
             },
             animation: {
                 "accordion-down": "accordion-down 0.2s ease-out",
@@ -84,6 +99,10 @@ module.exports = {
                 indeterminate: "indeterminate 1.6s ease-in-out infinite",
                 // Delay with [animation-delay:…]; "both" keeps it hidden until then
                 "rise-in": "rise-in 900ms cubic-bezier(0.16, 1, 0.3, 1) both",
+                // Duration and delay set per bubble/band
+                "bubble-rise": "bubble-rise 2.6s ease-in infinite",
+                "bubble-wobble": "bubble-wobble 0.9s ease-in-out infinite alternate",
+                "band-sink": "band-sink 2.4s ease-in infinite",
             },
         },
     },
