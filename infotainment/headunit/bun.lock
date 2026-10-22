@@ -6,7 +6,6 @@
       "name": "headunit",
       "dependencies": {
         "@asl-gokart/sero-node": "^0.2.3",
-        "@mars3d/heatmap.js": "^2.0.7",
         "@radix-ui/react-checkbox": "^1.3.3",
         "@radix-ui/react-dialog": "^1.1.15",
         "@radix-ui/react-label": "^2.1.8",
@@ -33,7 +32,6 @@
         "lucide-react": "^0.575.0",
         "next-themes": "^0.4.6",
         "react": "^19.2.4",
-        "react-circular-progressbar": "^2.2.0",
         "react-color": "^2.19.3",
         "react-dom": "^19.2.4",
         "react-i18next": "^16.5.4",
@@ -440,8 +438,6 @@
     "@listr2/prompt-adapter-inquirer": ["@listr2/prompt-adapter-inquirer@2.0.22", "", { "dependencies": { "@inquirer/type": "^1.5.5" }, "peerDependencies": { "@inquirer/prompts": ">= 3 < 8" } }, "sha512-hV36ZoY+xKL6pYOt1nPNnkciFkn89KZwqLhAFzJvYysAvL5uBQdiADZx/8bIDXIukzzwG0QlPYolgMzQUtKgpQ=="],
 
     "@malept/cross-spawn-promise": ["@malept/cross-spawn-promise@2.0.0", "", { "dependencies": { "cross-spawn": "^7.0.1" } }, "sha512-1DpKU0Z5ThltBwjNySMC14g0CkbyhCaz9FkhxqNsZI6uAPJXFS8cMXlBKo26FJ8ZuW6S9GCMcR9IO5k2X5/9Fg=="],
-
-    "@mars3d/heatmap.js": ["@mars3d/heatmap.js@2.0.7", "", {}, "sha512-cIXF6XF761d0ZS0XB43UlNvvXZrHj9VIJv4H6da2AiGS/R1gUs7KvSeu0XEEztiG4FdoeLrwIjIV0yZYDwIDZg=="],
 
     "@mediapipe/tasks-vision": ["@mediapipe/tasks-vision@0.10.17", "", {}, "sha512-CZWV/q6TTe8ta61cZXjfnnHsfWIdFhms03M9T7Cnd5y2mdpylJM0rF1qRq+wsQVRMLz1OYPVEBU9ph2Bx8cxrg=="],
 
@@ -2042,8 +2038,6 @@
     "raw-body": ["raw-body@3.0.2", "", { "dependencies": { "bytes": "~3.1.2", "http-errors": "~2.0.1", "iconv-lite": "~0.7.0", "unpipe": "~1.0.0" } }, "sha512-K5zQjDllxWkf7Z5xJdV0/B0WTNqx6vxG70zJE4N0kBs4LovmEYWJzQGxC9bS9RAKu3bgM40lrd5zoLJ12MQ5BA=="],
 
     "react": ["react@19.2.4", "", {}, "sha512-9nfp2hYpCwOjAN+8TZFGhtWEwgvWHXqESH8qT89AT/lWklpLON22Lc8pEtnpsZz7VmawabSU0gCjnj8aC0euHQ=="],
-
-    "react-circular-progressbar": ["react-circular-progressbar@2.2.0", "", { "peerDependencies": { "react": ">=0.14.0" } }, "sha512-cgyqEHOzB0nWMZjKfWN3MfSa1LV3OatcDjPz68lchXQUEiBD5O1WsAtoVK4/DSL0B4USR//cTdok4zCBkq8X5g=="],
 
     "react-color": ["react-color@2.19.3", "", { "dependencies": { "@icons/material": "^0.2.4", "lodash": "^4.17.15", "lodash-es": "^4.17.15", "material-colors": "^1.2.1", "prop-types": "^15.5.10", "reactcss": "^1.2.0", "tinycolor2": "^1.4.1" }, "peerDependencies": { "react": "*" } }, "sha512-LEeGE/ZzNLIsFWa1TMe8y5VYqr7bibneWmvJwm1pCn/eNmrabWDh659JSPn9BuaMpEfU83WTOJfnCcjDZwNQTA=="],
 
