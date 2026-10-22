@@ -1,0 +1,39 @@
+name: CI Gate
+
+# The one required status check for main. The CI workflows are path-filtered, so requiring
+# their checks directly would leave PRs outside those paths pending forever. This job always
+# runs, waits for every other check on the PR head and fails if any of them failed.
+on:
+    pull_request:
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+    cancel-in-progress: true
+
+jobs:
+    gate:
+        name: CI gate
+        runs-on: ubuntu-latest
+        timeout-minutes: 90
+        permissions:
+            checks: read
+        steps:
+            - name: Wait for other checks
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  SHA: ${{ github.event.pull_request.head.sha }}
+              run: |
+                  sleep 15 # let workflows triggered by the same push register their checks
+                  while :; do
+                      state=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?per_page=100" --jq '
+                          [.check_runs[] | select(.name != "CI gate")]
+                          | if any(.status != "completed") then "pending"
+                            elif any(.conclusion | . != "success" and . != "skipped" and . != "neutral") then "failed"
+                            else "ok" end')
+                      echo "$(date +%T) $state"
+                      case $state in
+                          ok) exit 0 ;;
+                          failed) exit 1 ;;
+                      esac
+                      sleep 20
+                  done
