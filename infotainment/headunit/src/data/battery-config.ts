@@ -3,6 +3,10 @@ import { Segment } from "@/data/gauge-config";
 export const BATTERY_MIN_VOLTAGE = 51.2;
 export const BATTERY_MAX_VOLTAGE = 67.2;
 
+/** State of charge (%) at or below which the battery shows amber, then red. */
+export const SOC_WARN_PCT = 25;
+export const SOC_LOW_PCT = 10;
+
 export const SOC_BOUNDARIES: [number, number] = [0, 100];
 
 export const HEATMAP_MIN_TEMP = 0;
