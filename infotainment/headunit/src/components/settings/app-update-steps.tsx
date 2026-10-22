@@ -4,7 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { RowBadge, SettingsRadioRow, SettingsSection, Status, VersionBadge } from "@/components/settings/settings-list";
 import { type AppRelease, type UpdateProgress } from "@/data/updater/updater-types";
-import { formatDate } from "@/lib/releases";
+import { formatDate, previousStable } from "@/lib/releases";
 import { cn } from "@/lib/utils";
 
 /* The steps of the App update page, one per update phase. */
@@ -50,6 +50,7 @@ export const ReleaseList = ({ releases, error, currentVersion, selected, onSelec
             </Status>
         );
     }
+    const rollback = previousStable(releases, currentVersion);
     return (
         <SettingsSection title="Available releases" role="radiogroup">
             {releases.map((release) => (
@@ -61,6 +62,7 @@ export const ReleaseList = ({ releases, error, currentVersion, selected, onSelec
                     onSelect={() => onSelect(release)}
                 >
                     {release.isPrerelease && <RowBadge className="border-yellow-500 text-yellow-500">pre-release</RowBadge>}
+                    {release === rollback && <RowBadge className="border-sky-500 text-sky-500">previous stable</RowBadge>}
                     <VersionBadge tag={release.tag} currentVersion={currentVersion} />
                 </SettingsRadioRow>
             ))}

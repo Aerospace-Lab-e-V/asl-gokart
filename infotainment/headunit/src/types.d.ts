@@ -3,3 +3,5 @@
 // whether you're running in development or production).
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
 declare const MAIN_WINDOW_VITE_NAME: string;
+/** Injected into the renderer by vite.renderer.config.ts. */
+declare const HEADUNIT_BUILD_INFO: { version: string; branch: string; builtAt: string; dev: boolean };

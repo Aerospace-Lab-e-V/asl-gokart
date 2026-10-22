@@ -1,20 +1,19 @@
 #!/bin/bash
 
 GITHUB_API_BASE_URL="https://api.github.com"
-GITHUB_PAT="<your_github_personal_access_token"
 org="Aerospace-Lab-e-V"
 repo="asl-gokart"
 release_file="tmp/release-selected.json"
 response_all_releases="tmp/releases-all.json"
 
+# The repo is public; GITHUB_TOKEN is optional and only raises the API rate limit.
+auth=()
+if [[ -n "$GITHUB_TOKEN" ]]; then
+    auth=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+fi
+
 # Ensure the tmp directory exists
 mkdir -p tmp
-
-# Ensure the GITHUB_API_BASE_URL and the GITHUB_PAT are valid
-if [[ -z "$GITHUB_PAT" ]]; then
-    echo "Error: GITHUB_PAT is not set. Please set it to a valid GitHub Personal Access Token with repo access."
-    exit 1
-fi
 
 # Check internet connectivity by pinging GitHub API
 if ! ping -c 1 api.github.com &> /dev/null; then
@@ -22,21 +21,14 @@ if ! ping -c 1 api.github.com &> /dev/null; then
     exit 1
 fi
 
-# Check if the GITHUB_PAT is valid by making a simple API request
-response=$(curl -sH "Authorization: Bearer ${GITHUB_PAT}" "${GITHUB_API_BASE_URL}/user")
-if [[ -z "$(echo "$response" | jq -r '.login // empty')" ]]; then
-    echo "Error: Invalid GITHUB_PAT. Please check your token and try again."
-    exit 1
-fi
-
 # ── Step 1: select a release ──────────────────────────────────────────────────
 
-echo "Which version should be downloaded? 1) latest or 2) other"
+echo "Which version should be downloaded? 1) latest stable or 2) other (includes pre-releases)"
 read -p "Enter 1 or 2: " version_choice
 
 if [[ $version_choice == "1" ]]; then
-    echo "Fetching the latest release..."
-    curl -sH "Authorization: Bearer ${GITHUB_PAT}" \
+    echo "Fetching the latest stable release..."
+    curl -s "${auth[@]}" \
         "${GITHUB_API_BASE_URL}/repos/${org}/${repo}/releases/latest" > "${release_file}"
 
     version_name=$(jq -r '.tag_name // empty' "${release_file}")
@@ -49,7 +41,7 @@ if [[ $version_choice == "1" ]]; then
 
 elif [[ $version_choice == "2" ]]; then
     echo "Fetching all available releases..."
-    curl -sH "Authorization: Bearer ${GITHUB_PAT}" \
+    curl -s "${auth[@]}" \
         "${GITHUB_API_BASE_URL}/repos/${org}/${repo}/releases" > "${response_all_releases}"
 
     release_count=$(jq '. | length' "${response_all_releases}")
@@ -60,7 +52,7 @@ elif [[ $version_choice == "2" ]]; then
 
     echo "Available releases:"
     for i in $(seq 0 $(($release_count - 1))); do
-        echo "$(($i + 1))) $(jq -r ".[$i].tag_name" "${response_all_releases}")"
+        echo "$(($i + 1))) $(jq -r ".[$i] | .tag_name + if .prerelease then \" (pre-release)\" else \"\" end" "${response_all_releases}")"
     done
 
     read -p "Select release number: " selected_release_number
@@ -113,7 +105,7 @@ read -p "Enter 1 or 2: " download_or_install
 if [[ $download_or_install == "1" ]]; then
     echo "Downloading $asset_name..."
     curl -L -H "Accept: application/octet-stream" \
-        -H "Authorization: Bearer ${GITHUB_PAT}" \
+        "${auth[@]}" \
         "${GITHUB_API_BASE_URL}/repos/${org}/${repo}/releases/assets/${asset_id}" \
         -o "${asset_name}"
     echo "Download complete: ${asset_name}"
@@ -130,7 +122,7 @@ elif [[ $download_or_install == "2" ]]; then
 
     echo "Downloading $asset_name..."
     curl -L -H "Accept: application/octet-stream" \
-        -H "Authorization: Bearer ${GITHUB_PAT}" \
+        "${auth[@]}" \
         "${GITHUB_API_BASE_URL}/repos/${org}/${repo}/releases/assets/${asset_id}" \
         -o "tmp/${asset_name}.downloaded"
     echo "Download complete: tmp/${asset_name}.downloaded"

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { ChevronLeft, Download, Loader2, RefreshCw, RotateCcw } from "lucide-react";
 import { Subpage } from "@/components/shared/subpage";
 import { Button } from "@/components/ui/button";
+import { SettingsSection, SettingsSwitchRow } from "@/components/settings/settings-list";
 import {
     ConfirmStep,
     DownloadStep,
@@ -15,6 +16,7 @@ import {
 import { type AppRelease, type UpdateProgress, UpdatePhase } from "@/data/updater/updater-types";
 import { updater } from "@/services/updater";
 import { useApp } from "@/stores/app";
+import { getShowPrereleases, setShowPrereleases, visibleReleases } from "@/lib/releases";
 import log from "@/lib/logger";
 
 const BUTTON = "h-14 px-8 text-lg";
@@ -31,6 +33,7 @@ const AppUpdatePage = () => {
     const [installError, setInstallError] = useState<string | null>(null);
     const [progress, setProgress] = useState<UpdateProgress | null>(null);
     const [sudoConfirmed, setSudoConfirmed] = useState(false);
+    const [showPre, setShowPre] = useState(() => getShowPrereleases(currentVersion));
 
     const progressCleanupRef = useRef<(() => void) | null>(null);
 
@@ -94,6 +97,12 @@ const AppUpdatePage = () => {
             toast.error(`Restart failed: ${err instanceof Error ? err.message : err}`);
         });
 
+    const toggleShowPre = (show: boolean) => {
+        setShowPrereleases(show);
+        setShowPre(show);
+        if (!show && selectedRelease?.isPrerelease) setSelectedRelease(null);
+    };
+
     const backToList = () => {
         setPhase(UpdatePhase.Idle);
         setInstallError(null);
@@ -123,13 +132,24 @@ const AppUpdatePage = () => {
                 return <ErrorStep error={installError} />;
             default:
                 return (
-                    <ReleaseList
-                        releases={releases}
-                        error={releasesError}
-                        currentVersion={currentVersion}
-                        selected={selectedRelease}
-                        onSelect={setSelectedRelease}
-                    />
+                    <>
+                        <SettingsSection title="Channel">
+                            <SettingsSwitchRow
+                                id="show-prereleases"
+                                title="Show pre-releases"
+                                description="Alpha, beta and release candidate builds for testing"
+                                checked={showPre}
+                                onCheckedChange={toggleShowPre}
+                            />
+                        </SettingsSection>
+                        <ReleaseList
+                            releases={releases && visibleReleases(releases, currentVersion, showPre)}
+                            error={releasesError}
+                            currentVersion={currentVersion}
+                            selected={selectedRelease}
+                            onSelect={setSelectedRelease}
+                        />
+                    </>
                 );
         }
     };

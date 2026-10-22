@@ -26,6 +26,7 @@ import {
 import { UplinkSwitch } from "@/components/telemetry/uplink-switch";
 import { uplink } from "@/services/kart-agent/health";
 import {
+  RowBadge,
   SegmentedControl,
   SettingsLinkRow,
   SettingsRow,
@@ -54,6 +55,7 @@ export const DriveModeRow = () => {
 
 const SettingsPage = () => {
   const appVersion = useApp((state) => state.version);
+  const updateAvailable = useApp((state) => state.updateAvailable);
   const adminMode = useSession((state) => state.adminMode);
   const uplinkState = useAgent((state) =>
     state.error ? "Not running" : state.status ? uplink(state.status).state : ""
@@ -134,7 +136,12 @@ const SettingsPage = () => {
             <SettingsLinkRow to="/settings/drivetrain" icon={Cog} title="Drivetrain" />
             <SettingsLinkRow to="/settings/system" icon={AppWindow} title="System" value={logLevel && `Log level: ${logLevel}`} />
             <SettingsLinkRow to="/ecu-manager" icon={CircuitBoard} title="ECU Manager" />
-            <SettingsLinkRow to="/settings/update" icon={Download} title="App update" value={appVersion && `v${appVersion}`} />
+            <SettingsLinkRow
+              to="/settings/update"
+              icon={Download}
+              title="App update"
+              value={updateAvailable ? <RowBadge className="border-green-500 text-green-500">{updateAvailable} available</RowBadge> : appVersion && `v${appVersion}`}
+            />
           </SettingsSection>
         )}
 
