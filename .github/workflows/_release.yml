@@ -41,8 +41,18 @@ jobs:
                   name: zc-firmware
                   path: release-assets/
 
+            # The deb maker writes pre-releases as 0.5.0~alpha.1 (Debian ordering); the in-app
+            # updater looks for the asset by tag, headunit_0.5.0-alpha.1_<arch>.deb.
+            - name: Name pre-release debs after the tag
+              run: |
+                  find release-assets -name '*~*.deb' | while read -r f; do
+                      mv "$f" "$(dirname "$f")/$(basename "$f" | tr '~' '-')"
+                  done
+                  find release-assets -type f
+
             - name: Create GitHub Release
               uses: softprops/action-gh-release@v3
               with:
                   files: release-assets/**
                   generate_release_notes: true
+                  prerelease: ${{ contains(github.ref_name, '-') }}

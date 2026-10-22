@@ -30,6 +30,29 @@ bun run make:odroid
 - Pi 4 image: `./out/make/deb/arm64/headunit_X.X.X_arm64.deb`
 - ODROID image: `./out/make/deb/armv7l/headunit_X.X.X_armhf.deb`
 
+## Releases and pre-releases
+
+A `v*` tag builds both debs and publishes a GitHub release (`.github/workflows/ci-release.yml`). The tag must match
+`version` in `package.json`.
+
+Pre-release for testing on the kart (`-alpha.N`, `-beta.N`, `-rc.N`):
+
+1. Set `version` in `package.json` to e.g. `0.5.0-alpha.1` and commit it.
+2. `git tag v0.5.0-alpha.1 && git push origin v0.5.0-alpha.1`
+3. CI marks the release as a pre-release, so it never becomes "Latest".
+
+Install it on the headunit in Settings > Engineer > App update with "Show pre-releases" on, then "Restart now".
+The newest stable release below an installed pre-release is badged "previous stable" for going back.
+`autodeploy-on-rpi-2.sh` does the same from a shell (no token needed; `GITHUB_TOKEN` only raises the rate limit).
+
+Pre-release and `bun start` builds show version, branch and build time in the bottom-left corner.
+
+The updater runs `sudo dpkg -i` and needs passwordless sudo for it, set up by hand on the Pi (`sudo visudo -f /etc/sudoers.d/headunit`):
+
+```
+<kart-user> ALL=(root) NOPASSWD: /usr/bin/dpkg -i /tmp/headunit-update/*
+```
+
 ## Dataflow
 
 - Main: `src/main/adapters/sero.ts` decodes Sero events into catalog signals (`analytics/schema/signals.yaml` names) and

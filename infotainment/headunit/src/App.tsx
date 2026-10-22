@@ -25,6 +25,7 @@ import { useSession } from "@/stores/session";
 import { Toaster } from "@/components/ui/sonner"
 import MotorPage from "./pages/motor";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
+import { BuildWatermark } from "@/components/shared/build-watermark";
 import NetworkGateScreen from "./components/shared/network-gate-screen";
 import type { NetworkGateStatus } from "./helpers/ipc/network-gate";
 import { networkGate } from "./services/app";
@@ -142,11 +143,12 @@ export default function App() {
         return <div className="bg-background h-full w-full" />;
     }
 
-    if (!gate.ready) {
-        return <NetworkGateScreen status={gate} />;
-    }
-
-    return <MainAppContent />;
+    return (
+        <>
+            {gate.ready ? <MainAppContent /> : <NetworkGateScreen status={gate} />}
+            <BuildWatermark />
+        </>
+    );
 }
 
 const root = createRoot(document.getElementById("root")!);

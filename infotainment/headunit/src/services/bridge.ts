@@ -2,6 +2,8 @@ import { useSignals } from "@/stores/signals";
 import { useAgent } from "@/stores/agent";
 import { useApp } from "@/stores/app";
 import { useSession } from "@/stores/session";
+import { getShowPrereleases, pickUpdate } from "@/lib/releases";
+import log from "@/lib/logger";
 
 /*
  * Pipes main's pushes into the stores. Started once from renderer.ts, outside React, so ingestion
@@ -20,6 +22,11 @@ export function startBridge(): () => void {
     api.agent.getState().then((state) => useAgent.setState((cur) => (cur.status || cur.error ? cur : state)));
     api.hardware.getConnection().then((c) => useApp.setState((cur) => ({ lanConnected: cur.lanConnected ?? c })));
     api.admin.get().then((adminMode) => useSession.setState({ adminMode }));
-    api.app.getVersion().then((version) => useApp.setState({ version }));
+    api.app.getVersion().then(async (version) => {
+        useApp.setState({ version });
+        // Offline is normal on the kart, so a failed check is not an error
+        const releases = await api.updater.getReleases().catch((err) => log.debug("[bridge] Update check failed:", err));
+        if (releases) useApp.setState({ updateAvailable: pickUpdate(releases, version, getShowPrereleases(version))?.tag ?? null });
+    });
     return () => offs.forEach((off) => off());
 }

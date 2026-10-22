@@ -165,6 +165,14 @@ jobs:
                 working-directory: infotainment/headunit
         steps:
             - uses: actions/checkout@v6
+              with:
+                  fetch-depth: 0 # branch lookup for the watermark
+
+            # Shown in the pre-release watermark; tag builds run on a detached HEAD, so look up the branch.
+            - name: Resolve build branch
+              run: |
+                  branch="${GITHUB_HEAD_REF:-$(git branch -r --contains HEAD --format='%(refname:lstrip=3)' | awk '$0 != "HEAD" && !b { b = $0 } END { print b }')}"
+                  echo "HEADUNIT_BUILD_BRANCH=${branch:-$GITHUB_REF_NAME}" >> "$GITHUB_ENV"
 
             - uses: actions/setup-node@v6.2.0
               with:
@@ -219,6 +227,14 @@ jobs:
                 working-directory: infotainment/headunit
         steps:
             - uses: actions/checkout@v6
+              with:
+                  fetch-depth: 0 # branch lookup for the watermark
+
+            # Shown in the pre-release watermark; tag builds run on a detached HEAD, so look up the branch.
+            - name: Resolve build branch
+              run: |
+                  branch="${GITHUB_HEAD_REF:-$(git branch -r --contains HEAD --format='%(refname:lstrip=3)' | awk '$0 != "HEAD" && !b { b = $0 } END { print b }')}"
+                  echo "HEADUNIT_BUILD_BRANCH=${branch:-$GITHUB_REF_NAME}" >> "$GITHUB_ENV"
 
             - uses: actions/setup-node@v6.2.0
               with:
