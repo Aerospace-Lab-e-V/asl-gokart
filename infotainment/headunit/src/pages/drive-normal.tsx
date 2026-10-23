@@ -7,7 +7,6 @@ import {
     HazardLights,
     HighBeam,
     HvBatteryFault,
-    InverterFault,
     MotorFault,
     MotorTemperature,
     ParkingLights,
@@ -161,30 +160,36 @@ const TONE_CLASS: Record<LampTone, string> = {
   red: "text-red-600 dark:text-red-500",
 };
 
-/** Warning lamp, dim while off. `label` names the lit state for screen readers. */
-const Lamp = ({ icon: Icon, tone, label }: { icon: TelltaleIcon; tone: LampTone | null; label: string }) => (
+/**
+ * Warning lamp, hidden while off but keeping its place, so lamps do not shift as others light up.
+ * `label` names the lit state for screen readers.
+ */
+const Lamp = ({ icon: Icon, tone, label, size = 48 }: { icon: TelltaleIcon; tone: LampTone | null; label: string; size?: number }) => (
   <Icon
-    size={48}
+    size={size}
     title={tone ? label : undefined}
-    className={cn("m-2", tone ? `${TONE_CLASS[tone]} dark:drop-shadow-[0_0_6px_currentColor]` : "text-muted-foreground/60")}
+    className={cn("m-2", tone ? `${TONE_CLASS[tone]} dark:drop-shadow-[0_0_4px_currentColor]` : "invisible")}
   />
 );
+
+/** Lamps between the arc gauges and the speed. */
+const GAUGE_LAMP_SIZE = 64;
 
 /** Red while the ECU is not connected; off until its status is known. */
 const offline = (status: ReturnType<typeof useEcuStatus>, ecu: EcuId) => status !== null && !status[ecu].online;
 
 const BatteryTempLamp = () => (
-  <Lamp icon={BatteryTemperature} tone={tempTone(useSignal("battery.temp"), BATTERY_TEMP_WARN_C, BATTERY_TEMP_HOT_C)} label="Battery temperature high" />
+  <Lamp icon={BatteryTemperature} tone={tempTone(useSignal("battery.temp"), BATTERY_TEMP_WARN_C, BATTERY_TEMP_HOT_C)} label="Battery temperature high" size={GAUGE_LAMP_SIZE} />
 );
 
 const MotorTempLamp = () => {
   // Smoothed like the readout, so the lamp does not flicker at a threshold.
   const temp = useSmoothed(highest(useSignal("temp.motor_left"), useSignal("temp.motor_right")));
-  return <Lamp icon={MotorTemperature} tone={tempTone(temp, MOTOR_TEMP_WARN_C, MOTOR_TEMP_HOT_C)} label="Motor temperature high" />;
+  return <Lamp icon={MotorTemperature} tone={tempTone(temp, MOTOR_TEMP_WARN_C, MOTOR_TEMP_HOT_C)} label="Motor temperature high" size={GAUGE_LAMP_SIZE} />;
 };
 
 /* TODO(firmware): no ECU reports a power limit yet; light it orange once zc_motor does. */
-const PowerLimitedLamp = () => <Lamp icon={PowerLimited} tone={null} label="Power limited" />;
+const PowerLimitedLamp = () => <Lamp icon={PowerLimited} tone={null} label="Power limited" size={GAUGE_LAMP_SIZE} />;
 
 const DriveNormalPage = () => {
   const ecus = useEcuStatus();
@@ -192,7 +197,9 @@ const DriveNormalPage = () => {
     <div className="flex h-full w-full flex-col">
       <HeaderBar />
 
-      <div className="flex items-center justify-center gap-x-10">
+      {/* Light buttons stay centred; the fault lamps beside them only show while lit. */}
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-10">
+        <div />
         <div className="flex gap-x-2">
           <LightToggle signal="lights.drl" light="drl" label="daytime running lights" icon={DaytimeRunningLights} onClassName="text-green-600 dark:text-green-500" />
           <LightToggle signal="lights.high_beam_left" orSignal="lights.high_beam_right" light="high_beam" label="high beams" icon={HighBeam} onClassName="text-blue-600 dark:text-blue-500" />
@@ -202,8 +209,6 @@ const DriveNormalPage = () => {
         <div className="flex gap-x-2">
           <Lamp icon={HvBatteryFault} tone={offline(ecus, "zc_battery") ? "red" : null} label="Battery controller not connected" />
           <Lamp icon={MotorFault} tone={offline(ecus, "zc_motor") ? "red" : null} label="Motor controller not connected" />
-          {/* TODO(firmware): no ECU reports an inverter fault yet. */}
-          <Lamp icon={InverterFault} tone={null} label="Inverter fault" />
         </div>
       </div>
 

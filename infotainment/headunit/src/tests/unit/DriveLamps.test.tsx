@@ -51,6 +51,18 @@ test("a controller that is not connected lights its lamp red", async () => {
     expect(screen.getByRole("button", { name: "tail lights" }).querySelector("svg")).not.toHaveClass("text-red-600");
 });
 
+test("warning lamps stay hidden while off; light buttons stay visible", async () => {
+    await renderPage({});
+
+    for (const lamp of ["hv-battery-fault", "motor-fault", "battery-temperature", "motor-temperature", "power-limited"]) {
+        expect(document.querySelector(`.telltale-${lamp}`)).toHaveClass("invisible");
+    }
+    expect(document.querySelector(".telltale-inverter-fault")).toBeNull();
+    for (const name of ["daytime running lights", "high beams", "tail lights", "hazard lights", "left turn signal", "right turn signal"]) {
+        expect(screen.getByRole("button", { name }).querySelector("svg")).toHaveClass("text-muted-foreground/60");
+    }
+});
+
 test("hot battery and motor light their temperature lamps", async () => {
     await renderPage({}, { "battery.temp": 46, "temp.motor_left": 42, "temp.motor_right": 30 });
 
