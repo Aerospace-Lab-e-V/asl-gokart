@@ -3,6 +3,7 @@ import { HeaderBar } from "@/components/shared/header-bar";
 import React from "react";
 import { DaytimeRunningLights, HazardLights, HighBeam, HvBatteryFault, InverterFault, MotorFault, ParkingLights, TurnSignalLeft, TurnSignalRight } from "@/components/icons/telltale";
 import { THROTTLE_BOUNDARIES, RPM_BOUNDARIES, throttleSegments, rpmSegments, Segment } from "@/data/gauge-config";
+import { SOC_LOW_PCT, SOC_WARN_PCT } from "@/data/battery-config";
 import { interpolateColor } from "@/lib/utils/gauge-utils";
 import { LightToggle } from "@/components/drive/light-toggle";
 import { avg, fmt } from "@/components/drive/format";
@@ -95,7 +96,7 @@ const Speed = () => {
 
 const BatteryBar = () => {
   const soc = useSignal("battery.soc");
-  const tone = soc !== null && soc <= 10 ? "bg-red-500" : soc !== null && soc <= 25 ? "bg-amber-500" : "bg-foreground";
+  const tone = soc !== null && soc <= SOC_LOW_PCT ? "bg-red-500" : soc !== null && soc <= SOC_WARN_PCT ? "bg-amber-500" : "bg-foreground";
   return (
     <div className="flex w-96 items-center gap-x-3 text-lg text-muted-foreground">
       <span>Battery</span>
