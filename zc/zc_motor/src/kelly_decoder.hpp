@@ -19,6 +19,12 @@ inline constexpr uint8_t     CMD_PACKET_B   = 0x3B;
 /// command. Bounds the loop so a noisy/miswired line can't hang the ZC.
 inline constexpr std::size_t FLUSH_MAX_BYTES = 64;
 
+/// Consecutive failed reads of one packet type that keep its last good
+/// values (300 ms at the 100 ms poll). A single bad read is common on the
+/// UART; zeroing it showed as e.g. a 0 °C blip. Past this the controller
+/// counts as gone and reads zero, which the headunit relies on.
+inline constexpr uint8_t MAX_HELD_FAILURES = 3;
+
 using Packet = std::array<uint8_t, PACKET_LENGTH>;
 
 enum class PacketType : uint8_t {
@@ -125,9 +131,9 @@ public:
     }
 
     /// Requests + decodes Packet A, then Packet B. Returns true only if
-    /// both validated this cycle. Faithful to rust_impl: a side that fails
-    /// type/checksum validation resets to 0/false for this cycle rather
-    /// than holding the last good value; fault_count() tracks failures.
+    /// both validated this cycle. A packet that fails keeps its last good
+    /// values for up to MAX_HELD_FAILURES reads in a row, then resets to
+    /// 0/false; fault_count() tracks every failure.
     bool poll() {
         const bool a_ok = process(kelly::CMD_PACKET_A);
         const bool b_ok = process(kelly::CMD_PACKET_B);
@@ -159,9 +165,14 @@ private:
                     (int)type, kelly::validate_checksum(buf));
             }
         }
-        if (!ok) {
+        uint8_t& failures = (cmd == kelly::CMD_PACKET_A) ? failures_a_ : failures_b_;
+        if (ok) {
+            failures = 0;
+        } else {
             ++fault_count_;
-            if (cmd == kelly::CMD_PACKET_A) {
+            if (failures < kelly::MAX_HELD_FAILURES) {
+                ++failures;
+            } else if (cmd == kelly::CMD_PACKET_A) {
                 packet_a_ = kelly::PacketA{};
             } else {
                 rpm_ = 0;
@@ -219,4 +230,7 @@ private:
     uint16_t       rpm_         = 0;
     kelly::PacketA packet_a_{};
     uint32_t       fault_count_ = 0;
+    /// Failed reads in a row, per packet type.
+    uint8_t        failures_a_  = 0;
+    uint8_t        failures_b_  = 0;
 };
