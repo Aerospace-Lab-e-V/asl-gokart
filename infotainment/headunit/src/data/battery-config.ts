@@ -25,3 +25,7 @@ export const tempSegments = (calm: string): Segment[] => [
     { value: 35, color: "#f59e0b" }, // amber-500
     { value: 45, color: "#dc2626" }, // red-600
 ];
+
+/** Hottest pack sensor (°C) from which the battery temperature lamp shows yellow; red above BATTERY_TEMP_HOT_C. */
+export const BATTERY_TEMP_WARN_C = 35;
+export const BATTERY_TEMP_HOT_C = 45;
