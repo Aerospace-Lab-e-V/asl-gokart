@@ -135,9 +135,9 @@ struct RearLightBarConfig {
 
     // ── Colors ──────────────────────────────────────────────────
     inline static const RgbColor COLOR_OFF     = RgbColor(  0,   0,   0);
-    inline static const RgbColor COLOR_TAIL    = RgbColor(  0, 255,   0);
-    inline static const RgbColor COLOR_BRAKE   = RgbColor(  0, 255,   0);
-    inline static const RgbColor COLOR_TURN    = RgbColor(40,  255,   0);
+    inline static const RgbColor COLOR_TAIL    = RgbColor(255,   0,   0);
+    inline static const RgbColor COLOR_BRAKE   = RgbColor(255,   0,   0);
+    inline static const RgbColor COLOR_TURN    = RgbColor(255,  40,   0);
     inline static const RgbColor COLOR_REVERSE = RgbColor(255, 255, 255);
 };
 

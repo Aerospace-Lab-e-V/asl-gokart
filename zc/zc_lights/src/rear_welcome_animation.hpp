@@ -37,7 +37,7 @@ public:
         clear_on_next_tick_ = true;
     }
 
-    bool tick(NeoPixelBus<NeoGrbFeature, NeoEsp32Rmt0Ws2812xMethod>* strip,
+    bool tick(RearStrip* strip,
               uint32_t elapsed_ms,
               uint16_t width,
               uint16_t height,
@@ -137,7 +137,7 @@ private:
     /// Sweep from center columns outward.  `cols_reached` = how many
     /// columns from center have been lit (0 = none, half_width = all).
     void render_center_outward(
-            NeoPixelBus<NeoGrbFeature, NeoEsp32Rmt0Ws2812xMethod>* strip,
+            RearStrip* strip,
             uint16_t width, uint16_t height, PixelIndexFn pixel_index,
             uint16_t center_left, uint16_t center_right,
             uint16_t cols_reached, RgbColor lit_color,
@@ -169,7 +169,7 @@ private:
     /// Sweep from both edges inward toward center.  `cols_reached` = how
     /// many columns from each edge have been lit.
     void render_edges_inward(
-            NeoPixelBus<NeoGrbFeature, NeoEsp32Rmt0Ws2812xMethod>* strip,
+            RearStrip* strip,
             uint16_t width, uint16_t height, PixelIndexFn pixel_index,
             uint16_t cols_reached, uint16_t half_width,
             RgbColor lit_color)
