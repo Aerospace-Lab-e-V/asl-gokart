@@ -5,6 +5,7 @@ import type { SignalName } from "@/domain/signals";
 import type { ToggleLight } from "@/domain/commands";
 import { useSignal } from "@/stores/signals";
 import { useCommand } from "@/services/commands";
+import { cn } from "@/lib/utils";
 
 interface LightToggleProps {
     /** On when this signal is 1. */
@@ -16,7 +17,7 @@ interface LightToggleProps {
     icon: TelltaleIcon;
     /** Text color class while on. */
     onClassName: string;
-    /** Lights red instead, e.g. while the ECU behind it is not connected. */
+    /** Lights red instead, blinking at first, e.g. while the ECU behind it is not connected. */
     fault?: boolean;
 }
 
@@ -35,7 +36,10 @@ export function LightToggle({ signal, orSignal, light, label, icon: Icon, onClas
 
     return (
         <button type="button" aria-label={label} aria-pressed={on} disabled={pending} onClick={toggle} className="p-2 disabled:opacity-50">
-            <Icon size={48} className={lit ? `${lit} dark:drop-shadow-[0_0_4px_currentColor]` : "text-muted-foreground/60"} />
+            <Icon
+                size={48}
+                className={cn(lit ? `${lit} dark:drop-shadow-[0_0_4px_currentColor]` : "text-muted-foreground/60", fault && "animate-lamp-blink")}
+            />
         </button>
     );
 }

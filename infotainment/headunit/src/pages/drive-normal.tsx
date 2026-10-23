@@ -1,6 +1,6 @@
 import { Gears } from "@/data/controlling_models/drivetrain";
 import { HeaderBar } from "@/components/shared/header-bar";
-import React from "react";
+import React, { createContext, useContext } from "react";
 import {
     BatteryTemperature,
     DaytimeRunningLights,
@@ -27,6 +27,7 @@ import { useSignal } from "@/stores/signals";
 import { useIsDark } from "@/hooks/use-is-dark";
 import { useEcuStatus } from "@/hooks/useEcuStatus";
 import { useSmoothed } from "@/hooks/use-smoothed";
+import { useBulbCheck } from "@/hooks/use-bulb-check";
 import { cn } from "@/lib/utils";
 
 /*
@@ -160,17 +161,30 @@ const TONE_CLASS: Record<LampTone, string> = {
   red: "text-red-600 dark:text-red-500",
 };
 
+/** True while every warning lamp is lit for the bulb check. */
+const BulbCheck = createContext(false);
+
 /**
  * Warning lamp, hidden while off but keeping its place, so lamps do not shift as others light up.
- * `label` names the lit state for screen readers.
+ * Red blinks for a few seconds when it comes on, so the driver notices the fault. `label` names the lit state
+ * for screen readers; `checkTone` is the colour it shows during the bulb check.
  */
-const Lamp = ({ icon: Icon, tone, label, size = 48 }: { icon: TelltaleIcon; tone: LampTone | null; label: string; size?: number }) => (
-  <Icon
-    size={size}
-    title={tone ? label : undefined}
-    className={cn("m-2", tone ? `${TONE_CLASS[tone]} dark:drop-shadow-[0_0_4px_currentColor]` : "invisible")}
-  />
-);
+const Lamp = ({ icon: Icon, tone, label, size = 48, checkTone = "red" }: { icon: TelltaleIcon; tone: LampTone | null; label: string; size?: number; checkTone?: LampTone }) => {
+  const checking = useContext(BulbCheck);
+  const shown = checking ? checkTone : tone;
+  return (
+    <Icon
+      size={size}
+      title={tone ? label : undefined}
+      className={cn(
+        "m-2",
+        shown ? `${TONE_CLASS[shown]} dark:drop-shadow-[0_0_4px_currentColor]` : "invisible",
+        // The animation runs once, each time the class is added.
+        !checking && tone === "red" && "animate-lamp-blink",
+      )}
+    />
+  );
+};
 
 /** Lamps between the arc gauges and the speed. */
 const GAUGE_LAMP_SIZE = 64;
@@ -189,63 +203,66 @@ const MotorTempLamp = () => {
 };
 
 /* TODO(firmware): no ECU reports a power limit yet; light it orange once zc_motor does. */
-const PowerLimitedLamp = () => <Lamp icon={PowerLimited} tone={null} label="Power limited" size={GAUGE_LAMP_SIZE} />;
+const PowerLimitedLamp = () => <Lamp icon={PowerLimited} tone={null} label="Power limited" size={GAUGE_LAMP_SIZE} checkTone="orange" />;
 
 const DriveNormalPage = () => {
   const ecus = useEcuStatus();
+  const checking = useBulbCheck();
   return (
-    <div className="flex h-full w-full flex-col">
-      <HeaderBar />
+    <BulbCheck.Provider value={checking}>
+      <div className="flex h-full w-full flex-col">
+        <HeaderBar />
 
-      {/* Light buttons stay centred; the fault lamps beside them only show while lit. */}
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-10">
-        <div />
-        <div className="flex gap-x-2">
-          <LightToggle signal="lights.drl" light="drl" label="daytime running lights" icon={DaytimeRunningLights} onClassName="text-green-600 dark:text-green-500" />
-          <LightToggle signal="lights.high_beam_left" orSignal="lights.high_beam_right" light="high_beam" label="high beams" icon={HighBeam} onClassName="text-blue-600 dark:text-blue-500" />
-          <LightToggle signal="lights.tail" light="tail" label="tail lights" icon={ParkingLights} onClassName="text-green-600 dark:text-green-500" />
-          <LightToggle signal="lights.hazard" light="hazard" label="hazard lights" icon={HazardLights} onClassName="text-green-600 dark:text-green-500" fault={offline(ecus, "zc_lights")} />
-        </div>
-        <div className="flex gap-x-2">
-          <Lamp icon={HvBatteryFault} tone={offline(ecus, "zc_battery") ? "red" : null} label="Battery controller not connected" />
-          <Lamp icon={MotorFault} tone={offline(ecus, "zc_motor") ? "red" : null} label="Motor controller not connected" />
-        </div>
-      </div>
-
-      <div className="relative grid flex-1 grid-cols-[1fr_auto_1fr] items-center">
-        {/* Lamps sit against the speed column, so a wider readout does not move them. */}
-        <div className="flex items-center justify-between">
-          <ThrottleGauge />
-          <div className="flex flex-col pr-6">
-            <PowerLimitedLamp />
-            <BatteryTempLamp />
+        {/* Light buttons stay centred; the fault lamps beside them only show while lit. */}
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-10">
+          <div />
+          <div className="flex gap-x-2">
+            <LightToggle signal="lights.drl" light="drl" label="daytime running lights" icon={DaytimeRunningLights} onClassName="text-green-600 dark:text-green-500" />
+            <LightToggle signal="lights.high_beam_left" orSignal="lights.high_beam_right" light="high_beam" label="high beams" icon={HighBeam} onClassName="text-blue-600 dark:text-blue-500" />
+            <LightToggle signal="lights.tail" light="tail" label="tail lights" icon={ParkingLights} onClassName="text-green-600 dark:text-green-500" />
+            <LightToggle signal="lights.hazard" light="hazard" label="hazard lights" icon={HazardLights} onClassName="text-green-600 dark:text-green-500" fault={offline(ecus, "zc_lights")} />
+          </div>
+          <div className="flex gap-x-2">
+            <Lamp icon={HvBatteryFault} tone={offline(ecus, "zc_battery") ? "red" : null} label="Battery controller not connected" />
+            <Lamp icon={MotorFault} tone={offline(ecus, "zc_motor") ? "red" : null} label="Motor controller not connected" />
           </div>
         </div>
-        <div className="flex flex-col items-center gap-y-4">
-          <div className="flex items-center gap-x-6">
-            <LightToggle signal="lights.turn_left" light="turn_left" label="left turn signal" icon={TurnSignalLeft} onClassName="text-green-600 dark:text-green-500" />
-            <GearIndicator />
-            <LightToggle signal="lights.turn_right" light="turn_right" label="right turn signal" icon={TurnSignalRight} onClassName="text-green-600 dark:text-green-500" />
-          </div>
-          <Speed />
-          <BatteryBar />
-          {/* TODO(firmware): no ECU publishes trip distance; re-mount <ResetDailyDistanceDialog /> when one does. */}
-        </div>
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col pl-6">
-            <MotorTempLamp />
-          </div>
-          <RpmGauge />
-        </div>
-      </div>
 
-      <div className="grid grid-cols-4 gap-x-10 px-10 pt-2 pb-6">
-        <BatteryTemp />
-        <MotorTemp />
-        <ControllerTemp label="Controller 1" signal="temp.esc_left" />
-        <ControllerTemp label="Controller 2" signal="temp.esc_right" />
+        <div className="relative grid flex-1 grid-cols-[1fr_auto_1fr] items-center">
+          {/* Lamps sit against the speed column, so a wider readout does not move them. */}
+          <div className="flex items-center justify-between">
+            <ThrottleGauge />
+            <div className="flex flex-col pr-6">
+              <PowerLimitedLamp />
+              <BatteryTempLamp />
+            </div>
+          </div>
+          <div className="flex flex-col items-center gap-y-4">
+            <div className="flex items-center gap-x-6">
+              <LightToggle signal="lights.turn_left" light="turn_left" label="left turn signal" icon={TurnSignalLeft} onClassName="text-green-600 dark:text-green-500" />
+              <GearIndicator />
+              <LightToggle signal="lights.turn_right" light="turn_right" label="right turn signal" icon={TurnSignalRight} onClassName="text-green-600 dark:text-green-500" />
+            </div>
+            <Speed />
+            <BatteryBar />
+            {/* TODO(firmware): no ECU publishes trip distance; re-mount <ResetDailyDistanceDialog /> when one does. */}
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col pl-6">
+              <MotorTempLamp />
+            </div>
+            <RpmGauge />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-4 gap-x-10 px-10 pt-2 pb-6">
+          <BatteryTemp />
+          <MotorTemp />
+          <ControllerTemp label="Controller 1" signal="temp.esc_left" />
+          <ControllerTemp label="Controller 2" signal="temp.esc_right" />
+        </div>
       </div>
-    </div>
+    </BulbCheck.Provider>
   );
 };
 

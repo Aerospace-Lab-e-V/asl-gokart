@@ -6,13 +6,23 @@ import { Gears } from "@/data/controlling_models/drivetrain";
 import { EcuPresence, EcuStatusMap } from "@/data/ecu/ecu-types";
 import type { SignalName } from "@/domain/signals";
 import { useSignals } from "@/stores/signals";
+import { BULB_CHECK_MS, resetBulbCheck } from "@/hooks/use-bulb-check";
 
 jest.mock("@/components/shared/header-bar", () => ({ HeaderBar: () => null }));
 
 const online: EcuPresence = { online: true, ip: "192.168.1.21", changedAt: 0 };
 const offline: EcuPresence = { online: false, changedAt: 0 };
 
-const renderPage = async (patch: Partial<EcuStatusMap>, signals: Partial<Record<SignalName, number>> = {}) => {
+beforeEach(() => {
+    jest.useFakeTimers();
+    resetBulbCheck();
+});
+
+afterEach(() => jest.useRealTimers());
+
+const finishBulbCheck = () => act(() => jest.advanceTimersByTime(BULB_CHECK_MS));
+
+const renderPage = async (patch: Partial<EcuStatusMap>, signals: Partial<Record<SignalName, number>> = {}, { bulbCheck = false } = {}) => {
     const status: EcuStatusMap = { zc_buttons: online, zc_lights: online, zc_battery: online, zc_motor: online, ...patch };
     Object.assign(window, {
         api: { firmware: { getEcuStatus: jest.fn().mockResolvedValue(status), onEcuStatus: jest.fn(() => () => {}) } },
@@ -21,9 +31,14 @@ const renderPage = async (patch: Partial<EcuStatusMap>, signals: Partial<Record<
         Object.fromEntries(Object.entries(signals).map(([name, value]) => [name, { value, ts: 0, stale: false }])),
         true
     );
-    render(<DriveNormalPage />);
+    const view = render(<DriveNormalPage />);
     await act(async () => {});
+    if (!bulbCheck) finishBulbCheck();
+    return view;
 };
+
+const WARNING_LAMPS = ["hv-battery-fault", "motor-fault", "battery-temperature", "motor-temperature", "power-limited"];
+const lamp = (name: string) => document.querySelector(`.telltale-${name}`);
 
 test("temperature lamps: yellow from the warning threshold, red above the hot one", () => {
     expect(tempTone(null, 35, 45)).toBeNull();
@@ -45,19 +60,17 @@ test("gear is P until the contactors close, then N or R", () => {
 test("a controller that is not connected lights its lamp red", async () => {
     await renderPage({ zc_battery: offline, zc_lights: offline });
 
-    expect(screen.getByRole("img", { name: "Battery controller not connected" })).toHaveClass("text-red-600");
+    expect(screen.getByRole("img", { name: "Battery controller not connected" })).toHaveClass("text-red-600", "animate-lamp-blink");
     expect(screen.queryByRole("img", { name: "Motor controller not connected" })).toBeNull();
-    expect(screen.getByRole("button", { name: "hazard lights" }).querySelector("svg")).toHaveClass("text-red-600");
+    expect(screen.getByRole("button", { name: "hazard lights" }).querySelector("svg")).toHaveClass("text-red-600", "animate-lamp-blink");
     expect(screen.getByRole("button", { name: "tail lights" }).querySelector("svg")).not.toHaveClass("text-red-600");
 });
 
 test("warning lamps stay hidden while off; light buttons stay visible", async () => {
     await renderPage({});
 
-    for (const lamp of ["hv-battery-fault", "motor-fault", "battery-temperature", "motor-temperature", "power-limited"]) {
-        expect(document.querySelector(`.telltale-${lamp}`)).toHaveClass("invisible");
-    }
-    expect(document.querySelector(".telltale-inverter-fault")).toBeNull();
+    for (const name of WARNING_LAMPS) expect(lamp(name)).toHaveClass("invisible");
+    expect(lamp("inverter-fault")).toBeNull();
     for (const name of ["daytime running lights", "high beams", "tail lights", "hazard lights", "left turn signal", "right turn signal"]) {
         expect(screen.getByRole("button", { name }).querySelector("svg")).toHaveClass("text-muted-foreground/60");
     }
@@ -67,7 +80,9 @@ test("hot battery and motor light their temperature lamps", async () => {
     await renderPage({}, { "battery.temp": 46, "temp.motor_left": 42, "temp.motor_right": 30 });
 
     expect(screen.getByRole("img", { name: "Battery temperature high" })).toHaveClass("text-red-600");
+    expect(screen.getByRole("img", { name: "Battery temperature high" })).toHaveClass("animate-lamp-blink");
     expect(screen.getByRole("img", { name: "Motor temperature high" })).toHaveClass("text-yellow-500");
+    expect(screen.getByRole("img", { name: "Motor temperature high" })).not.toHaveClass("animate-lamp-blink");
     expect(screen.queryByRole("img", { name: "Power limited" })).toBeNull();
 });
 
@@ -76,4 +91,22 @@ test("closed contactors show N", async () => {
 
     expect(screen.getByText("N")).toHaveClass("font-semibold");
     expect(screen.getByText("P")).not.toHaveClass("font-semibold");
+});
+
+test("the bulb check lights every warning lamp for 5 s, once per app start", async () => {
+    const { unmount } = await renderPage({ zc_battery: offline }, {}, { bulbCheck: true });
+
+    for (const name of WARNING_LAMPS) expect(lamp(name)).not.toHaveClass("invisible");
+    expect(lamp("power-limited")).toHaveClass("text-orange-500");
+    expect(lamp("motor-fault")).toHaveClass("text-red-600");
+    // A fault already present blinks once the check is over, not underneath it.
+    expect(lamp("hv-battery-fault")).not.toHaveClass("animate-lamp-blink");
+
+    finishBulbCheck();
+    expect(lamp("motor-fault")).toHaveClass("invisible");
+    expect(lamp("hv-battery-fault")).toHaveClass("text-red-600", "animate-lamp-blink");
+
+    unmount();
+    await renderPage({}, {}, { bulbCheck: true });
+    expect(lamp("motor-fault")).toHaveClass("invisible");
 });
