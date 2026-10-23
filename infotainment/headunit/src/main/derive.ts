@@ -31,9 +31,13 @@ export function socFromVoltage(voltage: number): number {
     return Math.min(100, Math.max(0, soc));
 }
 
-/** kW from the held voltage and current, `null` unless both are fresh and younger than HOLD_MS. */
-export function powerKw(voltage: Sample | undefined, current: Sample | undefined, now: number): number | null {
-    const held = (s: Sample | undefined) => (s && !s.stale && now - s.ts <= HOLD_MS ? s.value : undefined);
+/**
+ * kW from the held voltage and current, `null` unless both are fresh. Both arrive only on change, so a steady
+ * voltage (e.g. while charging) is still the current one: it is held until zc_battery is lost, not for a fixed
+ * age. decoder.rs drops it after HOLD_US instead, which leaves gaps in logged power.
+ */
+export function powerKw(voltage: Sample | undefined, current: Sample | undefined): number | null {
+    const held = (s: Sample | undefined) => (s && !s.stale ? s.value : undefined);
     const v = held(voltage);
     const c = held(current);
     return v === undefined || c === undefined ? null : (v * c) / 1000;

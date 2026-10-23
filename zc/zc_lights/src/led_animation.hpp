@@ -9,6 +9,11 @@
 #include <cstdint>
 #include <NeoPixelBus.h>
 
+/// The rear light bar's LEDs take their bytes in R, G, B order, unlike the
+/// front DRL strips (G, R, B). With the matching feature, RgbColor values are
+/// true colors on both, so one welcome color looks the same front and rear.
+using RearStrip = NeoPixelBus<NeoRgbFeature, NeoEsp32Rmt0Ws2812xMethod>;
+
 /// Pixel-index mapping function type.
 /// Maps (column, row) in a logical matrix to a physical strip index.
 using PixelIndexFn = uint16_t (*)(uint16_t col, uint16_t row);
@@ -38,7 +43,7 @@ public:
     /// @param pixel_index   Mapping function: (col, row) → strip index.
     /// @param brightness    Global brightness multiplier (0–255).
     /// @return true while the animation is still playing, false when done.
-    virtual bool tick(NeoPixelBus<NeoGrbFeature, NeoEsp32Rmt0Ws2812xMethod>* strip,
+    virtual bool tick(RearStrip* strip,
                       uint32_t elapsed_ms,
                       uint16_t width,
                       uint16_t height,

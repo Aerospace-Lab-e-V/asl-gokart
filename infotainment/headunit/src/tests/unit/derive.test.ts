@@ -18,13 +18,13 @@ test("soc is linear between the voltage limits and clamped", () => {
     expect(socFromVoltage(80)).toBe(100);
 });
 
-test("power needs both values fresh and younger than the hold time", () => {
+test("power holds an unchanged voltage until it goes stale", () => {
+    // Charging: the voltage was last sent a minute before the current.
     const v = { value: 60, ts: 0, stale: false };
-    const c = { value: 50, ts: 0, stale: false };
-    expect(powerKw(v, c, 1000)).toBe(3);
-    expect(powerKw(v, c, 6000)).toBeNull();
-    expect(powerKw({ ...v, stale: true }, c, 1000)).toBeNull();
-    expect(powerKw(undefined, c, 1000)).toBeNull();
+    const c = { value: 50, ts: 60_000, stale: false };
+    expect(powerKw(v, c)).toBe(3);
+    expect(powerKw({ ...v, stale: true }, c)).toBeNull();
+    expect(powerKw(undefined, c)).toBeNull();
 });
 
 test("temperature stats are null without a valid sensor", () => {

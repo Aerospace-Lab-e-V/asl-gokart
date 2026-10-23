@@ -77,7 +77,7 @@ static void ota_task(void* pvParams) {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /// Spawn the OTA task with the given firmware URL.
-/// @param url  Null-terminated HTTP URL (e.g. "http://192.168.1.10:8080/firmware/...")
+/// @param url  Null-terminated HTTP URL (e.g. "http://10.77.0.100:8080/firmware/...")
 /// @return true if the task was created successfully.
 static bool start_ota(const char* url) {
     if (!url || url[0] == '\0') {

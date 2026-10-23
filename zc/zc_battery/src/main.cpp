@@ -87,7 +87,8 @@ void connect_ethernet() {
 
     WiFi.onEvent(WiFiEvent);
     ETH.begin();
-    ETH.config(IPAddress(192, 168, 1, 6), IPAddress(192, 168, 1, 1), IPAddress(255, 255, 255, 0));
+    // Car network, see zc/README.md. It has no router, hence no gateway.
+    ETH.config(IPAddress(10, 77, 0, 6), IPAddress(0, 0, 0, 0), IPAddress(255, 255, 255, 0));
 
     Serial.print("Connecting to Ethernet");
     while (!ETH.linkUp()) {

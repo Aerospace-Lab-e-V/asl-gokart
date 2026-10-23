@@ -71,11 +71,11 @@ void connect_ethernet() {
     WiFi.onEvent(WiFiEvent);
     ETH.begin();
 
-    // TODO: Assign a static IP from the project's address registry and update
-    //       the gateway/netmask if needed.
+    // TODO: Assign a free address from the car network table in zc/README.md and
+    //       add it there. The car network has no router, hence no gateway.
     ETH.config(
-        IPAddress(192, 168, 1, 0),   // TODO: replace with real address
-        IPAddress(192, 168, 1, 1),
+        IPAddress(10, 77, 0, 0),     // TODO: replace with real address
+        IPAddress(0, 0, 0, 0),
         IPAddress(255, 255, 255, 0)
     );
 

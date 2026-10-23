@@ -175,7 +175,8 @@ void connect_ethernet() {
     WiFi.onEvent(WiFiEvent);
     ETH.begin();
     /* -------------------- HIER DIE IP-Adressen vom ESP und Gateway konfigurieren -------------------- */
-    ETH.config(IPAddress(192, 168, 1, 5), IPAddress(192, 168, 1, 1), IPAddress(255, 255, 255, 0));
+    // Car network, see zc/README.md. It has no router, hence no gateway.
+    ETH.config(IPAddress(10, 77, 0, 5), IPAddress(0, 0, 0, 0), IPAddress(255, 255, 255, 0));
     /* -------------------------------------------------------------------------------------------------*/
     // Wait for Ethernet to connect
     Serial.print("Connecting to Ethernet");

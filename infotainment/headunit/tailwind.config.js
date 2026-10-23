@@ -92,6 +92,10 @@ module.exports = {
                     from: { transform: "translateY(-100%)" },
                     to: { transform: "translateY(400%)" },
                 },
+                // Fault lamp coming on: off for the second half of each blink
+                "lamp-blink": {
+                    "50%": { opacity: "0" },
+                },
             },
             animation: {
                 "accordion-down": "accordion-down 0.2s ease-out",
@@ -103,6 +107,8 @@ module.exports = {
                 "bubble-rise": "bubble-rise 2.6s ease-in infinite",
                 "bubble-wobble": "bubble-wobble 0.9s ease-in-out infinite alternate",
                 "band-sink": "band-sink 2.4s ease-in infinite",
+                // Six blinks, 3 s in all, then steady
+                "lamp-blink": "lamp-blink 0.5s step-end 6",
             },
         },
     },

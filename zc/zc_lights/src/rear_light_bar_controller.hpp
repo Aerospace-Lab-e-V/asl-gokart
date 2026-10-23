@@ -39,7 +39,7 @@ class RearLightBarController {
 public:
     using Cfg = RearLightBarConfig;
 
-    using StripType      = NeoPixelBus<NeoGrbFeature, NeoEsp32Rmt0Ws2812xMethod>;
+    using StripType      = RearStrip;
     using TurnStateFn    = std::function<void(uint8_t left, uint8_t right)>;
     using BrakeStateFn   = std::function<void(uint8_t on)>;
     using ReverseStateFn = std::function<void(uint8_t on)>;

@@ -134,7 +134,7 @@ function batteryEvent(event: number, p: Buffer, ts: number): void {
             publish("battery.current", value, ts);
             publish("drive.flow_state", flowStateFor(value), ts);
         }
-        publish("battery.power", powerKw(get("battery.voltage"), get("battery.current"), ts), ts);
+        publish("battery.power", powerKw(get("battery.voltage"), get("battery.current")), ts);
         return;
     }
     if (event !== EVENT.battery.TEMPS) return;
