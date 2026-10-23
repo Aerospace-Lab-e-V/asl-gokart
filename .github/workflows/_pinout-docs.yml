@@ -5,14 +5,16 @@ name: Pinout Docs
 
 on:
     workflow_call:
+        inputs:
+            deploy:
+                description: Publish the page to GitHub Pages (otherwise only build and check it)
+                type: boolean
+                default: false
 
 jobs:
-    generate-and-deploy:
-        name: Generate & Deploy
+    build:
+        name: Generate
         runs-on: ubuntu-latest
-        environment:
-            name: github-pages
-            url: ${{ steps.deployment.outputs.page_url }}
         steps:
             - uses: actions/checkout@v6
 
@@ -20,14 +22,31 @@ jobs:
               with:
                   python-version: '3.x'
 
-            - name: Generate pinout documentation
-              run: python zc/tools/gen_pinout_docs.py --output-dir docs/
+            - name: Test generator
+              run: python -m unittest discover -s zc/tools/pinout_docs -v
 
+            # Conflicts fail PRs; on main the page is still published and lists them at the top
+            - name: Generate pinout page
+              run: python zc/tools/pinout_docs/gen_pinout_docs.py --output-dir docs/ ${{ !inputs.deploy && '--strict' || '' }}
+
+            # On PRs this doubles as a downloadable preview of the page
             - name: Upload Pages artifact
               uses: actions/upload-pages-artifact@v5
               with:
                   path: docs/
 
+    deploy:
+        name: Deploy
+        needs: build
+        if: inputs.deploy
+        runs-on: ubuntu-latest
+        concurrency:
+            group: github-pages
+            cancel-in-progress: false
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+        steps:
             - name: Deploy to GitHub Pages
               id: deployment
               uses: actions/deploy-pages@v5

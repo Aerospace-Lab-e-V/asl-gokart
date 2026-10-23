@@ -1,17 +1,41 @@
 name: CI — Pinout Docs
 
+# Pins are read from the PlatformIO zone controllers' src/ and include/ folders. PRs check
+# that the page still builds without pin conflicts; main publishes it to GitHub Pages.
 on:
+    pull_request:
+        paths:
+            - 'zc/*/src/**'
+            - 'zc/*/include/**'
+            - 'zc/*/platformio.ini'
+            - 'zc/tools/pinout_docs/**'
+            - '!zc/zc_throttle/**'
+            - '!zc/zc_simulator/**'
+            - '.github/workflows/_pinout-docs.yml'
+            - '.github/workflows/ci-pinout-docs.yml'
     push:
         branches: [main]
         paths:
-            - 'zc/tools/gen_pinout_docs.py'
-            - 'zc/**/pins*'
+            - 'zc/*/src/**'
+            - 'zc/*/include/**'
+            - 'zc/*/platformio.ini'
+            - 'zc/tools/pinout_docs/**'
+            - '!zc/zc_throttle/**'
+            - '!zc/zc_simulator/**'
             - '.github/workflows/_pinout-docs.yml'
             - '.github/workflows/ci-pinout-docs.yml'
+    workflow_dispatch:
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
     pinout-docs:
         uses: ./.github/workflows/_pinout-docs.yml
+        with:
+            # The github-pages environment only accepts deployments from main
+            deploy: ${{ github.ref == 'refs/heads/main' }}
         permissions:
             pages: write
             id-token: write
