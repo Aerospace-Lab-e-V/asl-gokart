@@ -77,9 +77,10 @@ void connect_ethernet() {
     WiFi.onEvent(WiFiEvent);
     ETH.begin();
 
+    // Car network, see zc/README.md. It has no router, hence no gateway.
     ETH.config(
-        IPAddress(192, 168, 1, 7),
-        IPAddress(192, 168, 1, 1),
+        IPAddress(10, 77, 0, 7),
+        IPAddress(0, 0, 0, 0),
         IPAddress(255, 255, 255, 0)
     );
 

@@ -47,6 +47,28 @@ The newest stable release below an installed pre-release is badged "previous sta
 
 Pre-release and `bun start` builds show version, branch and build time in the bottom-left corner.
 
+## Pi setup
+
+One-time setup on a new headunit Pi.
+
+### Car network
+
+The car LAN is `10.77.0.0/24` (addresses in [`zc/README.md`](../../zc/README.md#fahrzeugnetz)) and has no router.
+Give `eth0` its address without a gateway. With a gateway, the Pi sends all internet traffic and DNS into the car as
+soon as the LAN is plugged in, and app updates, firmware downloads and the telemetry uplink fail:
+
+```sh
+sudo nmcli connection modify "Wired connection 1" \
+    ipv4.method manual ipv4.addresses 10.77.0.100/24 ipv4.gateway "" ipv4.never-default yes
+```
+
+`nmcli connection` lists the name if it differs. With the LAN plugged in, `ip route get 1.1.1.1` must show the Wi-Fi
+interface (`dev wlan0`), not `eth0`. The Wi-Fi must not use `10.77.0.0/24` itself.
+
+Then choose `eth0` in Settings > Network interface.
+
+### Updater
+
 The updater runs `sudo dpkg -i` and needs passwordless sudo for it, set up by hand on the Pi (`sudo visudo -f /etc/sudoers.d/headunit`):
 
 ```
