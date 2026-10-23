@@ -9,6 +9,7 @@ import { LightToggle } from "@/components/drive/light-toggle";
 import { avg, fmt } from "@/components/drive/format";
 import { useSignal } from "@/stores/signals";
 import { useIsDark } from "@/hooks/use-is-dark";
+import { useSmoothed } from "@/hooks/use-smoothed";
 import { cn } from "@/lib/utils";
 
 /*
@@ -128,13 +129,14 @@ const TempReadout = ({ label, value, min, max }: { label: string; value: number 
 
 const BatteryTemp = () => <TempReadout label="Battery" value={useSignal("battery.temp_avg")} min={-10} max={45} />;
 
+/* Motor and controller temperatures come from the Kelly controllers, which flip between neighbouring whole °C. */
 const MotorTemp = () => {
-  const temp = avg(useSignal("temp.motor_left"), useSignal("temp.motor_right"));
+  const temp = useSmoothed(avg(useSignal("temp.motor_left"), useSignal("temp.motor_right")));
   return <TempReadout label="Motor" value={temp} min={-20} max={50} />;
 };
 
 const ControllerTemp = ({ label, signal }: { label: string; signal: "temp.esc_left" | "temp.esc_right" }) => (
-  <TempReadout label={label} value={useSignal(signal)} min={-10} max={50} />
+  <TempReadout label={label} value={useSmoothed(useSignal(signal))} min={-10} max={50} />
 );
 
 const DriveNormalPage = () => (
