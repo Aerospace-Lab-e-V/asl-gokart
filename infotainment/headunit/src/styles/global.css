@@ -15,6 +15,11 @@ body,
     -webkit-user-select: none;
     user-select: none;
 }
+
+/* No native drag: links and images would otherwise drag a URL preview (mouse and touch) */
+* {
+    -webkit-user-drag: none;
+}
 input, button, textarea, :focus {
     outline: none;
 }
