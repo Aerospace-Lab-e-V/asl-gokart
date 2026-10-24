@@ -289,6 +289,9 @@ export async function sendOtaTrigger(serviceId: number, url: string): Promise<vo
     const hex = `0x${serviceId.toString(16).padStart(4, "0")}`;
     log.info(`[SERO] Sending OTA trigger to service ${hex}: ${url}`);
     const result = await runtime().request(serviceId, ZC_OTA_METHOD_ID, Buffer.from(url, "utf-8"));
+    if (result.returnCode === 6 /* E_TIMEOUT */) {
+        throw new Error(`[SERO] OTA trigger got no answer from service ${hex} (timeout)`);
+    }
     if (result.returnCode !== 0 /* E_OK */) {
         throw new Error(`[SERO] OTA trigger rejected by ECU (returnCode=${result.returnCode})`);
     }
