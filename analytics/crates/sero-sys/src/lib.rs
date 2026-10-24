@@ -1,4 +1,4 @@
-//! Rust bindings for [sero](https://github.com/mad201802/sero), the zone controllers'
+//! Rust bindings for [sero](https://github.com/Aerospace-Lab-e-V/sero), the zone controllers'
 //! service-oriented UDP protocol.
 //!
 //! The C++ library is a git submodule (`vendor/sero`, pinned to a release tag) and is
