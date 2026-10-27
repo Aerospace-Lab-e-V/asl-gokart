@@ -582,7 +582,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT bucket AS time, avg AS \"Speed\"\nFROM samples_1s\nWHERE session_id = '$session'::uuid AND signal_id = 204 AND $__timeFilter(bucket)\nORDER BY 1"
+          "rawSql": "SELECT bucket AS time, avg AS \"Speed (motors)\"\nFROM samples_1s\nWHERE session_id = '$session'::uuid AND signal_id = 204 AND $__timeFilter(bucket)\nORDER BY 1"
         },
         {
           "refId": "B",
@@ -594,6 +594,17 @@
           "format": "time_series",
           "rawQuery": true,
           "rawSql": "SELECT bucket AS time, avg AS \"Throttle\"\nFROM samples_1s\nWHERE session_id = '$session'::uuid AND signal_id = 201 AND $__timeFilter(bucket)\nORDER BY 1"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "timescaledb"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT bucket AS time, avg AS \"GPS speed\"\nFROM samples_1s\nWHERE session_id = '$session'::uuid AND signal_id = 304 AND $__timeFilter(bucket)\nORDER BY 1"
         }
       ],
       "fieldConfig": {
