@@ -22,6 +22,14 @@ const KEEP_MS = MAX_WINDOW_MS + 30_000;
 /** A pause longer than this many sample periods is drawn as a break, never interpolated. */
 const GAP_PERIODS = 3;
 
+/**
+ * A batch of another session only replaces the one on screen after the current session
+ * sent nothing for this long (arrival time). A rebooted kart takes over quickly; a second
+ * sender with the same kart id (e.g. kart-sim next to a real kart) cannot make the view
+ * reset with every batch.
+ */
+export const SESSION_TAKEOVER_MS = 5_000;
+
 interface Series {
     def: SignalDef;
     /** Shared by reference with the chart datasets; only ever mutated in place. */
@@ -42,12 +50,16 @@ export class TelemetryStore {
     sessionId: string | null = null;
     /** Batches lost on the link in this session (gaps in `seq`). */
     lostBatches = 0;
+    /** Batches of another session dropped while this one was live (two senders, one kart id). */
+    otherSessionBatches = 0;
     /** Newest kart time of any sample, for the data age readout. */
     newestTMs: number | null = null;
     /** Incremented on every change. */
     version = 0;
 
     private lastSeq: number | null = null;
+    /** Arrival time (ms) of this session's last batch. */
+    private lastArrivalMs: number | null = null;
     private lastBatchTMs: number | null = null;
     private readonly series = new Map<number, Series>();
 
@@ -78,8 +90,10 @@ export class TelemetryStore {
     reset(sessionId: string | null): void {
         this.sessionId = sessionId;
         this.lostBatches = 0;
+        this.otherSessionBatches = 0;
         this.newestTMs = null;
         this.lastSeq = null;
+        this.lastArrivalMs = null;
         this.lastBatchTMs = null;
         for (const s of this.series.values()) {
             s.points.length = 0;
@@ -89,8 +103,19 @@ export class TelemetryStore {
         this.version++;
     }
 
-    ingest(batch: LiveBatch): void {
-        if (batch.sessionId !== this.sessionId) this.reset(batch.sessionId);
+    /** `arrivalMs`: when the batch was received (wall clock), for the session takeover. */
+    ingest(batch: LiveBatch, arrivalMs = Date.now()): void {
+        if (batch.sessionId !== this.sessionId) {
+            const silent =
+                this.lastArrivalMs === null || arrivalMs - this.lastArrivalMs > SESSION_TAKEOVER_MS;
+            if (this.sessionId !== null && !silent) {
+                this.otherSessionBatches++;
+                this.version++;
+                return;
+            }
+            this.reset(batch.sessionId);
+        }
+        this.lastArrivalMs = arrivalMs;
 
         if (this.lastSeq !== null) {
             if (batch.seq <= this.lastSeq) return; // duplicate or reordered
