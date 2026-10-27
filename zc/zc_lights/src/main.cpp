@@ -39,6 +39,55 @@ static FrontDrlController<FrontRightMethod> front_drl_right(
         "drl_right");
 static HighBeamController high_beams;
 
+// --- zc_motor reverse -------------------------------------------
+// Subscribes to zc_motor's telemetry and switches the reverse lights when both Kelly
+// controllers report reverse. Only changes are applied, so the headunit's reverse toggle
+// still works in between. Lights go off when zc_motor falls silent or is lost.
+
+class MotorReverseHandler : public sero::IEventHandler<MotorReverseHandler> {
+public:
+    void impl_on_event(uint16_t /*service_id*/, uint16_t event_id,
+                       const uint8_t* payload, std::size_t payload_length) {
+        if (event_id != Esp32ServiceConfig::ZC_MOTOR_EVENT_RPM_ID ||
+            payload_length < Esp32ServiceConfig::ZC_MOTOR_EVENT_RPM_PAYLOAD_SIZE) return;
+        last_event_ms_ = millis();
+        apply(payload[Esp32ServiceConfig::ZC_MOTOR_EVENT_REVERSE_INDEX] != 0);
+    }
+
+    /// Call every loop; turns the lights off once zc_motor has been silent too long.
+    void check_timeout(uint32_t now) {
+        if (reverse_ && now - last_event_ms_ >= Esp32ServiceConfig::ZC_MOTOR_REVERSE_TIMEOUT_MS) {
+            Serial.println("[motor] No telemetry, reverse lights off");
+            apply(false);
+        }
+    }
+
+    void on_lost() {
+        if (reverse_) apply(false);
+        known_ = false;
+    }
+
+private:
+    void apply(bool reverse) {
+        if (known_ && reverse == reverse_) return;
+        known_   = true;
+        reverse_ = reverse;
+        rear_light_bar.set_reverse(reverse);
+        Serial.printf("[motor] Kelly reverse %s\n", reverse ? "ON" : "OFF");
+    }
+
+    bool     known_         = false;
+    bool     reverse_       = false;
+    uint32_t last_event_ms_ = 0;
+};
+
+static MotorReverseHandler motor_reverse;
+
+static void on_service_lost(uint16_t sid, void* /*ctx*/) {
+    std::printf("[sd] Service 0x%04X lost\n", sid);
+    if (sid == Esp32ServiceConfig::ZC_MOTOR_ID) motor_reverse.on_lost();
+}
+
 // --- Function Declarations ----------------------------------------------
 void WiFiEvent(WiFiEvent_t event);
 void connect_ethernet();
@@ -227,6 +276,17 @@ void setup() {
                         /*auth_required=*/false);
     rt.offer_service(Esp32ServiceConfig::ZC_LIGHTS_ID, /*ttl=*/30, now);
     std::printf("[server] LightsService 0x%04X offered\n", Esp32ServiceConfig::ZC_LIGHTS_ID);
+
+    // ── Consumer: zc_motor telemetry for the reverse lights ─────
+    // Sero sends the subscription once zc_motor is found and renews it after a reboot.
+    rt.sd_callbacks().on_service_lost = on_service_lost;
+    if (!rt.find_service(Esp32ServiceConfig::ZC_MOTOR_ID, 1, now)) {
+        Serial.println("[ERROR] find_service(ZC_MOTOR_ID) failed!");
+    }
+    if (!rt.subscribe_event(Esp32ServiceConfig::ZC_MOTOR_ID, Esp32ServiceConfig::ZC_MOTOR_EVENT_RPM_ID,
+                            motor_reverse, Esp32Config::SubscriptionTtlSeconds, now)) {
+        Serial.println("[ERROR] subscribe_event(ZC_MOTOR_EVENT_RPM_ID) failed!");
+    }
 }
 
 void loop() {
@@ -235,4 +295,6 @@ void loop() {
 
     // ── Process protocol (poll transport, dispatch, housekeeping) ──
     rt.process(now);
+
+    motor_reverse.check_timeout(now);
 }

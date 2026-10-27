@@ -70,6 +70,15 @@ struct Esp32ServiceConfig {
     static constexpr uint16_t ZC_LIGHTS_EVENT_REVERSE_STATE_ID = 0x8005;  // Reverse state [on]
     static constexpr uint16_t ZC_LIGHTS_EVENT_DRL_STATE_ID     = 0x8006;  // DRL state [on]
     static constexpr uint16_t ZC_LIGHTS_EVENT_TAIL_STATE_ID    = 0x8007;  // Tail state [on]
+
+    // ── zc_motor service (consumer side — reverse lights follow the Kelly controllers) ──
+    static constexpr uint16_t    ZC_MOTOR_ID                     = 0x0004;
+    static constexpr uint16_t    ZC_MOTOR_EVENT_RPM_ID           = 0x8001;
+    static constexpr std::size_t ZC_MOTOR_EVENT_RPM_PAYLOAD_SIZE = 19;
+    // 1 = both Kelly controllers report reverse over UART, see zc_motor main.cpp
+    static constexpr std::size_t ZC_MOTOR_EVENT_REVERSE_INDEX    = 18;
+    // zc_motor notifies every 100 ms; without a notification for this long the reverse lights go off
+    static constexpr uint32_t    ZC_MOTOR_REVERSE_TIMEOUT_MS     = 1000;
 };
 
 // ── Hardware Pin Assignments ────────────────────────────────────
