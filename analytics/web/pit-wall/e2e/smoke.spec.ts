@@ -35,4 +35,7 @@ test("every view renders charts and keeps the window", async ({ page }) => {
     }
     await page.goto("/kart/kart-01/track");
     await expect(page.getByRole("heading", { name: "Track map" })).toBeVisible();
+    await expect(page.locator(".leaflet-container")).toBeVisible();
+    // kart-sim sends GPS, so the trail is drawn and the no-fix overlay is gone.
+    await expect(page.getByText("No GPS data from this kart yet")).toBeHidden();
 });

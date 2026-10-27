@@ -251,11 +251,11 @@ Detects start/finish and sector crossings from GPS using track geofences and wri
 ### Pit wall (live view)
 The real-time view for the pit area (`web/pit-wall`). The crew watches one kart at a time and judges what they see. The pit wall shows data and link state only; it raises no automatic warnings.
 
-- **Views** (fixed, defined in `src/views/presets.ts`): Overview, Battery, Drivetrain, Thermal; Track is a placeholder for maps and heatmaps. Each view shows value tiles and rolling charts over the last 1, 5 or 10 min (`?window=`).
+- **Views** (fixed, defined in `src/views/presets.ts`): Overview, Battery, Drivetrain, Thermal, and Track (the GPS trail coloured by speed on OpenStreetMap tiles, with the latest position). Each view shows value tiles and rolling charts over the last 1, 5 or 10 min (`?window=`).
 - **Status line:** broker connection, kart online/offline (retained status, last will), session, data age, lost batches.
 - **Data path:** MQTT messages go straight into a store outside React (`src/live/store.ts`). One `requestAnimationFrame` loop redraws the charts when new data arrived; tiles refresh at 10 Hz.
 - **History seed:** on open, the charts are filled from `pit-api` with the session's recent past, then live data appends. Where both overlap, live data wins.
-- **Runtime config:** `/config.json` (`mqttUrl`, `mqttUsername`, `mqttPassword`, `apiBaseUrl`); all optional, defaults are the page's own origin (`/mqtt`, `/api`).
+- **Runtime config:** `/config.json` (`mqttUrl`, `mqttUsername`, `mqttPassword`, `apiBaseUrl`, `tileUrl`, `tileAttribution`); all optional, defaults are the page's own origin (`/mqtt`, `/api`) and the public OpenStreetMap tiles (the browser needs internet for the map background; the trail draws without it).
 - **Deployment:** one container (Caddy) serves the SPA and proxies `/api` → `pit-api` and `/mqtt` → Mosquitto, so the browser talks to one origin. TLS and Keycloak go in front of it later.
 
 This is the contract the implementation follows:
