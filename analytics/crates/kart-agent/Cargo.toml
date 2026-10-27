@@ -1,6 +1,6 @@
 [package]
 name = "kart-agent"
-description = "On-kart telemetry gateway: Sero ECUs → local MCAP log + live MQTT, managed from the headunit"
+description = "On-kart telemetry gateway: Sero ECUs and GPS → local MCAP log + live MQTT, managed from the headunit"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
@@ -13,13 +13,16 @@ telemetry-schema.workspace = true
 
 anyhow.workspace = true
 axum.workspace = true
+chrono.workspace = true
 clap.workspace = true
 libc.workspace = true
 mcap.workspace = true
+nmea.workspace = true
 prost.workspace = true
 sd-notify.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serialport.workspace = true
 tokio = { workspace = true, features = ["net", "sync"] }
 toml.workspace = true
 tracing.workspace = true

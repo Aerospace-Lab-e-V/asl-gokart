@@ -1,7 +1,7 @@
 # Installed with the headunit package (/usr/lib/headunit/resources/kart-agent/) and
 # enabled by its postinst via `systemctl link`. See analytics/README.md (kart-agent).
 [Unit]
-Description=Kart telemetry agent (ECU logging and live uplink)
+Description=Kart telemetry agent (ECU and GPS logging, live uplink)
 Documentation=https://github.com/mad201802/asl-gokart/tree/main/analytics
 After=network.target
 ConditionFileIsExecutable=/usr/lib/headunit/resources/kart-agent/kart-agent
@@ -32,7 +32,11 @@ ConfigurationDirectory=kart-agent
 ConfigurationDirectoryMode=0755
 
 ProtectHome=yes
-PrivateDevices=yes
+# Not PrivateDevices=, which hides the GPS: only the standard pseudo devices plus USB
+# CDC-ACM serial ports (the u-blox receiver, /dev/serial/by-id/usb-u-blox*).
+DevicePolicy=closed
+DeviceAllow=char-ttyACM rw
+SupplementaryGroups=dialout
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectKernelLogs=yes

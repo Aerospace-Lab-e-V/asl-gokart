@@ -21,6 +21,14 @@ client_id = 0x0010
 port = 30492
 subscribe_ttl_s = 15
 
+[gps]
+# USB GPS receiver (u-blox 6, e.g. Navilock NL-602U).
+enabled = true
+# Empty: the first /dev/serial/by-id/usb-u-blox* device.
+device = ""
+# Navigation solutions per second, 1–5.
+rate_hz = 5
+
 [log]
 segment_minutes = 30
 # Data at risk on a power cut is at most this old.

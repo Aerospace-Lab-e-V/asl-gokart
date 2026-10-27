@@ -7,6 +7,10 @@ broker_url = "mqtt://mosquitto:1883"
 # The agent's only network in compose.
 interface = "eth0"
 
+[gps]
+# No serial devices in compose; see agent.gps.toml for a receiver on the host.
+enabled = false
+
 [api]
 # Published as 127.0.0.1:7411 on the host; needs --api-allow-remote.
 listen = "0.0.0.0:7411"
