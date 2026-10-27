@@ -25,6 +25,9 @@ bun run make:pi4
 bun run make:odroid
 ```
 
+No cross compiler needed: `@asl-gokart/sero-node` ships prebuilt `.node` addons, so electron-rebuild compiles nothing.
+A new native dependency that builds from source would need one (or the CI job on `ubuntu-24.04-arm`).
+
 ### Output 
 
 - Pi 4 image: `./out/make/deb/arm64/headunit_X.X.X_arm64.deb`
