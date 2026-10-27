@@ -3,7 +3,7 @@ import path from "path";
 import { AgentStatusSchema } from "@/services/kart-agent/schema";
 import { getStatus, KartAgentError, putConfig } from "@/main/kart-agent-client";
 import { formPatch } from "@/components/telemetry/telemetry-config-dialog";
-import { carNetwork, overall, recording, uplink } from "@/services/kart-agent/health";
+import { carNetwork, gps, overall, recording, uplink } from "@/services/kart-agent/health";
 
 // Written by analytics/crates/kart-agent/tests/status_fixture.rs from the agent's Status type.
 const FIXTURE = path.resolve(
@@ -19,6 +19,7 @@ test("the agent's status fixture matches the schema", () => {
     const status = AgentStatusSchema.parse(JSON.parse(fs.readFileSync(FIXTURE, "utf8")));
     expect(status.live.connected).toBe(true);
     expect(status.sero.services.map((s) => s.name)).toEqual(["lights", "motor"]);
+    expect(status.gps).toMatchObject({ state: "running", fix: 3, satellites: 9 });
 });
 
 test("an unreachable agent gives a clear error", async () => {
@@ -43,13 +44,17 @@ test("putConfig sends a JSON merge patch and reports agent errors", async () => 
 });
 
 test("formPatch only sends changed, trimmed fields", () => {
-    const saved = { kart_id: "kart-01", broker_url: "", interface: "eth0" };
+    const saved = { kart_id: "kart-01", broker_url: "", interface: "eth0", gps_enabled: true, gps_device: "" };
     expect(formPatch(saved, saved)).toEqual({});
     expect(formPatch(saved, { ...saved, broker_url: " mqtt://pit:1883 " })).toEqual({
         live: { broker_url: "mqtt://pit:1883" },
     });
     expect(formPatch(saved, { ...saved, kart_id: "kart-01 ", interface: "eth1" })).toEqual({
         sero: { interface: "eth1" },
+    });
+    expect(formPatch(saved, { ...saved, gps_enabled: false })).toEqual({ gps: { enabled: false } });
+    expect(formPatch(saved, { ...saved, gps_device: " /dev/ttyACM1 " })).toEqual({
+        gps: { device: "/dev/ttyACM1" },
     });
 });
 
@@ -84,4 +89,25 @@ test("car network counts ECUs that are found and subscribed", () => {
     expect(carNetwork(status)).toEqual({ tone: "warn", state: "1 / 2 ECUs" });
     status.sero.state = "waiting_for_interface";
     expect(carNetwork(status)).toEqual({ tone: "warn", state: "No network", detail: "eth0 is down" });
+});
+
+test("GPS shows the fix with satellites and HDOP, and warns without one", () => {
+    const status = fixture();
+    expect(gps(status)).toEqual({ tone: "ok", state: "3D fix", detail: "9 satellites · HDOP 0.9" });
+    status.gps!.fix = 0;
+    status.gps!.satellites = 1;
+    status.gps!.hdop = null;
+    expect(gps(status)).toEqual({ tone: "warn", state: "No fix", detail: "1 satellite" });
+    status.gps!.state = "waiting_for_device";
+    expect(gps(status)).toMatchObject({ tone: "warn", state: "Not connected" });
+    status.gps!.state = "disabled";
+    expect(gps(status)).toEqual({ tone: "off", state: "Off" });
+    // GPS never changes the header: it is not needed to record.
+    expect(overall(status, null)).toBe("ok");
+});
+
+test("an agent without GPS support has no GPS line", () => {
+    const status = fixture();
+    delete status.gps;
+    expect(gps(status)).toBeNull();
 });

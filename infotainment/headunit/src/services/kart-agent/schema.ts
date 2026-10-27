@@ -45,6 +45,20 @@ export const AgentStatusSchema = z.object({
         services: z.array(ServiceStatusSchema),
         counters: z.record(z.string(), z.number()),
     }),
+    /** Missing from agents before the GPS provider. */
+    gps: z
+        .object({
+            state: z.string(),
+            error: z.string().nullable(),
+            device: z.string().nullable(),
+            configured: z.boolean(),
+            rate_hz: z.number(),
+            fix: z.number(),
+            satellites: z.number(),
+            hdop: z.number().nullable(),
+            last_fix_us: z.number().nullable(),
+        })
+        .optional(),
     live: z.object({
         enabled: z.boolean(),
         configured: z.boolean(),
@@ -78,6 +92,12 @@ export const AgentConfigSchema = z.object({
         client_id: z.number(),
         port: z.number(),
     }),
+    gps: z
+        .object({
+            enabled: z.boolean(),
+            device: z.string(),
+        })
+        .optional(),
 });
 
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;
@@ -94,6 +114,7 @@ export type ConfigPatch = {
     kart_id?: string | null;
     live?: Partial<{ enabled: boolean | null; broker_url: string | null; batch_ms: number | null }>;
     sero?: Partial<{ interface: string | null; client_id: number | null; port: number | null }>;
+    gps?: Partial<{ enabled: boolean | null; device: string | null }>;
 };
 
 /** What main pushes after each poll: the last status read (kept while unreachable) and why the last poll failed. */

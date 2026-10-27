@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Check, ChevronDown, CloudOff, HardDrive, LucideIcon, Network, RadioTower, SlidersHorizontal, X } from "lucide-react";
+import { Check, ChevronDown, CloudOff, HardDrive, LucideIcon, Network, RadioTower, Satellite, SlidersHorizontal, X } from "lucide-react";
 import { Subpage } from "@/components/shared/subpage";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -8,11 +8,11 @@ import { UplinkSwitch } from "@/components/telemetry/uplink-switch";
 import { useSession } from "@/stores/session";
 import { useAgent } from "@/stores/agent";
 import { AgentStatus } from "@/services/kart-agent/schema";
-import { carNetwork, ecus, Line, recording, Tone, uplink } from "@/services/kart-agent/health";
+import { carNetwork, ecus, gps, Line, recording, Tone, uplink } from "@/services/kart-agent/health";
 import { cn } from "@/lib/utils";
 
 /**
- * State of kart-agent, the service that records ECU data on the Pi and sends it to
+ * State of kart-agent, the service that records ECU and GPS data on the Pi and sends it to
  * the pit wall. Read at arm's length by the pit crew; the debug counters stay in its log.
  */
 const TelemetryPage = () => {
@@ -53,6 +53,7 @@ const TelemetryPage = () => {
 
 const StatusList = ({ status }: { status: AgentStatus }) => {
     const [showEcus, setShowEcus] = useState(false);
+    const gpsLine = gps(status);
 
     return (
         <div>
@@ -92,6 +93,12 @@ const StatusList = ({ status }: { status: AgentStatus }) => {
                         </li>
                     ))}
                 </ul>
+            )}
+            {gpsLine && (
+                <>
+                    <Separator />
+                    <StatusRow icon={Satellite} title="GPS" line={gpsLine} />
+                </>
             )}
             <Separator />
         </div>

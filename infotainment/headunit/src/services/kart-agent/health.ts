@@ -66,6 +66,32 @@ export function carNetwork(status: AgentStatus): Line {
     }
 }
 
+const FIX_NAMES: Record<number, string> = { 2: "2D fix", 3: "3D fix", 4: "3D fix" };
+
+/** `null` for an agent without GPS support. */
+export function gps(status: AgentStatus): Line | null {
+    const g = status.gps;
+    if (!g) return null;
+    const satellites = `${g.satellites} satellite${g.satellites === 1 ? "" : "s"}`;
+    switch (g.state) {
+        case "disabled":
+            return { tone: "off", state: "Off" };
+        case "waiting_for_device":
+            return { tone: "warn", state: "Not connected", detail: "Plug in the USB receiver" };
+        case "error":
+            return { tone: "warn", state: "Error", detail: g.error ?? undefined };
+        case "configuring":
+        case "running": {
+            const name = FIX_NAMES[g.fix];
+            if (!name) return { tone: "warn", state: "No fix", detail: satellites };
+            const hdop = g.hdop !== null ? ` · HDOP ${g.hdop.toFixed(1)}` : "";
+            return { tone: "ok", state: name, detail: satellites + hdop };
+        }
+        default:
+            return { tone: "warn", state: g.state.charAt(0).toUpperCase() + g.state.slice(1) };
+    }
+}
+
 /**
  * The single state the driver sees in the header: red when nothing is being
  * recorded, otherwise the uplink's state. "unknown" until the first poll answers.
