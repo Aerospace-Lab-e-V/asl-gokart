@@ -366,7 +366,7 @@ signals:
     name: gps.lat
     ecu: gps
     unit: deg
-    rate_hz: 10
+    rate_hz: 5
     min: -90
     max: 90
     description: Latitude (WGS84)
@@ -374,7 +374,7 @@ signals:
     name: gps.lon
     ecu: gps
     unit: deg
-    rate_hz: 10
+    rate_hz: 5
     min: -180
     max: 180
     description: Longitude (WGS84)
@@ -382,18 +382,50 @@ signals:
     name: gps.heading
     ecu: gps
     unit: deg
-    rate_hz: 10
+    rate_hz: 5
     min: 0
     max: 360
-    description: Course over ground, 0 = north, clockwise
+    description: Course over ground, 0 = north, clockwise; only sent above 3 km/h, where it is meaningful
   - id: 304
     name: gps.speed
     ecu: gps
     unit: km/h
-    rate_hz: 10
+    rate_hz: 5
     min: 0
     max: 80
-    description: Speed over ground
+    description: Speed over ground; compare with drive.speed (from the motor rpm)
+  - id: 305
+    name: gps.altitude
+    ecu: gps
+    unit: m
+    rate_hz: 5
+    min: -100
+    max: 3000
+    description: Altitude above mean sea level; only sent with a 3D fix
+  - id: 306
+    name: gps.fix
+    ecu: gps
+    unit: enum
+    rate_hz: 5
+    min: 0
+    max: 4
+    description: 0 = no fix, 2 = 2D, 3 = 3D, 4 = 3D with SBAS/DGPS correction; sent every epoch, position signals only with a fix
+  - id: 307
+    name: gps.satellites
+    ecu: gps
+    unit: count
+    rate_hz: 5
+    min: 0
+    max: 32
+    description: Satellites used in the fix; sent every epoch
+  - id: 308
+    name: gps.hdop
+    ecu: gps
+    unit: ""
+    rate_hz: 5
+    min: 0
+    max: 100
+    description: Horizontal dilution of precision (lower is better, < 2 is good); only sent with a fix
 
   # --- Temperatures --------------------------------------------------------
   - id: 401
