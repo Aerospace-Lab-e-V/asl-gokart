@@ -8,8 +8,9 @@ export const tempTone = (t: number | null, warnC: number, hotC: number): LampTon
     t === null ? null : t > hotC ? "red" : t >= warnC ? "yellow" : null;
 
 /**
- * P until the main contactors (relay 1) are closed and current can flow, also while unknown; then R with reverse
- * engaged, else N. Nothing reports D yet.
+ * N until the main contactors (relay 1) are closed and current can flow, also while unknown; then R once both Kelly
+ * controllers report reverse over UART (`drive.reverse`), else D. Relay 2 only drives the reverse input wire, so its
+ * state is not taken as the gear. P is never reported.
  */
 export const gearFor = (contactors: number | null, reverse: number | null): Gears =>
-    contactors !== 1 ? Gears.p : reverse === 1 ? Gears.r : Gears.n;
+    contactors !== 1 ? Gears.n : reverse === 1 ? Gears.r : Gears.d;

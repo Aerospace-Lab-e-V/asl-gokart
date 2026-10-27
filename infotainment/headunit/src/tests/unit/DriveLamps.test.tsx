@@ -48,12 +48,12 @@ test("temperature lamps: yellow from the warning threshold, red above the hot on
     expect(tempTone(45.1, 35, 45)).toBe("red");
 });
 
-test("gear is P until the contactors close, then N or R", () => {
-    expect(gearFor(null, null)).toBe(Gears.p);
-    expect(gearFor(0, 0)).toBe(Gears.p);
-    expect(gearFor(0, 1)).toBe(Gears.p);
-    expect(gearFor(1, 0)).toBe(Gears.n);
-    expect(gearFor(1, null)).toBe(Gears.n);
+test("gear is N until the contactors close, then D, or R once the controllers report reverse", () => {
+    expect(gearFor(null, null)).toBe(Gears.n);
+    expect(gearFor(0, 0)).toBe(Gears.n);
+    expect(gearFor(0, 1)).toBe(Gears.n);
+    expect(gearFor(1, 0)).toBe(Gears.d);
+    expect(gearFor(1, null)).toBe(Gears.d);
     expect(gearFor(1, 1)).toBe(Gears.r);
 });
 
@@ -86,11 +86,20 @@ test("hot battery and motor light their temperature lamps", async () => {
     expect(screen.queryByRole("img", { name: "Power limited" })).toBeNull();
 });
 
-test("closed contactors show N", async () => {
+test("closed contactors show D", async () => {
     await renderPage({}, { "drive.relay_1": 1, "drive.reverse": 0 });
 
-    expect(screen.getByText("N")).toHaveClass("font-semibold");
-    expect(screen.getByText("P")).not.toHaveClass("font-semibold");
+    expect(screen.getByText("D")).toHaveClass("font-semibold");
+    expect(screen.getByText("N")).not.toHaveClass("font-semibold");
+});
+
+test("relay 2 alone does not show R; the controllers' reverse report does", async () => {
+    const { unmount } = await renderPage({}, { "drive.relay_1": 1, "drive.relay_2": 1, "drive.reverse": 0 });
+    expect(screen.getByText("R")).not.toHaveClass("font-semibold");
+    unmount();
+
+    await renderPage({}, { "drive.relay_1": 1, "drive.relay_2": 1, "drive.reverse": 1 });
+    expect(screen.getByText("R")).toHaveClass("font-semibold");
 });
 
 test("the bulb check lights every warning lamp for 5 s, once per app start", async () => {
