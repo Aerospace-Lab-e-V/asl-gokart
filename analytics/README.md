@@ -110,7 +110,7 @@ Runs the whole pipeline in containers: fake kart → Mosquitto → ingest → Ti
 docker compose -f deploy/compose/compose.yml -f deploy/compose/compose.dev.yml --profile sim up --build
 ```
 
-Open Grafana at http://localhost:3000 (anonymous viewer access; admin login is `admin` / `admin`).
+Open Grafana at http://localhost:3000 (anonymous viewer access; admin login is `admin` / `admin`). If port 3000 is taken (the speedcamera daemon uses it too), start with `GRAFANA_PORT=3001` and open that port instead.
 - **Kart Live**: the home dashboard. It refreshes every second and shows the kart moving on the track map. This is a near-live overview only, about 1–2 s behind.
 - **Kart Session History**: click a session in the table to open its full time range.
 
