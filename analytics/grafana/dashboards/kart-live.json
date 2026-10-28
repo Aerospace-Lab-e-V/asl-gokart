@@ -493,7 +493,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT $__timeGroupAlias(time, $__interval), avg(value) AS \"Speed\"\nFROM samples\nWHERE kart_id = '$kart' AND signal_id = 204 AND $__timeFilter(time)\nGROUP BY 1 ORDER BY 1"
+          "rawSql": "SELECT $__timeGroupAlias(time, $__interval), avg(value) AS \"Speed (motors)\"\nFROM samples\nWHERE kart_id = '$kart' AND signal_id = 204 AND $__timeFilter(time)\nGROUP BY 1 ORDER BY 1"
         },
         {
           "refId": "B",
@@ -505,6 +505,17 @@
           "format": "time_series",
           "rawQuery": true,
           "rawSql": "SELECT $__timeGroupAlias(time, $__interval), avg(value) AS \"Throttle\"\nFROM samples\nWHERE kart_id = '$kart' AND signal_id = 201 AND $__timeFilter(time)\nGROUP BY 1 ORDER BY 1"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "timescaledb"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(time, $__interval), avg(value) AS \"GPS speed\"\nFROM samples\nWHERE kart_id = '$kart' AND signal_id = 304 AND $__timeFilter(time)\nGROUP BY 1 ORDER BY 1"
         }
       ],
       "fieldConfig": {

@@ -1,0 +1,12 @@
+# Running the agent on a dev machine against a real GPS receiver, e.g.:
+#   cargo run -p kart-agent -- --config crates/kart-agent/dev/agent.gps.toml \
+#     --state-dir /tmp/kart-agent/state --runtime-dir /tmp/kart-agent/run \
+#     --config-dir /tmp/kart-agent/etc
+# The user needs access to the device (group dialout on most distributions).
+[gps]
+enabled = true
+device = "/dev/ttyACM0"
+
+[sero]
+# No car network here: Sero keeps waiting for this interface.
+interface = "lo-none"

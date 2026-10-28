@@ -60,6 +60,22 @@
     },
     "rx_queue_full": 0
   },
+  "gps": {
+    "state": "running",
+    "error": null,
+    "device": "/dev/serial/by-id/usb-u-blox_AG_-_www.u-blox.com_u-blox_6_-_GPS_Receiver-if00",
+    "firmware": "UBX-G60xx 00040007, EXT CORE 7.03 (45970) Mar 17 2011 16:26:24",
+    "configured": true,
+    "rate_hz": 5,
+    "fix": 3,
+    "satellites": 9,
+    "hdop": 0.9,
+    "last_fix_us": 1792400001400000,
+    "epochs": 18000,
+    "sentences": 54006,
+    "errors": 0,
+    "rx_queue_full": 0
+  },
   "live": {
     "enabled": true,
     "configured": true,

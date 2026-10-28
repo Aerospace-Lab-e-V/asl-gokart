@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { agent } from "@/services/agent";
 import { hardware } from "@/services/hardware";
@@ -13,12 +14,21 @@ import { NetworkInterfaceFamily, parseNetworkInterfaces } from "@/lib/types/hard
 import log from "@/lib/logger";
 
 /** The settings that change at the track; everything else lives in kart-agent's TOML. */
-export type Form = { kart_id: string; broker_url: string; interface: string };
+export type Form = {
+    kart_id: string;
+    broker_url: string;
+    interface: string;
+    gps_enabled: boolean;
+    gps_device: string;
+};
 
 const toForm = (c: AgentConfig): Form => ({
     kart_id: c.kart_id,
     broker_url: c.live.broker_url,
     interface: c.sero.interface,
+    // Agents without GPS support ignore the gps keys.
+    gps_enabled: c.gps?.enabled ?? true,
+    gps_device: c.gps?.device ?? "",
 });
 
 /** The changed fields as a merge patch. */
@@ -27,6 +37,10 @@ export function formPatch(saved: Form, edited: Form): ConfigPatch {
     if (edited.kart_id.trim() !== saved.kart_id) patch.kart_id = edited.kart_id.trim();
     if (edited.broker_url.trim() !== saved.broker_url) patch.live = { broker_url: edited.broker_url.trim() };
     if (edited.interface !== saved.interface) patch.sero = { interface: edited.interface };
+    const gps: NonNullable<ConfigPatch["gps"]> = {};
+    if (edited.gps_enabled !== saved.gps_enabled) gps.enabled = edited.gps_enabled;
+    if (edited.gps_device.trim() !== saved.gps_device) gps.device = edited.gps_device.trim();
+    if (Object.keys(gps).length > 0) patch.gps = gps;
     return patch;
 }
 
@@ -126,6 +140,29 @@ export const TelemetryConfigDialog = ({ trigger }: { trigger: React.ReactNode })
                                 </SelectContent>
                             </Select>
                         </div>
+                        <div className="flex min-h-12 items-center justify-between gap-4">
+                            <Label htmlFor="cfg-gps" className="text-base">GPS</Label>
+                            {/* The label widens the switch's touch target without resizing it. */}
+                            <label className="-my-2 -mr-2 p-2">
+                                <Switch
+                                    id="cfg-gps"
+                                    checked={form.gps_enabled}
+                                    onCheckedChange={(v) => setForm({ ...form, gps_enabled: v })}
+                                />
+                            </label>
+                        </div>
+                        {form.gps_enabled && (
+                            <div className="flex flex-col gap-2">
+                                <Label htmlFor="cfg-gps-device" className="text-base">GPS device</Label>
+                                <Input
+                                    id="cfg-gps-device"
+                                    className="h-12 text-lg"
+                                    placeholder="Automatic (u-blox on USB)"
+                                    value={form.gps_device}
+                                    onChange={(e) => setForm({ ...form, gps_device: e.target.value })}
+                                />
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <Loader2 className="text-muted-foreground mx-auto h-8 w-8 animate-spin" />

@@ -7,8 +7,8 @@
 use std::collections::BTreeMap;
 
 use kart_agent::status::{
-    AgentStatus, ClockStatus, EventStatus, LiveStatus, LogStatus, SeroStatus, ServiceStatus,
-    SessionStatus, Status,
+    AgentStatus, ClockStatus, EventStatus, GpsStatus, LiveStatus, LogStatus, SeroStatus,
+    ServiceStatus, SessionStatus, Status,
 };
 
 fn sample() -> Status {
@@ -62,6 +62,25 @@ fn sample() -> Status {
                 },
             ],
             counters: BTreeMap::from([("crc_errors".into(), 0), ("stale_messages".into(), 3)]),
+            rx_queue_full: 0,
+        },
+        gps: GpsStatus {
+            state: "running".into(),
+            error: None,
+            device: Some(
+                "/dev/serial/by-id/usb-u-blox_AG_-_www.u-blox.com_u-blox_6_-_GPS_Receiver-if00"
+                    .into(),
+            ),
+            firmware: Some("UBX-G60xx 00040007, EXT CORE 7.03 (45970) Mar 17 2011 16:26:24".into()),
+            configured: true,
+            rate_hz: 5,
+            fix: 3,
+            satellites: 9,
+            hdop: Some(0.9),
+            last_fix_us: Some(1_792_400_001_400_000),
+            epochs: 18_000,
+            sentences: 54_006,
+            errors: 0,
             rx_queue_full: 0,
         },
         live: LiveStatus {

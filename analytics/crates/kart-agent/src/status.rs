@@ -18,6 +18,7 @@ pub struct Status {
     pub session: SessionStatus,
     pub clock: ClockStatus,
     pub sero: SeroStatus,
+    pub gps: GpsStatus,
     pub live: LiveStatus,
     pub log: LogStatus,
 }
@@ -80,6 +81,32 @@ pub struct EventStatus {
     pub last_rx_us: Option<i64>,
     pub rx: u64,
     pub decode_errors: u64,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct GpsStatus {
+    /// `disabled`, `waiting_for_device`, `configuring`, `running`, `error` or `stopped`
+    pub state: String,
+    pub error: Option<String>,
+    /// The opened (or expected) serial device.
+    pub device: Option<String>,
+    /// From the receiver's start-up text, e.g. `UBX-G60xx 00040007, EXT CORE 7.03 …`.
+    pub firmware: Option<String>,
+    /// The receiver acknowledged every configuration message.
+    pub configured: bool,
+    pub rate_hz: u8,
+    /// `gps.fix` of the last epoch: 0 = none, 2 = 2D, 3 = 3D, 4 = 3D + SBAS/DGPS.
+    pub fix: u8,
+    pub satellites: u32,
+    pub hdop: Option<f64>,
+    /// Last epoch with a position (µs since the Unix epoch).
+    pub last_fix_us: Option<i64>,
+    pub epochs: u64,
+    pub sentences: u64,
+    /// Malformed sentences and UBX frames.
+    pub errors: u64,
+    /// Reads dropped because the agent could not keep up (should stay 0).
+    pub rx_queue_full: u64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]

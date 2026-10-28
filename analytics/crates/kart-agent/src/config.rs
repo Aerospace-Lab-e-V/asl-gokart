@@ -23,6 +23,7 @@ pub struct Config {
     pub kart_id: String,
     pub live: Live,
     pub sero: Sero,
+    pub gps: Gps,
     pub log: Log,
     pub retention: Retention,
     pub vehicle: Vehicle,
@@ -49,6 +50,16 @@ pub struct Sero {
     /// Unicast port; must differ from the headunit's (30491).
     pub port: u16,
     pub subscribe_ttl_s: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Gps {
+    pub enabled: bool,
+    /// Serial device; empty means the first u-blox under `/dev/serial/by-id`.
+    pub device: String,
+    /// Navigation solutions per second; the u-blox 6 supports up to 5.
+    pub rate_hz: u8,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -88,6 +99,7 @@ impl Default for Config {
             kart_id: "kart-01".into(),
             live: Live::default(),
             sero: Sero::default(),
+            gps: Gps::default(),
             log: Log::default(),
             retention: Retention::default(),
             vehicle: Vehicle::default(),
@@ -114,6 +126,16 @@ impl Default for Sero {
             client_id: 0x0010,
             port: 30492,
             subscribe_ttl_s: 15,
+        }
+    }
+}
+
+impl Default for Gps {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            device: String::new(),
+            rate_hz: 5,
         }
     }
 }
@@ -260,6 +282,12 @@ impl Config {
         }
         if self.sero.subscribe_ttl_s < 2 {
             bail!("sero.subscribe_ttl_s must be at least 2");
+        }
+        if !(1..=5).contains(&self.gps.rate_hz) {
+            bail!("gps.rate_hz must be between 1 and 5");
+        }
+        if !self.gps.device.is_empty() && !self.gps.device.starts_with("/dev/") {
+            bail!("gps.device must be a path under /dev/ (or empty for auto-detection)");
         }
         if self.log.segment_minutes == 0 || self.log.sync_interval_ms < 100 {
             bail!("log.segment_minutes must be > 0 and log.sync_interval_ms ≥ 100");

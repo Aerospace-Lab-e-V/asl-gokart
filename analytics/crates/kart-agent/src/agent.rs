@@ -21,6 +21,7 @@ use crate::{
     api::{self, ApiState, Control},
     clock,
     config::{Loaded, Sources},
+    gps,
     log::{LogWriter, SessionInfo},
     pipeline::Pipeline,
     sero,
@@ -117,11 +118,20 @@ pub async fn run(ctx: &Context, loaded: Loaded) -> Result<Exit> {
         json!({ "version": VERSION, "config": &cfg }),
     );
 
-    // ECUs → samples → pipeline. The pipeline ends when the provider closes the channel,
-    // so on shutdown everything received is still written.
+    // ECUs and GPS → samples → pipeline. The pipeline ends when both providers have
+    // closed the channel, so on shutdown everything received is still written.
     let (stop_provider, provider_stop) = watch::channel(false);
     let (live_tx, live_rx) = watch::channel(cfg.live.enabled);
     let (samples_tx, samples_rx) = mpsc::channel(1024);
+    let gps = tokio::spawn(
+        gps::Provider::new(
+            cfg.gps.clone(),
+            ctx.shared.clone(),
+            samples_tx.clone(),
+            log.clone(),
+        )
+        .run(provider_stop.clone()),
+    );
     let provider = tokio::spawn(
         sero::Provider::new(
             cfg.sero.clone(),
@@ -171,6 +181,7 @@ pub async fn run(ctx: &Context, loaded: Loaded) -> Result<Exit> {
     info!(?exit, "stopping the pipeline");
     let _ = stop_provider.send(true);
     let _ = provider.await;
+    let _ = gps.await;
     let _ = pipeline.await;
     log.event("agent.stopped", json!({ "exit": format!("{exit:?}") }));
     drop(log);

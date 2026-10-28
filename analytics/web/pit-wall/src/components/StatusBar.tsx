@@ -20,6 +20,8 @@ export function StatusBar({ kartId, historyError }: { kartId: string; historyErr
     const { broker } = useLive();
     const status = useKartStatus(kartId);
     const age = telemetry.newestTMs === null ? null : now - telemetry.newestTMs;
+    // The session whose data is on screen; the retained status may name another sender's.
+    const session = telemetry.sessionId ?? status?.sessionId ?? null;
 
     return (
         <dl className="text-base-content/70 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
@@ -38,8 +40,8 @@ export function StatusBar({ kartId, historyError }: { kartId: string; historyErr
                 {status ? (status.online ? "Online" : "Offline") : "Unknown"}
             </Item>
             <Item term="Session">
-                <span className="font-mono" title={status?.sessionId}>
-                    {status?.sessionId ? status.sessionId.slice(-8) : "—"}
+                <span className="font-mono" title={session ?? undefined}>
+                    {session ? session.slice(-8) : "—"}
                 </span>
             </Item>
             <Item term="Data age">
@@ -48,6 +50,13 @@ export function StatusBar({ kartId, historyError }: { kartId: string; historyErr
             <Item term="Lost batches">
                 <span className="tabular-nums">{telemetry.lostBatches}</span>
             </Item>
+            {telemetry.otherSessionBatches > 0 && (
+                <Item term="Other sender">
+                    <span className="tabular-nums">
+                        {telemetry.otherSessionBatches} batches of another session ignored
+                    </span>
+                </Item>
+            )}
             {historyError && <Item term="History">unavailable, live only</Item>}
         </dl>
     );

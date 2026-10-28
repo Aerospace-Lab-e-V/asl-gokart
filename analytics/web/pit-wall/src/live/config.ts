@@ -11,6 +11,10 @@ export interface PitWallConfig {
     mqttPassword?: string;
     /** Base URL of pit-api. */
     apiBaseUrl: string;
+    /** Raster tiles of the track map (Leaflet URL template); needs internet by default. */
+    tileUrl: string;
+    /** Shown on the map; required by the tile provider's licence. */
+    tileAttribution: string;
 }
 
 function defaults(): PitWallConfig {
@@ -18,6 +22,9 @@ function defaults(): PitWallConfig {
     return {
         mqttUrl: `${wsProtocol}//${location.host}/mqtt`,
         apiBaseUrl: "/api",
+        tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        tileAttribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     };
 }
 

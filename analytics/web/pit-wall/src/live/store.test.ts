@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LiveBatch } from "./decode";
-import { TelemetryStore } from "./store";
+import { SESSION_TAKEOVER_MS, TelemetryStore } from "./store";
 
 const SPEED = 204; // drive.speed, 10 Hz → 100 ms period, break after 300 ms
 const SOC = 104; // battery.soc, 1 Hz
@@ -80,13 +80,34 @@ describe("TelemetryStore", () => {
     it("resets on a new session, keeping array identity for the charts", () => {
         const s = new TelemetryStore();
         const points = s.points(SPEED);
-        s.ingest(batch(1, [[SPEED, T0, 1]]));
-        s.ingest(batch(9, [[SPEED, T0 + 50, 2]]));
-        s.ingest(batch(1, [[SPEED, T0 + 100, 3]], "s2"));
+        s.ingest(batch(1, [[SPEED, T0, 1]]), 0);
+        s.ingest(batch(9, [[SPEED, T0 + 50, 2]]), 0);
+        s.ingest(batch(1, [[SPEED, T0 + 100, 3]], "s2"), SESSION_TAKEOVER_MS + 1);
         expect(s.sessionId).toBe("s2");
         expect(s.lostBatches).toBe(0);
         expect(s.points(SPEED)).toBe(points);
         expect(ys(s, SPEED)).toEqual([3]);
+    });
+
+    it("keeps a live session when another one sends under the same kart id", () => {
+        const s = new TelemetryStore();
+        s.ingest(batch(1, [[SPEED, T0, 1]]), 0);
+        s.ingest(batch(500, [[SPEED, T0 + 10, 99]], "other"), 100);
+        s.ingest(batch(2, [[SPEED, T0 + 50, 2]]), 200);
+        s.ingest(batch(501, [[SPEED, T0 + 60, 99]], "other"), 300);
+        expect(s.sessionId).toBe("s1");
+        expect(ys(s, SPEED)).toEqual([1, 2]);
+        expect(s.otherSessionBatches).toBe(2);
+        expect(s.lostBatches).toBe(0);
+    });
+
+    it("switches to another session once the current one went silent", () => {
+        const s = new TelemetryStore();
+        s.ingest(batch(1, [[SPEED, T0, 1]]), 0);
+        s.ingest(batch(1, [[SPEED, T0 + 9000, 5]], "s2"), SESSION_TAKEOVER_MS + 1);
+        expect(s.sessionId).toBe("s2");
+        expect(ys(s, SPEED)).toEqual([5]);
+        expect(s.otherSessionBatches).toBe(0);
     });
 
     it("trims samples older than the kept range", () => {

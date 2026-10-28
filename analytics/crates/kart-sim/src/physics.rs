@@ -29,6 +29,7 @@ const PACK_CAPACITY_J: f64 = 2.5 * 3.6e6; // 2.5 kWh
 const PACK_INTERNAL_RESISTANCE: f64 = 0.04;
 const AMBIENT_C: f64 = 20.0;
 const EARTH_M_PER_DEG: f64 = 111_320.0;
+const GPS_ALTITUDE_M: f64 = 520.0;
 /// Pack temperature sensors (DS18B20) and how much warmer each runs than the pack average.
 const TEMP_SENSOR_OFFSETS_C: [f64; 10] = [0.0, 0.4, 0.8, 1.2, 0.2, 0.6, 1.0, 1.4, 0.3, 0.7];
 /// The driver indicates this far before each curve (both curves are left turns).
@@ -367,6 +368,10 @@ impl Kart {
                 (self.track.pose(self.s_m).heading_deg + self.rng.gauss(0.5)).rem_euclid(360.0)
             }
             "gps.speed" => (speed_kmh + self.rng.gauss(0.2)).max(0.0),
+            "gps.altitude" => GPS_ALTITUDE_M + self.rng.gauss(1.5),
+            "gps.fix" => 3.0,
+            "gps.satellites" => 9.0,
+            "gps.hdop" => (0.9 + self.rng.gauss(0.1)).max(0.5),
             "temp.motor_left" => self.temp_motor[0] + self.rng.gauss(0.1),
             "temp.motor_right" => self.temp_motor[1] + self.rng.gauss(0.1),
             "temp.esc_left" => self.temp_esc[0] + self.rng.gauss(0.1),

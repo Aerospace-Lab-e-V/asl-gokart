@@ -247,11 +247,7 @@ jobs:
                       https://registry.npmjs.org/
                       @asl-gokart:https://registry.leotm.de/
 
-            - name: Install arm64 cross-compilation toolchain
-              run: |
-                  sudo apt-get update -qq
-                  sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-
+            # No cross toolchain: sero-node ships a prebuilt linux-arm64 addon, so electron-rebuild compiles nothing.
             - name: Install dependencies
               run: bun install
 
@@ -263,8 +259,6 @@ jobs:
 
             - name: Build (arm64)
               env:
-                  CC: aarch64-linux-gnu-gcc
-                  CXX: aarch64-linux-gnu-g++
                   KART_AGENT_BIN: ${{ runner.temp }}/kart-agent/kart-agent
               run: bun run make:pi4
 
