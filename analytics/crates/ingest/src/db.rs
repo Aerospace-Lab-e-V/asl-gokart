@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
+use telemetry_schema::timing::v1::LapCrossing;
 use telemetry_schema::v1::{Batch, Status};
 use uuid::Uuid;
 
@@ -123,4 +124,40 @@ pub async fn update_status(
     .execute(pool)
     .await?;
     Ok(())
+}
+
+/// Stores one timing-device crossing. The device resends until the broker acknowledges, so a
+/// crossing can arrive twice; the second copy is ignored. Returns whether it was new.
+pub async fn insert_crossing(
+    pool: &PgPool,
+    kart_id: &str,
+    crossing_id: Uuid,
+    session_id: Option<Uuid>,
+    time: DateTime<Utc>,
+    c: &LapCrossing,
+) -> Result<bool> {
+    // Store the enum name without its VERDICT_ prefix (e.g. ACCEPTED) so SQL and Grafana read it as is.
+    let verdict = c.verdict().as_str_name().trim_start_matches("VERDICT_");
+    let result = sqlx::query(
+        "INSERT INTO lap_crossings (crossing_id, device_id, kart_id, session_id, time, lap_number,
+            lap_us, speed_kmh, verdict, distance_m, barrier_lat, barrier_lon, clock_synced)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         ON CONFLICT (crossing_id) DO NOTHING",
+    )
+    .bind(crossing_id)
+    .bind(&c.device_id)
+    .bind(kart_id)
+    .bind(session_id)
+    .bind(time)
+    .bind(c.lap_number as i32)
+    .bind(c.lap_us.map(|us| us as i64))
+    .bind(c.speed_kmh)
+    .bind(verdict)
+    .bind(c.distance_m)
+    .bind(c.barrier_lat)
+    .bind(c.barrier_lon)
+    .bind(c.clock_synced)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() == 1)
 }
