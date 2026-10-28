@@ -62,6 +62,9 @@ async fn main() -> Result<()> {
         MqttOptions::parse_url(format!("{}?client_id={}", args.mqtt_url, args.client_id))
             .context("parsing MQTT_URL")?;
     opts.set_keep_alive(Duration::from_secs(5));
+    // Persistent session: the broker queues QoS 1 messages (lap crossings) while ingest is
+    // away, e.g. during a deploy. A timing device's outbox only knows the broker accepted them.
+    opts.set_clean_session(false);
     let (client, eventloop) = AsyncClient::new(opts, 100);
 
     // Decouple the MQTT event loop from DB latency; it must keep polling to stay connected.
