@@ -7,12 +7,12 @@
 #include "ota_handler.hpp"
 #include "config.hpp"
 
-const char* FIRMWARE_VERSION = "0.2.0";
+const char* FIRMWARE_VERSION = "0.3.0";
 
 // Button pins
 #define BUTTON_PIN_1 GPIO_NUM_16    // Green Cable, Top Right Button
 #define BUTTON_PIN_2 GPIO_NUM_5     // White Cable, Top Left Button
-#define BUTTON_PIN_3 GPIO_NUM_13    // Yellow Cable, Bottom Right Button
+#define BUTTON_PIN_3 GPIO_NUM_13    // Yellow Cable, Bottom Right Button (reverse)
 #define BUTTON_PIN_4 GPIO_NUM_4     // Violet Cable, Bottom Left Button 
 #define BUTTON_PIN_5 GPIO_NUM_32    // Orange Cable, unused
 #define BUTTON_PIN_6 GPIO_NUM_33    // Blue Cable, unused
@@ -82,6 +82,10 @@ Bounce2::Button button6 = Bounce2::Button();
 
 struct AppState {
     bool lights_found = false;
+    bool motor_found  = false;
+    // Reverse OFF not yet confirmed by zc_motor; resent until it is.
+    bool reverse_off_pending  = false;
+    bool reverse_off_inflight = false;
 };
 
 static AppState app;
@@ -98,6 +102,29 @@ static void on_lights_response(sero::ReturnCode rc,
     }
 }
 
+static void on_reverse_on_response(sero::ReturnCode rc,
+                                   const uint8_t* /*payload*/, std::size_t /*len*/,
+                                   void* /*ctx*/) {
+    if (rc == sero::ReturnCode::E_OK) {
+        Serial.println("[motor] Reverse ON acknowledged");
+    } else {
+        // E_NOT_OK: zc_motor refused, kart above 3 km/h or speed unknown.
+        Serial.printf("[motor] Reverse ON refused: rc=%u\n", static_cast<unsigned>(rc));
+    }
+}
+
+static void on_reverse_off_response(sero::ReturnCode rc,
+                                    const uint8_t* /*payload*/, std::size_t /*len*/,
+                                    void* /*ctx*/) {
+    app.reverse_off_inflight = false;
+    if (rc == sero::ReturnCode::E_OK) {
+        app.reverse_off_pending = false;
+        Serial.println("[motor] Reverse OFF acknowledged");
+    } else {
+        Serial.printf("[motor] Reverse OFF failed: rc=%u, retrying\n", static_cast<unsigned>(rc));
+    }
+}
+
 // ─── SD Callbacks ───────────────────────────────────────────────
 
 static void on_service_found(uint16_t sid, const Addr& addr, void* /*ctx*/) {
@@ -105,12 +132,16 @@ static void on_service_found(uint16_t sid, const Addr& addr, void* /*ctx*/) {
                 sid, addr[0], addr[1], addr[2], addr[3],
                 unsigned((addr[4] << 8) | addr[5]));
     if (sid == Esp32ServiceConfig::ZC_LIGHTS_ID) app.lights_found = true;
+    if (sid == Esp32ServiceConfig::ZC_MOTOR_ID)  app.motor_found  = true;
 }
 
 static void on_service_lost(uint16_t sid, void* /*ctx*/) {
     std::printf("[sd] Service 0x%04X lost\n", sid);
     if (sid == Esp32ServiceConfig::ZC_LIGHTS_ID) {
         app.lights_found = false;
+    }
+    if (sid == Esp32ServiceConfig::ZC_MOTOR_ID) {
+        app.motor_found = false;
     }
 }
 
@@ -238,6 +269,9 @@ void setup() {
 
     // ── Consumer: discover lights service ──────────────────────
     rt.find_service(Esp32ServiceConfig::ZC_LIGHTS_ID, 1, now);
+
+    // ── Consumer: discover motor service (reverse relay) ───────
+    rt.find_service(Esp32ServiceConfig::ZC_MOTOR_ID, 1, now);
 }
 
 void loop() {
@@ -274,6 +308,28 @@ void loop() {
             rt.request(Esp32ServiceConfig::ZC_LIGHTS_ID, Esp32ServiceConfig::ZC_LIGHTS_HIGH_BEAMS_ID,
                        payload, sizeof(payload), on_lights_response, nullptr, 2000, now);
             Serial.println("Button 4 (Bottom Left) released - High Beams OFF sent");
+        }
+    }
+
+    // Reverse (relay 2 on zc_motor) while button 3 is held. zc_motor
+    // checks the speed itself and refuses reverse above 3 km/h.
+    if (app.motor_found) {
+        if (button3.pressed()) {
+            app.reverse_off_pending = false;
+            uint8_t payload[2] = {Esp32ServiceConfig::ZC_MOTOR_REVERSE_RELAY, 0x01};
+            rt.request(Esp32ServiceConfig::ZC_MOTOR_ID, Esp32ServiceConfig::ZC_MOTOR_SET_RELAY_ID,
+                       payload, sizeof(payload), on_reverse_on_response, nullptr, 2000, now);
+            Serial.println("Button 3 (Bottom Right) pressed - Reverse ON sent");
+        }
+        if (button3.released()) {
+            app.reverse_off_pending = true;
+            Serial.println("Button 3 (Bottom Right) released - Reverse OFF queued");
+        }
+        if (app.reverse_off_pending && !app.reverse_off_inflight) {
+            uint8_t payload[2] = {Esp32ServiceConfig::ZC_MOTOR_REVERSE_RELAY, 0x00};
+            app.reverse_off_inflight = rt.request(
+                Esp32ServiceConfig::ZC_MOTOR_ID, Esp32ServiceConfig::ZC_MOTOR_SET_RELAY_ID,
+                payload, sizeof(payload), on_reverse_off_response, nullptr, 500, now).has_value();
         }
     }
 }

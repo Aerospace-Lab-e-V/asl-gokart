@@ -42,6 +42,12 @@ struct Esp32ServiceConfig {
     static constexpr uint16_t ZC_LIGHTS_DRL_ID          = 0x0009;
     static constexpr uint16_t ZC_LIGHTS_HIGH_BEAMS_ID   = 0x0006;
 
+    // zc_motor service (consumer side — bottom right button drives relay 2 / reverse)
+    static constexpr uint16_t ZC_MOTOR_ID               = 0x0004;
+    // Payload: [relay_idx][on u8]. zc_motor refuses reverse above 3 km/h.
+    static constexpr uint16_t ZC_MOTOR_SET_RELAY_ID     = 0x0006;
+    static constexpr uint8_t  ZC_MOTOR_REVERSE_RELAY    = 1; // relay 2
+
     // zc_buttons own service (provider side — exposes OTA method to headunit)
     static constexpr uint16_t ZC_BUTTONS_ID             = 0x0002;
 

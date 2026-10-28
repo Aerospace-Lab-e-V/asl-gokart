@@ -51,6 +51,10 @@ struct Esp32ServiceConfig {
     // Method to toggle individual relays (payload: [relay_idx]).
     static constexpr uint16_t ZC_MOTOR_TOGGLE_RELAY_METHOD_ID = 0x0005;
 
+    // Method to switch individual relays (payload: [relay_idx][on u8]).
+    // zc_buttons drives relay 2 (reverse) with it on press/release.
+    static constexpr uint16_t ZC_MOTOR_SET_RELAY_METHOD_ID = 0x0006;
+
     // Event: [Motor L/R] each 8 bytes: [rpm u16 BE][throttle u8][brake_pedal u8][switches bitfield][bat_v u8][mot_temp u8][ctrl_temp u8]
     // And extra: [relay 1 u8][relay 2 u8][reverse u8]
     static constexpr uint16_t    ZC_MOTOR_EVENT_RPM_ID            = 0x8001;
@@ -70,4 +74,13 @@ struct Esp32HwConfig {
     static constexpr int8_t   KELLY_RIGHT_RX_PIN    = 33;
     static constexpr int8_t   RELAY_1_PIN           = 13;
     static constexpr int8_t   RELAY_2_PIN           = 16;
+};
+
+// ── Drive limits ─────────────────────────────────────────────────────────────
+struct Esp32DriveConfig {
+    // Motors drive the wheels directly, so motor rpm is wheel rpm
+    // (same value as the headunit's derive.ts).
+    static constexpr float WHEEL_CIRCUMFERENCE_M = 1.415f;
+    // Relay 2 (reverse) only switches on at or below this speed.
+    static constexpr float REVERSE_MAX_SPEED_KMH = 3.0f;
 };
