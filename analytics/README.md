@@ -71,7 +71,7 @@ analytics/
 │   ├── ingest/            # MQTT → TimescaleDB, idempotent by (session, seq)
 │   ├── pit-api/           # read-only HTTP: recent samples for the pit wall charts
 │   ├── command-api/       # audited parameter writes
-│   ├── lap-timing/        # GPS geofence → laps table
+│   ├── lap-timing/        # (planned) GPS geofence → lap_crossings
 │   └── kart-sim/          # fake kart; replays recorded sessions
 ├── web/
 │   ├── pit-wall/    # real-time live view (Bun, React, Vite)
@@ -237,24 +237,31 @@ Sero client registry (subscriptions are keyed by client id, so each consumer nee
 The ECU firmware accepts 4 subscribers per event.
 
 ### `ingest`
-Subscribes to live and backfill topics and writes to TimescaleDB. Inserts are idempotent on `(session_id, seq)`, so live data and backfill can overlap safely and gaps fill in automatically.
+Subscribes to live and backfill topics and writes to TimescaleDB. Inserts are idempotent on `(session_id, seq)`, so live data and backfill can overlap safely and gaps fill in automatically. Lap crossings from `kart/+/laps` go to `lap_crossings`, idempotent on `crossing_id`.
 
 ### `command-api` + `param-app`
 The only path for changing vehicle parameters. Every request is authenticated through Keycloak, authorized by role, logged (who, what, old/new value, when), published to the command topic, and only reported as successful after the kart's acknowledgment. Some parameters may only be changed while the kart is stationary.
 
 ### `pit-api`
-Read-only HTTP for the pit wall, connected as the `pit_api_ro` role. `GET /api/karts/{kart}/sessions/{session}/samples?since_us=…&signals=101,204` returns the session's samples since `since_us` (at most 15 min back, default 5 min) as columns per signal: `{"signals": {"101": {"t_us": […], "v": […]}}}`. `GET /api/health` for probes.
+Read-only HTTP for the pit wall, connected as the `pit_api_ro` role. `GET /api/karts/{kart}/sessions/{session}/samples?since_us=…&signals=101,204` returns the session's samples since `since_us` (at most 15 min back, default 5 min) as columns per signal: `{"signals": {"101": {"t_us": […], "v": […]}}}`. `GET /api/karts/{kart}/sessions/{session}/laps` returns every timing-device crossing of the session in time order: `{"crossings": [{"crossing_id", "time" (Unix µs), "lap_number", "lap_us", "verdict", …}]}`. `GET /api/health` for probes.
 
-### `lap-timing`
-Detects start/finish and sector crossings from GPS using track geofences and writes the `laps` table. All lap overlays and comparisons depend on it.
+### Lap timing
+Laps come from a trackside timing device: the speedcamera's light barrier ([speedcamera repo](https://github.com/LeoLTM/speedcamera), lap timer plugin). It joins the driver's phone hotspot, subscribes to its kart's `live` and `status` topics, and publishes one `kart.timing.v1.LapCrossing` (`schema/proto/timing.proto`) per barrier crossing on `kart/{id}/laps`:
+
+- **Durations** are measured by the barrier's microcontroller to the µs (`lap_us`); the wall-clock time `t_us` is the device's NTP clock.
+- **Verdict:** the device only counts a crossing when the kart's own GPS put it at the barrier around that time (`VERDICT_ACCEPTED`). A crossing while the kart is far away (someone walking through), too slow, a double trigger or with the kart offline is published as rejected and never ends a lap. Without a usable GPS position or synced clocks the crossing counts as `VERDICT_ACCEPTED_UNVERIFIED`.
+- **Storage:** every crossing lands in `lap_crossings`, rejected ones included (they explain gaps). The `laps` view holds the completed laps: counted crossings with a `lap_us`.
+- **Delivery:** QoS 1 from an outbox on the device, so crossings recorded while the hotspot was down arrive later; ingest ignores resends.
+
+A GPS-geofence lap source (`crates/lap-timing`, planned) would publish the same message for karts without a barrier.
 
 ### Pit wall (live view)
 The real-time view for the pit area (`web/pit-wall`). The crew watches one kart at a time and judges what they see. The pit wall shows data and link state only; it raises no automatic warnings.
 
-- **Views** (fixed, defined in `src/views/presets.ts`): Overview, Battery, Drivetrain, Thermal, and Track (the GPS trail coloured by speed on OpenStreetMap tiles, with the latest position). Each view shows value tiles and rolling charts over the last 1, 5 or 10 min (`?window=`).
+- **Views** (fixed, defined in `src/views/presets.ts`): Overview, Battery, Drivetrain, Thermal, Track (the GPS trail coloured by speed on OpenStreetMap tiles, with the latest position and the light barrier), and Laps (running lap clock, last and best lap, the session's laps and the barrier's crossings with their verdicts). Each view shows value tiles and rolling charts over the last 1, 5 or 10 min (`?window=`).
 - **Status line:** broker connection, kart online/offline (retained status, last will), session, data age, lost batches.
 - **Data path:** MQTT messages go straight into a store outside React (`src/live/store.ts`). One `requestAnimationFrame` loop redraws the charts when new data arrived; tiles refresh at 10 Hz.
-- **History seed:** on open, the charts are filled from `pit-api` with the session's recent past, then live data appends. Where both overlap, live data wins.
+- **History seed:** on open, the charts are filled from `pit-api` with the session's recent past, then live data appends. Where both overlap, live data wins. The lap list is seeded with every crossing of the session the same way.
 - **Runtime config:** `/config.json` (`mqttUrl`, `mqttUsername`, `mqttPassword`, `apiBaseUrl`, `tileUrl`, `tileAttribution`); all optional, defaults are the page's own origin (`/mqtt`, `/api`) and the public OpenStreetMap tiles (the browser needs internet for the map background; the trail draws without it).
 - **Deployment:** one container (Caddy) serves the SPA and proxies `/api` → `pit-api` and `/mqtt` → Mosquitto, so the browser talks to one origin. TLS and Keycloak go in front of it later.
 
@@ -264,9 +271,11 @@ This is the contract the implementation follows:
 - **Subscribe**
   - `kart/+/status`: retained, so you immediately learn every kart's online state, `session_id` and schema version.
   - `kart/+/live`: QoS 0.
+  - `kart/+/laps`: QoS 1, crossings of the lap timing device.
 - **Decode** with code generated from `schema/proto/telemetry.proto`, not hand-written:
   - `live` payloads are `kart.telemetry.v1.Batch`;
-  - `status` payloads are `Status`.
+  - `status` payloads are `Status`;
+  - `laps` payloads are `kart.timing.v1.LapCrossing` (`schema/proto/timing.proto`).
 - **Signals:** map `Sample.signal_id` through `schema/signals.yaml` (name, unit, min/max, rate). Load the catalog at build time. Ignore unknown IDs, which come from a newer kart-agent.
 - **Time:** `Sample.t_us` is Unix time in microseconds from the kart clock (GPS/PPS-disciplined). Plot on that time, not on arrival time.
 - **Data age:** show `now − newest t_us`. This is the live latency measurement and the way to verify the 250 ms target. The browser machine's clock must be NTP-synced.
@@ -291,10 +300,11 @@ Historical dashboards, track maps (Geomap) and speed-vs-distance overlays (XY ch
 | `kart/{id}/backfill` | kart → cloud | 1 | log chunks with sequence numbers |
 | `kart/{id}/alerts` | kart → cloud | 1 | threshold violations |
 | `kart/{id}/status` | kart → cloud | 1, retained | online/offline (last will), agent + schema version |
+| `kart/{id}/laps` | timing device → cloud | 1 | lap crossings of the light barrier (`timing.proto`) |
 | `kart/{id}/cmd` | cloud → kart | 1 | parameter change requests |
 | `kart/{id}/cmd/ack` | kart → cloud | 1 | accepted / rejected + reason |
 
-Only `command-api` may publish to `cmd`. The kart authenticates to the broker with an mTLS client certificate. Browser clients (pit wall) connect through the WebSocket listener and may only subscribe to `live` and `status`.
+Only `command-api` may publish to `cmd`. The kart authenticates to the broker with an mTLS client certificate. The timing device may only publish to `laps`. Browser clients (pit wall) connect through the WebSocket listener and may only subscribe to `live`, `status` and `laps`.
 
 ---
 
