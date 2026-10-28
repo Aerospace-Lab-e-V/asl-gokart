@@ -23,9 +23,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
 
     let fds = protox::compile([format!("{proto_dir}/telemetry.proto")], [proto_dir])?;
+    let timing = protox::compile([format!("{proto_dir}/timing.proto")], [proto_dir])?;
     // Self-describing logs (MCAP) embed the schema next to the data.
     fs::write(out_dir.join("telemetry.fds.bin"), fds.encode_to_vec())?;
     prost_build::Config::new().compile_fds(fds)?;
+    prost_build::Config::new().compile_fds(timing)?;
 
     // One constant per signal, so code that names a signal breaks at compile time
     // when the catalog renames or drops it.
