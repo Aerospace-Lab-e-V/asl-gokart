@@ -6,7 +6,7 @@
 #include "motor_service.hpp"
 #include "kelly_decoder.hpp"
 
-const char* FIRMWARE_VERSION = "0.1.0";
+const char* FIRMWARE_VERSION = "0.2.0";
 
 // ── Type Aliases ─────────────────────────────────────────────────────────────
 
@@ -179,6 +179,8 @@ void loop() {
 
         const uint16_t left_rpm   = motor_left.rpm();
         const uint16_t right_rpm  = motor_right.rpm();
+        motor_svc.update_speed(left_rpm, right_rpm,
+                               motor_left.rpm_valid() && motor_right.rpm_valid());
 
         auto pack_switches = [](const kelly::PacketA& a) -> uint8_t {
             return static_cast<uint8_t>(

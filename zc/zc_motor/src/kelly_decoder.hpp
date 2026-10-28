@@ -141,6 +141,9 @@ public:
     }
 
     uint16_t rpm() const noexcept { return rpm_; }
+    /// False until the first good Packet B and once reads keep failing, so
+    /// an rpm of 0 from a missing controller is not taken as standstill.
+    bool rpm_valid() const noexcept { return rpm_seen_ && failures_b_ < kelly::MAX_HELD_FAILURES; }
     bool reverse() const noexcept { return packet_a_.reverse; }
     const kelly::PacketA& packet_a() const noexcept { return packet_a_; }
     uint32_t fault_count() const noexcept { return fault_count_; }
@@ -159,6 +162,7 @@ private:
                     kelly::PacketB b{};
                     kelly::parse_packet_b(buf, b);
                     rpm_ = static_cast<uint16_t>(b.rpm / 4U);
+                    rpm_seen_ = true;
                 }
             } else {
                 Serial.printf("[motor] Validation failed! type=%d, checksum_ok=%d\n", 
@@ -228,6 +232,7 @@ private:
 
     HardwareSerial& serial_;
     uint16_t       rpm_         = 0;
+    bool           rpm_seen_    = false;
     kelly::PacketA packet_a_{};
     uint32_t       fault_count_ = 0;
     /// Failed reads in a row, per packet type.
