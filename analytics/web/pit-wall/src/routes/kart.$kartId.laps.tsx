@@ -8,7 +8,7 @@ export const Route = createFileRoute("/kart/$kartId/laps")({
     component: LapsView,
 });
 
-/** What the timing device decided, in words for the crew. */http://0.0.0.0:3000
+/** What the timing device decided, in words for the crew. */
 const VERDICT_LABEL: Record<VerdictName, string> = {
     UNSPECIFIED: "Unknown",
     ACCEPTED: "Counted",
