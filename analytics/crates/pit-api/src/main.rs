@@ -1,5 +1,5 @@
 //! Read-only HTTP API for the pit wall. Serves the recent past of a session so the
-//! live charts start full on page load; everything after that comes over MQTT.
+//! live charts and lap list start full on page load; everything after that comes over MQTT.
 //! Never writes: ingest owns the schema and the data.
 
 mod db;
@@ -72,6 +72,10 @@ fn router(pool: PgPool) -> Router {
             "/api/karts/{kart_id}/sessions/{session_id}/samples",
             get(samples),
         )
+        .route(
+            "/api/karts/{kart_id}/sessions/{session_id}/laps",
+            get(laps),
+        )
         .layer(TraceLayer::new_for_http())
         .with_state(pool)
 }
@@ -107,6 +111,20 @@ async fn samples(
     let body = Json(to_columns(rows));
     // Always the current state of the database; never cache.
     Ok(([(header::CACHE_CONTROL, "no-store")], body).into_response())
+}
+
+/// Every timing-device crossing of the session (counted or not), in time order.
+#[derive(Serialize, Debug)]
+struct LapsResponse {
+    crossings: Vec<db::Crossing>,
+}
+
+async fn laps(
+    State(pool): State<PgPool>,
+    Path((kart_id, session_id)): Path<(String, Uuid)>,
+) -> Result<Response, AppError> {
+    let crossings = db::crossings(&pool, &kart_id, session_id).await?;
+    Ok(([(header::CACHE_CONTROL, "no-store")], Json(LapsResponse { crossings })).into_response())
 }
 
 fn clamp_since(since_us: Option<i64>, now: DateTime<Utc>) -> DateTime<Utc> {
