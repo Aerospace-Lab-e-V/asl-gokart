@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package kart.timing.v1;
+
+// Why a barrier crossing does or does not count as the kart passing the line.
+enum Verdict {
+  VERDICT_UNSPECIFIED = 0;
+  // The kart's GPS put it at the barrier.
+  VERDICT_ACCEPTED = 1;
+  // Counted, but the kart's position could not be checked (no fix, clocks not synced).
+  VERDICT_ACCEPTED_UNVERIFIED = 2;
+  // The kart was farther from the barrier than the gate radius (distance_m says how far).
+  VERDICT_REJECTED_FAR = 3;
+  // Too slow for a kart at the line, e.g. someone walking through.
+  VERDICT_REJECTED_SLOW = 4;
+  // Too soon after the last counted crossing (one pass breaking the beams twice).
+  VERDICT_REJECTED_DUPLICATE = 5;
+  // The kart was offline.
+  VERDICT_REJECTED_KART_OFFLINE = 6;
+  // Passed in the direction the timing device ignores.
+  VERDICT_REJECTED_DIRECTION = 7;
+}
+
+// One crossing of a trackside timing device (the speedcamera light barrier), counted or not.
+// Published (QoS 1, not retained) on kart/{id}/laps; the device keeps an outbox and resends
+// until the broker acknowledges, so ingest is idempotent on crossing_id.
+message LapCrossing {
+  // UUIDv7 assigned by the device.
+  string crossing_id = 1;
+  string device_id = 2;
+  string kart_id = 3;
+  // The kart's telemetry session (from its retained Status) at the crossing; "" if unknown.
+  string kart_session_id = 4;
+  // First beam break, Unix time in microseconds (device clock, NTP).
+  sint64 t_us = 5;
+  // Lap that starts at this crossing; 0 when none does (rejected, or single mode end).
+  uint32 lap_number = 6;
+  // Duration of the lap that ends at this crossing, measured by the barrier to the µs.
+  optional uint64 lap_us = 7;
+  double speed_kmh = 8;
+  Verdict verdict = 9;
+  // Closest kart GPS position to the barrier around the crossing, when the kart was checked.
+  optional double distance_m = 10;
+  double barrier_lat = 11;
+  double barrier_lon = 12;
+  // The device clock was NTP-synced, so t_us lines up with kart samples.
+  bool clock_synced = 13;
+}

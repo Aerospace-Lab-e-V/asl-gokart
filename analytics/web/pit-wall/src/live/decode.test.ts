@@ -1,7 +1,8 @@
 import { create, toBinary } from "@bufbuild/protobuf";
 import { describe, expect, it } from "vitest";
 import { BatchSchema, SampleSchema, StatusSchema } from "../gen/telemetry_pb";
-import { decodeBatch, decodeStatus } from "./decode";
+import { LapCrossingSchema, Verdict } from "../gen/timing_pb";
+import { decodeBatch, decodeLapCrossing, decodeStatus } from "./decode";
 
 describe("decode", () => {
     it("decodes a Batch and converts 64-bit fields to numbers", () => {
@@ -45,5 +46,46 @@ describe("decode", () => {
             sessionId: "s1",
         });
         expect(decodeStatus(new Uint8Array())).toBeNull();
+    });
+
+    it("decodes a LapCrossing with the verdict name and optional fields", () => {
+        const base = {
+            crossingId: "0190a0e0-0000-7000-8000-000000000001",
+            deviceId: "speedcamera-01",
+            kartId: "kart-01",
+            kartSessionId: "0190a0e0-0000-7000-8000-000000000000",
+            tUs: 1_700_000_000_123_456n,
+            speedKmh: 38.4,
+            barrierLat: 48.1,
+            barrierLon: 11.5,
+            clockSynced: true,
+        };
+        const lapEnd = decodeLapCrossing(
+            toBinary(
+                LapCrossingSchema,
+                create(LapCrossingSchema, {
+                    ...base,
+                    lapNumber: 3,
+                    lapUs: 42_123_456n,
+                    verdict: Verdict.ACCEPTED,
+                    distanceM: 2.5,
+                })
+            )
+        );
+        expect(lapEnd).toMatchObject({
+            tMs: 1_700_000_000_123.456,
+            lapNumber: 3,
+            lapMs: 42_123.456,
+            verdict: "ACCEPTED",
+            distanceM: 2.5,
+        });
+
+        const rejected = decodeLapCrossing(
+            toBinary(
+                LapCrossingSchema,
+                create(LapCrossingSchema, { ...base, verdict: Verdict.REJECTED_SLOW })
+            )
+        );
+        expect(rejected).toMatchObject({ lapMs: null, distanceM: null, verdict: "REJECTED_SLOW" });
     });
 });

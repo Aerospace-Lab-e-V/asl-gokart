@@ -3,6 +3,7 @@ import "leaflet/dist/leaflet.css";
 import { useEffect, useRef } from "react";
 import { signal } from "../live/catalog";
 import { onFrame } from "../live/frame";
+import { laps } from "../live/laps";
 import { telemetry } from "../live/store";
 import { formatValue } from "../views/format";
 import { binLines, NO_SPEED_COLOR, SPEED_COLORS, speedColor, trackRuns } from "../views/track";
@@ -26,7 +27,7 @@ interface Props {
 
 /**
  * The kart's trail over the last `windowMs` (kart time) on a raster map, coloured by
- * GPS speed, with the latest fix as a marker. Leaflet draws on one canvas; the frame
+ * GPS speed, with the latest fix as a marker and the lap timer's light barrier, if any. Leaflet draws on one canvas; the frame
  * loop rebuilds the lines only when the telemetry store changed.
  */
 export function TrackMap({ windowMs, tileUrl, tileAttribution }: Props) {
@@ -54,17 +55,38 @@ export function TrackMap({ windowMs, tileUrl, tileAttribution }: Props) {
             fillOpacity: 1,
             renderer,
         }).bindTooltip("", { direction: "top", offset: [0, -8] });
+        // Where the light barrier stands, as its newest lap crossing reports it.
+        const barrier = L.circleMarker(INITIAL_VIEW, {
+            radius: 6,
+            color: "#ffffff",
+            weight: 2,
+            fillColor: "#111827",
+            fillOpacity: 1,
+            renderer,
+        }).bindTooltip("Light barrier (start/finish)", { direction: "top", offset: [0, -6] });
         casing.addTo(map);
         for (const l of lines) l.addTo(map);
 
         let fitted = false;
         let lastVersion = -1;
+        let lastLapsVersion = -1;
         let lastDraw = 0;
         const stop = onFrame((frameTime) => {
             const version = telemetry.version;
-            if (version === lastVersion && frameTime - lastDraw < IDLE_REDRAW_MS) return;
+            const lapsVersion = laps.version;
+            const unchanged = version === lastVersion && lapsVersion === lastLapsVersion;
+            if (unchanged && frameTime - lastDraw < IDLE_REDRAW_MS) return;
             lastVersion = version;
+            lastLapsVersion = lapsVersion;
             lastDraw = frameTime;
+
+            const line = laps.barrier();
+            if (line) {
+                barrier.setLatLng([line.lat, line.lon]);
+                if (!map.hasLayer(barrier)) barrier.addTo(map);
+            } else {
+                barrier.remove();
+            }
 
             const lat = telemetry.points(LAT.id);
             const newest = lat.findLast((p) => !isNaN(p.y))?.x;

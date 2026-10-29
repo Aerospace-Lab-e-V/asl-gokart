@@ -1,6 +1,7 @@
 import mqtt, { type MqttClient } from "mqtt";
 import type { PitWallConfig } from "./config";
-import { decodeBatch, decodeStatus, type KartStatus } from "./decode";
+import { decodeBatch, decodeLapCrossing, decodeStatus, type KartStatus } from "./decode";
+import { laps } from "./laps";
 import { telemetry } from "./store";
 
 export type BrokerState = "connecting" | "connected" | "reconnecting" | "offline";
@@ -13,11 +14,13 @@ export interface LiveSnapshot {
 
 const STATUS_TOPIC = "kart/+/status";
 const liveTopic = (kartId: string) => `kart/${kartId}/live`;
+/** Crossings of a trackside timing device (QoS 1, so none is lost on a flaky link). */
+const lapsTopic = (kartId: string) => `kart/${kartId}/laps`;
 
 /**
  * The single MQTT-over-WebSocket connection. Read-only: it subscribes to every kart's
- * status and to the live topic of the kart on screen, and never publishes.
- * Live batches go straight into the telemetry store, bypassing React.
+ * status and to the live and laps topics of the kart on screen, and never publishes.
+ * Live batches and lap crossings go straight into their stores, bypassing React.
  */
 class LiveConnection {
     private client: MqttClient | null = null;
@@ -48,16 +51,23 @@ class LiveConnection {
         // mqtt.js re-subscribes on reconnect.
         client.subscribe(STATUS_TOPIC, { qos: 1 });
         this.client = client;
-        if (this.watched) client.subscribe(liveTopic(this.watched), { qos: 0 });
+        if (this.watched) this.subscribeKart(this.watched);
     }
 
     /** Switches the live subscription to `kartId` (null: no kart on screen). */
     watch(kartId: string | null): void {
         if (kartId === this.watched) return;
-        if (this.watched) this.client?.unsubscribe(liveTopic(this.watched));
+        if (this.watched)
+            this.client?.unsubscribe([liveTopic(this.watched), lapsTopic(this.watched)]);
         this.watched = kartId;
         telemetry.reset(null);
-        if (kartId) this.client?.subscribe(liveTopic(kartId), { qos: 0 });
+        laps.reset(null);
+        if (kartId) this.subscribeKart(kartId);
+    }
+
+    private subscribeKart(kartId: string): void {
+        this.client?.subscribe(liveTopic(kartId), { qos: 0 });
+        this.client?.subscribe(lapsTopic(kartId), { qos: 1 });
     }
 
     subscribe = (listener: () => void): (() => void) => {
@@ -73,6 +83,8 @@ class LiveConnection {
         try {
             if (kind === "live") {
                 if (kartId === this.watched) telemetry.ingest(decodeBatch(payload));
+            } else if (kind === "laps") {
+                if (kartId === this.watched) laps.ingest(decodeLapCrossing(payload));
             } else if (kind === "status") {
                 const karts = new Map(this.snapshot.karts);
                 const status = decodeStatus(payload);

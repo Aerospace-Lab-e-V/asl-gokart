@@ -12,6 +12,7 @@ use prost::Message;
 use rumqttc::{AsyncClient, Event, EventLoop, MqttOptions, Packet, Publish, QoS};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
+use telemetry_schema::timing::v1::LapCrossing;
 use telemetry_schema::v1::{Batch, Status};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
@@ -61,6 +62,9 @@ async fn main() -> Result<()> {
         MqttOptions::parse_url(format!("{}?client_id={}", args.mqtt_url, args.client_id))
             .context("parsing MQTT_URL")?;
     opts.set_keep_alive(Duration::from_secs(5));
+    // Persistent session: the broker queues QoS 1 messages (lap crossings) while ingest is
+    // away, e.g. during a deploy. A timing device's outbox only knows the broker accepted them.
+    opts.set_clean_session(false);
     let (client, eventloop) = AsyncClient::new(opts, 100);
 
     // Decouple the MQTT event loop from DB latency; it must keep polling to stay connected.
@@ -87,6 +91,7 @@ async fn mqtt_loop(
                 // Re-subscribe on every (re)connect.
                 client.subscribe("kart/+/live", QoS::AtMostOnce).await?;
                 client.subscribe("kart/+/status", QoS::AtLeastOnce).await?;
+                client.subscribe("kart/+/laps", QoS::AtLeastOnce).await?;
             }
             Ok(Event::Incoming(Packet::Publish(p))) => {
                 if tx.try_send(p).is_err() {
@@ -156,6 +161,26 @@ async fn handle(pool: &PgPool, p: &Publish, last_touch: &mut HashMap<Uuid, Insta
         };
         db::update_status(pool, kart_id, session_id, &status).await?;
         info!(kart_id, %session_id, online = status.online, agent = %status.agent_version, "status");
+    } else if topic.ends_with("/laps") {
+        let crossing = LapCrossing::decode(p.payload.as_ref()).context("decoding LapCrossing")?;
+        anyhow::ensure!(
+            crossing.kart_id == kart_id,
+            "crossing for kart {:?} published on {topic}",
+            crossing.kart_id
+        );
+        let crossing_id = Uuid::parse_str(&crossing.crossing_id).context("invalid crossing_id")?;
+        // Unknown when the device could not see the kart's status; the row still counts.
+        let session_id = Uuid::parse_str(&crossing.kart_session_id).ok();
+        let time = DateTime::<Utc>::from_timestamp_micros(crossing.t_us).context("invalid t_us")?;
+        let new = db::insert_crossing(pool, kart_id, crossing_id, session_id, time, &crossing).await?;
+        info!(
+            kart_id,
+            device = %crossing.device_id,
+            verdict = crossing.verdict().as_str_name(),
+            lap_us = crossing.lap_us,
+            new,
+            "lap crossing"
+        );
     }
     Ok(())
 }
