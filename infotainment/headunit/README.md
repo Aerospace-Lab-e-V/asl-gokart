@@ -15,14 +15,10 @@ bun run start
 
 Without a kart: `bun run start:mock` drives a simulated kart through a looping lap and answers light commands.
 
-## Make `Pi4`/`ODROID` image
+## Make `Pi4` image
 
 ```
 bun run make:pi4
-```
-
-```
-bun run make:odroid
 ```
 
 No cross compiler needed: `@asl-gokart/sero-node` ships prebuilt `.node` addons, so electron-rebuild compiles nothing.
@@ -31,7 +27,6 @@ A new native dependency that builds from source would need one (or the CI job on
 ### Output 
 
 - Pi 4 image: `./out/make/deb/arm64/headunit_X.X.X_arm64.deb`
-- ODROID image: `./out/make/deb/armv7l/headunit_X.X.X_armhf.deb`
 
 ## Releases and pre-releases
 
