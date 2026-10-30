@@ -42,7 +42,8 @@ export function publish(name: SignalName, value: number | null, ts = Date.now())
     queue(name, sample);
 }
 
-function markStale(name: SignalName): void {
+/** For an adapter that lost its source (e.g. the connection to kart-agent). */
+export function markStale(name: SignalName): void {
     const s = samples.get(name);
     if (!s || s.stale) return;
     const stale = { ...s, stale: true };

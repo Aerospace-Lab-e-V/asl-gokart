@@ -117,6 +117,16 @@ export type ConfigPatch = {
     gps?: Partial<{ enabled: boolean | null; device: string | null }>;
 };
 
+/**
+ * Data of a `samples` event on `GET /v1/stream` (analytics/crates/kart-agent/src/stream.rs): one timestamp,
+ * values by catalog name. Contract test: src/tests/unit/agent-stream.test.ts.
+ */
+export const StreamSamplesSchema = z.object({
+    /** kart-agent's receive time, µs since the Unix epoch. */
+    t_us: z.number(),
+    samples: z.record(z.string(), z.number()),
+});
+
 /** What main pushes after each poll: the last status read (kept while unreachable) and why the last poll failed. */
 export interface AgentState {
     status: AgentStatus | null;

@@ -3,6 +3,7 @@ import log from "electron-log/main";
 import registerListeners from "./helpers/ipc/listeners-register";
 import path from "path";
 import { stopSeroAdapter } from "./main/adapters/sero";
+import { stopAgentStream } from "./main/adapters/kart-agent";
 import { stopKartAgent } from "./main/kart-agent";
 import { getFullscreenOnStartup, getDevToolsEnabled, getTheme } from "./helpers/ipc/application/system-config";
 
@@ -58,6 +59,7 @@ app.whenReady().then(createWindow);
 
 app.on("before-quit", () => {
     stopSeroAdapter();
+    stopAgentStream();
     stopKartAgent();
 });
 
