@@ -27,6 +27,8 @@ axum = "0.8"
 cc = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 clap = { version = "4", features = ["derive", "env"] }
+# Stream combinators for the SSE stream (already in the tree through axum).
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
 libc = "0.2"
 # zstd only: lz4 would add a second C library to cross-compile.
 mcap = { version = "0.25", default-features = false, features = ["zstd"] }

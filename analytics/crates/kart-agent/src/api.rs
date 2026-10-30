@@ -6,10 +6,13 @@
 //! - `PUT /v1/config`: JSON merge patch (RFC 7396) on the overrides; `null` removes one.
 //!   `live.enabled` applies immediately, anything else restarts the agent's pipeline
 //!   within the same session.
+//! - `GET /v1/stream`: Server-Sent Events with the live samples, see [`crate::stream`].
+//!   A restart ends it; the client reconnects.
 //!
 //! There is no authentication: the API listens on loopback and rejects requests whose
 //! `Host` is not loopback (DNS rebinding). It sends no CORS headers and only accepts
-//! `application/json` bodies, so a web page cannot change the configuration.
+//! `application/json` bodies, so a web page can neither change the configuration nor
+//! read the stream.
 
 use std::sync::{Arc, Mutex};
 
@@ -18,17 +21,21 @@ use axum::{
     extract::{Request, State},
     http::{StatusCode, header},
     middleware::{self, Next},
-    response::{IntoResponse, Response},
+    response::{
+        IntoResponse, Response,
+        sse::{KeepAlive, Sse},
+    },
     routing::get,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 use tracing::info;
 
 use crate::{
     config::{self, Loaded, Sources},
     status::Shared,
+    stream::{self, Tap},
     systemd,
 };
 
@@ -47,6 +54,9 @@ pub struct ApiState {
     pub control: mpsc::UnboundedSender<Control>,
     /// Accept any `Host` (the agent runs in a container and is published on a port).
     pub allow_remote: bool,
+    pub tap: Arc<Tap>,
+    /// Set when the API shuts down; ends open streams.
+    pub stop: watch::Receiver<bool>,
 }
 
 #[derive(Serialize)]
@@ -61,6 +71,7 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .route("/v1/health", get(health))
         .route("/v1/status", get(status))
         .route("/v1/config", get(get_config).put(put_config))
+        .route("/v1/stream", get(live_stream))
         .layer(middleware::from_fn_with_state(state.clone(), loopback_host))
         .with_state(state)
 }
@@ -75,6 +86,10 @@ async fn health(State(s): State<Arc<ApiState>>) -> StatusCode {
 
 async fn status(State(s): State<Arc<ApiState>>) -> impl IntoResponse {
     Json(s.shared.snapshot())
+}
+
+async fn live_stream(State(s): State<Arc<ApiState>>) -> impl IntoResponse {
+    Sse::new(stream::events(s.tap.clone(), s.stop.clone())).keep_alive(KeepAlive::default())
 }
 
 async fn get_config(State(s): State<Arc<ApiState>>) -> Response {

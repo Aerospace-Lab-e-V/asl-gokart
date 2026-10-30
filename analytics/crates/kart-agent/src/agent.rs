@@ -13,7 +13,7 @@ use anyhow::{Context as _, Result, bail};
 use serde_json::json;
 use tokio::{
     net::TcpListener,
-    sync::{broadcast, mpsc, watch},
+    sync::{mpsc, watch},
 };
 use tracing::info;
 
@@ -27,6 +27,7 @@ use crate::{
     sero,
     session::Session,
     status::Shared,
+    stream::Tap,
     systemd,
 };
 
@@ -72,21 +73,25 @@ pub async fn run(ctx: &Context, loaded: Loaded) -> Result<Exit> {
     });
 
     let (control_tx, mut control_rx) = mpsc::unbounded_channel();
+    let tap = Arc::new(Tap::default());
+    // Stops the API: its graceful shutdown and every open stream.
+    let (stop_api, mut api_stopped) = watch::channel(false);
     let api_state = Arc::new(ApiState {
         shared: ctx.shared.clone(),
         sources: ctx.sources.clone(),
         config: Mutex::new(loaded),
         control: control_tx,
         allow_remote: ctx.allow_remote_api,
+        tap: tap.clone(),
+        stop: api_stopped.clone(),
     });
     let listener = TcpListener::bind(listen)
         .await
         .with_context(|| format!("binding the API to {listen}"))?;
-    let (stop_api, api_stopped) = tokio::sync::oneshot::channel::<()>();
     let api = tokio::spawn(
         axum::serve(listener, api::router(api_state))
-            .with_graceful_shutdown(async {
-                let _ = api_stopped.await;
+            .with_graceful_shutdown(async move {
+                let _ = api_stopped.wait_for(|&stopped| stopped).await;
             })
             .into_future(),
     );
@@ -142,14 +147,13 @@ pub async fn run(ctx: &Context, loaded: Loaded) -> Result<Exit> {
         )
         .run(provider_stop),
     );
-    let (stream, _) = broadcast::channel(64);
     let pipeline = tokio::spawn(
         Pipeline {
             cfg: cfg.clone(),
             session: ctx.session.clone(),
             shared: ctx.shared.clone(),
             log: log.clone(),
-            stream,
+            tap,
         }
         .run(samples_rx, live_rx),
     );
@@ -187,7 +191,7 @@ pub async fn run(ctx: &Context, loaded: Loaded) -> Result<Exit> {
     drop(log);
     let _ = tokio::task::spawn_blocking(move || writer.stop()).await;
 
-    let _ = stop_api.send(());
+    let _ = stop_api.send(true);
     let _ = api.await;
     Ok(exit)
 }

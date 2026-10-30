@@ -1,10 +1,10 @@
-//! Samples → batches → (log, live uplink, local stream).
+//! Samples → headunit stream, and batches → (log, live uplink).
 //!
-//! Every `live.batch_ms` the samples that arrived are packed into one
-//! `kart.telemetry.v1.Batch` with the next sequence number of the session, encoded once,
-//! and the same bytes go to the MCAP log, the MQTT uplink and a broadcast channel (the
-//! seam for streaming to the headunit later). Empty intervals produce no batch. The
-//! pipeline ends, after a last flush, when every sample sender is gone.
+//! Every sample goes to the [`Tap`] as it arrives, for the headunit's live stream. Every
+//! `live.batch_ms` the samples that arrived are packed into one `kart.telemetry.v1.Batch`
+//! with the next sequence number of the session, encoded once, and the same bytes go to
+//! the MCAP log and the MQTT uplink. Empty intervals produce no batch. The pipeline ends,
+//! after a last flush, when every sample sender is gone.
 
 use std::{
     sync::{Arc, Mutex},
@@ -15,7 +15,7 @@ use kart_mqtt::{Link, LinkOptions};
 use prost::Message;
 use telemetry_schema::v1::{Batch, Sample};
 use tokio::{
-    sync::{broadcast, mpsc, watch},
+    sync::{mpsc, watch},
     time::MissedTickBehavior,
 };
 use tracing::{info, warn};
@@ -26,6 +26,7 @@ use crate::{
     log::{self, LogHandle},
     session::Session,
     status::{LiveStatus, Shared},
+    stream::Tap,
 };
 
 pub struct Pipeline {
@@ -33,7 +34,7 @@ pub struct Pipeline {
     pub session: Arc<Mutex<Session>>,
     pub shared: Arc<Shared>,
     pub log: LogHandle,
-    pub stream: broadcast::Sender<Arc<Vec<u8>>>,
+    pub tap: Arc<Tap>,
 }
 
 impl Pipeline {
@@ -52,7 +53,10 @@ impl Pipeline {
         loop {
             tokio::select! {
                 received = samples.recv() => match received {
-                    Some(s) => buffer.extend(s),
+                    Some(s) => {
+                        self.tap.push(&s);
+                        buffer.extend(s);
+                    }
                     None => break,
                 },
                 _ = tick.tick() => {
@@ -121,9 +125,8 @@ impl Pipeline {
             .encode_to_vec();
             self.log.batch(seq, log::now_ns(), bytes.clone());
             if let Some(link) = link {
-                link.publish_live(bytes.clone());
+                link.publish_live(bytes);
             }
-            let _ = self.stream.send(Arc::new(bytes));
         }
         buffer.clear();
     }
