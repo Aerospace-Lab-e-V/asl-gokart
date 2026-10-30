@@ -1,7 +1,8 @@
 # ADR-0001: kart-agent as a systemd service bundled with the headunit
 
 ## Status
-Accepted
+Accepted. The phase in which the agent becomes the only ECU gateway is superseded by
+[ADR-0002](0002-kart-agent-as-headunit-data-source.md): the headunit keeps its own Sero client.
 
 ## Date
 2026-10-19

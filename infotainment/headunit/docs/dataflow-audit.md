@@ -161,7 +161,8 @@ multiplier commands only exist on this path. Migrate zc_throttle to Sero (or tin
 4. `CommandBus` + `services/commands.ts`; remove `window.sero` from views and `hardware-command-subscriber.ts`.
 5. zc_throttle off WS (firmware) -> delete E.
 6. kart-agent adapter in main -> drop renderer fetch -> S3 hardening.
-7. Later (ADR 0001): kart-agent as gateway, delete TS sero decoder.
+7. ~~Later (ADR 0001): kart-agent as gateway, delete TS sero decoder.~~ Dropped: the headunit keeps its Sero client;
+   kart-agent streams only the signals no zone controller measures (ADR 0002).
 
 ## Files referenced (most relevant)
 - `src/helpers/ipc/sero/sero-service.ts`, `sero-context.ts`
