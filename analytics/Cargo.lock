@@ -1187,6 +1187,7 @@ dependencies = [
  "chrono",
  "clap",
  "ecu-sero",
+ "futures-util",
  "kart-mqtt",
  "libc",
  "mcap",

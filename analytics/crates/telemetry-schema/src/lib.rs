@@ -68,6 +68,10 @@ pub fn signal_by_name(name: &str) -> Option<&'static Signal> {
     signals().iter().find(|s| s.name == name)
 }
 
+pub fn signal_by_id(id: u32) -> Option<&'static Signal> {
+    signals().iter().find(|s| s.id == id)
+}
+
 pub fn live_topic(kart_id: &str) -> String {
     format!("kart/{kart_id}/live")
 }
@@ -136,6 +140,8 @@ mod tests {
             signal_by_name("battery.voltage").unwrap().id
         );
         assert_eq!(ids::LIGHTS_TAIL, signal_by_name("lights.tail").unwrap().id);
+        assert_eq!(signal_by_id(ids::GPS_LAT).unwrap().name, "gps.lat");
+        assert!(signal_by_id(0).is_none());
         assert!(!FILE_DESCRIPTOR_SET.is_empty());
     }
 

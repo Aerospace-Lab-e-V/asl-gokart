@@ -1,0 +1,6 @@
+event: samples
+data: {"t_us":1792400000900000,"samples":{"battery.voltage":67.2}}
+
+event: samples
+data: {"t_us":1792400001000000,"samples":{"gps.altitude":412.5,"gps.fix":3.0,"gps.hdop":0.9,"gps.heading":87.5,"gps.lat":48.59412,"gps.lon":8.86605,"gps.satellites":9.0,"gps.speed":42.3}}
+

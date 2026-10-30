@@ -12,6 +12,7 @@ import { registerAdminListeners } from "@/main/admin";
 import { registerKartAgentListeners } from "@/main/kart-agent";
 import { registerSignalIpc } from "@/main/signal-ipc";
 import { startSeroAdapter } from "@/main/adapters/sero";
+import { startAgentStream } from "@/main/adapters/kart-agent";
 
 export default function registerListeners(mainWindow: BrowserWindow) {
     registerAdminListeners(mainWindow);
@@ -24,6 +25,8 @@ export default function registerListeners(mainWindow: BrowserWindow) {
     registerUpdaterListeners(mainWindow);
     registerKartAgentListeners(mainWindow);
     registerSignalIpc(mainWindow);
+    // Loopback: kart-agent's stream does not need the car network.
+    startAgentStream();
 
     // ponytail: Defer network-bound services until car network interface is available
     waitForCarNetwork(mainWindow).then(() => {

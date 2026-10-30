@@ -13,9 +13,15 @@ import type { EcuId } from "@/data/ecu/ecu-types";
 const MOTOR_TIMEOUT_MS = 1000;
 /** Battery temperatures arrive at 0.5 Hz. */
 const TEMP_TIMEOUT_MS = 6000;
+/** GPS epochs arrive at 1-5 Hz; kart-agent itself calls the receiver stale after 3 s. */
+const GPS_TIMEOUT_MS = 3000;
 
 interface SignalMeta {
-    ecu: EcuId;
+    /**
+     * The zone controller that measures the signal; the Sero adapter writes these. Unset for signals that come
+     * from kart-agent's stream (main/adapters/kart-agent.ts), so every signal has one writer (ADR-0002).
+     */
+    ecu?: EcuId;
     /** Stale after this long without a sample. Unset for signals sent on change: stale only when the ECU is lost. */
     timeoutMs?: number;
 }
@@ -24,6 +30,7 @@ const motor = { ecu: "zc_motor", timeoutMs: MOTOR_TIMEOUT_MS } as const;
 const temps = { ecu: "zc_battery", timeoutMs: TEMP_TIMEOUT_MS } as const;
 const battery = { ecu: "zc_battery" } as const;
 const lights = { ecu: "zc_lights" } as const;
+const gps = { timeoutMs: GPS_TIMEOUT_MS } as const;
 
 export const SIGNALS = {
     // --- battery (zc_battery, voltage/current sent on change) ---
@@ -96,6 +103,20 @@ export const SIGNALS = {
     "lights.tail": lights,
     /** Headunit-derived: hazard mode, held through the blink-off phase. */
     "lights.hazard": lights,
+
+    // --- GPS (kart-agent, u-blox receiver on the Pi) ---
+    // Position, altitude and HDOP only arrive with a fix, heading only above 3 km/h: they go stale when the
+    // kart loses the fix or stops. Use useSample where a held value makes sense (e.g. the heading on a map).
+    "gps.lat": gps,
+    "gps.lon": gps,
+    "gps.heading": gps,
+    /** km/h over ground. */
+    "gps.speed": gps,
+    "gps.altitude": gps,
+    /** 0 = none, 2 = 2D, 3 = 3D, 4 = 3D + SBAS/DGPS. */
+    "gps.fix": gps,
+    "gps.satellites": gps,
+    "gps.hdop": gps,
 } satisfies Record<string, SignalMeta>;
 
 export type SignalName = keyof typeof SIGNALS;
