@@ -11,10 +11,6 @@ log.initialize();
 log.transports.console.level = "info";
 log.transports.file.level = "info";
 
-if (require("electron-squirrel-startup")) {
-    app.quit();
-}
-
 function createWindow() {
     const preload = path.join(__dirname, "preload.js");
     const isFullscreen = getFullscreenOnStartup();
