@@ -1,6 +1,6 @@
 import type { ConfigEnv, UserConfig } from "vite";
 import { defineConfig, mergeConfig } from "vite";
-import { getBuildConfig, getBuildDefine, external, pluginHotRestart } from "./vite.base.config";
+import { getBuildConfig, getBuildDefine, builtins, pluginHotRestart } from "./vite.base.config";
 import path from 'path'
 
 
@@ -17,7 +17,8 @@ export default defineConfig((env) => {
                 formats: ["cjs"],
             },
             rollupOptions: {
-                external,
+                // Bundle all pure-JS deps; only the native addon has to load from node_modules.
+                external: [...builtins, "@asl-gokart/sero-node"],
             },
         },
         plugins: [pluginHotRestart("restart")],
