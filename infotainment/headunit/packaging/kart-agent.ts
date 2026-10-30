@@ -6,7 +6,7 @@ import path from "node:path";
  * systemd service, see analytics/docs/adr/0001-kart-agent-integration.md.
  */
 
-/** Rust target per Electron arch. armv7l (ODROID) has no agent build. */
+/** Rust target per Electron arch. */
 const TARGETS: Record<string, { triple: string; elfMachine: number }> = {
     x64: { triple: "x86_64-unknown-linux-gnu", elfMachine: 0x3e },
     arm64: { triple: "aarch64-unknown-linux-gnu", elfMachine: 0xb7 },

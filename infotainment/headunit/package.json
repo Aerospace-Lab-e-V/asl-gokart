@@ -10,7 +10,6 @@
         "package": "electron-forge package",
         "make": "electron-forge make",
         "make:pi4": "DEBUG=electron-packager electron-forge make --arch=arm64",
-        "make:odroid": "electron-forge make --arch=armv7l",
         "publish": "electron-forge publish",
         "lint": "oxlint",
         "prett": "prettier . --write",
@@ -44,7 +43,7 @@
         "@types/react-dom": "^19.2.3",
         "@types/three": "^0.183.1",
         "autoprefixer": "^10.4.27",
-        "electron": "31.7.7",
+        "electron": "45.1.0",
         "electron-playwright-helpers": "^2.1.0",
         "jest": "^30.2.0",
         "jest-environment-jsdom": "^30.2.0",
@@ -100,6 +99,6 @@
         "zustand": "^5.0.11"
     },
     "overrides": {
-        "node-abi": "^3.87.0"
+        "node-abi": "^4.40.0"
     }
 }
