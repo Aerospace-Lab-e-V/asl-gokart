@@ -1,12 +1,14 @@
 import { act, render, screen } from "@testing-library/react";
 import React from "react";
 import DrivePage from "@/pages/drive";
+import type { DriveStyleId } from "@/pages/drive/styles";
 import { gearFor, tempTone } from "@/components/drive/lamps";
 import { Gears } from "@/data/controlling_models/drivetrain";
 import { EcuPresence, EcuStatusMap } from "@/data/ecu/ecu-types";
 import type { SignalName } from "@/domain/signals";
 import { useSignals } from "@/stores/signals";
 import { BULB_CHECK_MS, resetBulbCheck } from "@/hooks/use-bulb-check";
+import { useSession } from "@/stores/session";
 
 jest.mock("@/components/shared/header-bar", () => ({ HeaderBar: () => null }));
 
@@ -57,65 +59,72 @@ test("gear is N until the contactors close, then D, or R once the controllers re
     expect(gearFor(1, 1)).toBe(Gears.r);
 });
 
-test("a controller that is not connected lights its lamp red", async () => {
-    await renderPage({ zc_battery: offline, zc_lights: offline });
+/* Every style shows all warning lamps, light buttons and the gear strip. */
+const STYLES: DriveStyleId[] = ["classic", "minimal"];
 
-    expect(screen.getByRole("img", { name: "Battery controller not connected" })).toHaveClass("text-red-600", "animate-lamp-blink");
-    expect(screen.queryByRole("img", { name: "Motor controller not connected" })).toBeNull();
-    expect(screen.getByRole("button", { name: "hazard lights" }).querySelector("svg")).toHaveClass("text-red-600", "animate-lamp-blink");
-    expect(screen.getByRole("button", { name: "tail lights" }).querySelector("svg")).not.toHaveClass("text-red-600");
-});
+describe.each(STYLES)("%s style", (driveStyle) => {
+    beforeEach(() => useSession.setState({ driveStyle }));
 
-test("warning lamps stay hidden while off; light buttons stay visible", async () => {
-    await renderPage({});
+    test("a controller that is not connected lights its lamp red", async () => {
+        await renderPage({ zc_battery: offline, zc_lights: offline });
 
-    for (const name of WARNING_LAMPS) expect(lamp(name)).toHaveClass("invisible");
-    expect(lamp("inverter-fault")).toBeNull();
-    for (const name of ["daytime running lights", "high beams", "tail lights", "hazard lights", "left turn signal", "right turn signal"]) {
-        expect(screen.getByRole("button", { name }).querySelector("svg")).toHaveClass("text-muted-foreground/60");
-    }
-});
+        expect(screen.getByRole("img", { name: "Battery controller not connected" })).toHaveClass("text-red-600", "animate-lamp-blink");
+        expect(screen.queryByRole("img", { name: "Motor controller not connected" })).toBeNull();
+        expect(screen.getByRole("button", { name: "hazard lights" }).querySelector("svg")).toHaveClass("text-red-600", "animate-lamp-blink");
+        expect(screen.getByRole("button", { name: "tail lights" }).querySelector("svg")).not.toHaveClass("text-red-600");
+    });
 
-test("hot battery and motor light their temperature lamps", async () => {
-    await renderPage({}, { "battery.temp": 46, "temp.motor_left": 42, "temp.motor_right": 30 });
+    test("warning lamps stay hidden while off; light buttons stay visible", async () => {
+        await renderPage({});
 
-    expect(screen.getByRole("img", { name: "Battery temperature high" })).toHaveClass("text-red-600");
-    expect(screen.getByRole("img", { name: "Battery temperature high" })).toHaveClass("animate-lamp-blink");
-    expect(screen.getByRole("img", { name: "Motor temperature high" })).toHaveClass("text-yellow-500");
-    expect(screen.getByRole("img", { name: "Motor temperature high" })).not.toHaveClass("animate-lamp-blink");
-    expect(screen.queryByRole("img", { name: "Power limited" })).toBeNull();
-});
+        for (const name of WARNING_LAMPS) expect(lamp(name)).toHaveClass("invisible");
+        expect(lamp("inverter-fault")).toBeNull();
+        for (const name of ["daytime running lights", "high beams", "tail lights", "hazard lights", "left turn signal", "right turn signal"]) {
+            expect(screen.getByRole("button", { name }).querySelector("svg")).toHaveClass("text-muted-foreground/60");
+        }
+    });
 
-test("closed contactors show D", async () => {
-    await renderPage({}, { "drive.relay_1": 1, "drive.reverse": 0 });
+    test("hot battery and motor light their temperature lamps", async () => {
+        await renderPage({}, { "battery.temp": 46, "temp.motor_left": 42, "temp.motor_right": 30 });
 
-    expect(screen.getByText("D")).toHaveClass("font-semibold");
-    expect(screen.getByText("N")).not.toHaveClass("font-semibold");
-});
+        expect(screen.getByRole("img", { name: "Battery temperature high" })).toHaveClass("text-red-600");
+        expect(screen.getByRole("img", { name: "Battery temperature high" })).toHaveClass("animate-lamp-blink");
+        expect(screen.getByRole("img", { name: "Motor temperature high" })).toHaveClass("text-yellow-500");
+        expect(screen.getByRole("img", { name: "Motor temperature high" })).not.toHaveClass("animate-lamp-blink");
+        expect(screen.queryByRole("img", { name: "Power limited" })).toBeNull();
+    });
 
-test("relay 2 alone does not show R; the controllers' reverse report does", async () => {
-    const { unmount } = await renderPage({}, { "drive.relay_1": 1, "drive.relay_2": 1, "drive.reverse": 0 });
-    expect(screen.getByText("R")).not.toHaveClass("font-semibold");
-    unmount();
+    test("closed contactors show D", async () => {
+        await renderPage({}, { "drive.relay_1": 1, "drive.reverse": 0 });
 
-    await renderPage({}, { "drive.relay_1": 1, "drive.relay_2": 1, "drive.reverse": 1 });
-    expect(screen.getByText("R")).toHaveClass("font-semibold");
-});
+        expect(screen.getByText("D")).toHaveClass("font-semibold");
+        expect(screen.getByText("N")).not.toHaveClass("font-semibold");
+    });
 
-test("the bulb check lights every warning lamp for 5 s, once per app start", async () => {
-    const { unmount } = await renderPage({ zc_battery: offline }, {}, { bulbCheck: true });
+    test("relay 2 alone does not show R; the controllers' reverse report does", async () => {
+        const { unmount } = await renderPage({}, { "drive.relay_1": 1, "drive.relay_2": 1, "drive.reverse": 0 });
+        expect(screen.getByText("R")).not.toHaveClass("font-semibold");
+        unmount();
 
-    for (const name of WARNING_LAMPS) expect(lamp(name)).not.toHaveClass("invisible");
-    expect(lamp("power-limited")).toHaveClass("text-orange-500");
-    expect(lamp("motor-fault")).toHaveClass("text-red-600");
-    // A fault already present blinks once the check is over, not underneath it.
-    expect(lamp("hv-battery-fault")).not.toHaveClass("animate-lamp-blink");
+        await renderPage({}, { "drive.relay_1": 1, "drive.relay_2": 1, "drive.reverse": 1 });
+        expect(screen.getByText("R")).toHaveClass("font-semibold");
+    });
 
-    finishBulbCheck();
-    expect(lamp("motor-fault")).toHaveClass("invisible");
-    expect(lamp("hv-battery-fault")).toHaveClass("text-red-600", "animate-lamp-blink");
+    test("the bulb check lights every warning lamp for 5 s, once per app start", async () => {
+        const { unmount } = await renderPage({ zc_battery: offline }, {}, { bulbCheck: true });
 
-    unmount();
-    await renderPage({}, {}, { bulbCheck: true });
-    expect(lamp("motor-fault")).toHaveClass("invisible");
+        for (const name of WARNING_LAMPS) expect(lamp(name)).not.toHaveClass("invisible");
+        expect(lamp("power-limited")).toHaveClass("text-orange-500");
+        expect(lamp("motor-fault")).toHaveClass("text-red-600");
+        // A fault already present blinks once the check is over, not underneath it.
+        expect(lamp("hv-battery-fault")).not.toHaveClass("animate-lamp-blink");
+
+        finishBulbCheck();
+        expect(lamp("motor-fault")).toHaveClass("invisible");
+        expect(lamp("hv-battery-fault")).toHaveClass("text-red-600", "animate-lamp-blink");
+
+        unmount();
+        await renderPage({}, {}, { bulbCheck: true });
+        expect(lamp("motor-fault")).toHaveClass("invisible");
+    });
 });
