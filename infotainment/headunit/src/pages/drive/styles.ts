@@ -3,7 +3,7 @@ import ClassicDrive from "./classic";
 import MinimalDrive from "./minimal";
 
 /*
- * The looks the Drive page can take.
+ * The looks the Drive page can take; the driver picks one by tapping the Drive navbar item again.
  * To add a style: add its id here, a page under pages/drive/ and an entry below. Parts several styles
  * show (lamps, light row, gear row, ...) live in components/drive/. The BulbCheck context is provided
  * by the Drive page, so a style only renders its layout.
@@ -18,6 +18,7 @@ interface DriveStyle {
     Page: React.ComponentType;
 }
 
+/** In picker order. */
 export const DRIVE_STYLES: Record<DriveStyleId, DriveStyle> = {
     classic: { label: "Classic", description: "Speed with throttle and RPM gauges, temperatures below", Page: ClassicDrive },
     minimal: { label: "Minimal", description: "Large speed, gear and battery only", Page: MinimalDrive },

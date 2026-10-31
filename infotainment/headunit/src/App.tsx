@@ -21,7 +21,7 @@ import AdminUnlockPage from "./pages/settings/admin-unlock";
 import DrivetrainPage from "./pages/settings/drivetrain";
 import SystemPage from "./pages/settings/system";
 import AppUpdatePage from "./pages/settings/app-update";
-import { useSession } from "@/stores/session";
+import { setDriveStylePickerOpen, useSession } from "@/stores/session";
 import { Toaster } from "@/components/ui/sonner"
 import MotorPage from "./pages/motor";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
@@ -49,6 +49,8 @@ function MainAppContent() {
             Icon: Gauge,
             label: "Drive",
             linkTo: "/",
+            // Tapping Drive again picks the drive style.
+            onReselect: () => setDriveStylePickerOpen(true),
         },
         {
             Icon: LifeBuoy,

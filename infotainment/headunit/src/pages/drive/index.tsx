@@ -1,5 +1,6 @@
 import React from "react";
 import { BulbCheck } from "@/components/drive/warning-lamps";
+import { DriveStylePicker } from "@/components/drive/drive-style-picker";
 import { useBulbCheck } from "@/hooks/use-bulb-check";
 import { useSession } from "@/stores/session";
 import { DRIVE_STYLES } from "./styles";
@@ -11,6 +12,7 @@ const DrivePage = () => {
     return (
         <BulbCheck.Provider value={checking}>
             <Page />
+            <DriveStylePicker />
         </BulbCheck.Provider>
     );
 };
