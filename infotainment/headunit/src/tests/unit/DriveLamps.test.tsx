@@ -1,6 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import React from "react";
-import DriveNormalPage from "@/pages/drive/classic";
+import DrivePage from "@/pages/drive";
 import { gearFor, tempTone } from "@/components/drive/lamps";
 import { Gears } from "@/data/controlling_models/drivetrain";
 import { EcuPresence, EcuStatusMap } from "@/data/ecu/ecu-types";
@@ -31,7 +31,7 @@ const renderPage = async (patch: Partial<EcuStatusMap>, signals: Partial<Record<
         Object.fromEntries(Object.entries(signals).map(([name, value]) => [name, { value, ts: 0, stale: false }])),
         true
     );
-    const view = render(<DriveNormalPage />);
+    const view = render(<DrivePage />);
     await act(async () => {});
     if (!bulbCheck) finishBulbCheck();
     return view;

@@ -8,7 +8,7 @@ import { Routes, Route, HashRouter, Navigate } from "react-router-dom";
 import { Battery, Car, Gauge, LifeBuoy, Settings } from "lucide-react";
 import { NavBarItemData } from "./data/models";
 import NavBar from "./components/navbar/navbar";
-import DriveNormalPage from "./pages/drive/classic";
+import DrivePage from "./pages/drive";
 import SettingsPage from "./pages/settings";
 import CarPage from "./pages/car";
 import BatteryPage from "./pages/battery";
@@ -78,7 +78,7 @@ function MainAppContent() {
                 <div className="flex-1">
                     <>
                         <Routes>
-                            <Route path="/" element={<ErrorBoundary><DriveNormalPage /></ErrorBoundary>} />
+                            <Route path="/" element={<ErrorBoundary><DrivePage /></ErrorBoundary>} />
                             <Route path="/motor" element={<ErrorBoundary><MotorPage /></ErrorBoundary>} />
                             <Route path="/car" element={<ErrorBoundary><CarPage /></ErrorBoundary>} />
                             <Route path="/settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />

@@ -7,8 +7,7 @@ import { BatteryBar } from "@/components/drive/battery-bar";
 import { GearRow } from "@/components/drive/gear-row";
 import { LightRow } from "@/components/drive/light-row";
 import { Speed } from "@/components/drive/speed";
-import { BatteryTempLamp, BulbCheck, MotorTempLamp, PowerLimitedLamp } from "@/components/drive/warning-lamps";
-import { useBulbCheck } from "@/hooks/use-bulb-check";
+import { BatteryTempLamp, MotorTempLamp, PowerLimitedLamp } from "@/components/drive/warning-lamps";
 import { useSignal } from "@/stores/signals";
 import { useIsDark } from "@/hooks/use-is-dark";
 import { useSmoothed } from "@/hooks/use-smoothed";
@@ -141,10 +140,4 @@ const ClassicDrive = () => (
   </div>
 );
 
-const DriveNormalPage = () => (
-  <BulbCheck.Provider value={useBulbCheck()}>
-    <ClassicDrive />
-  </BulbCheck.Provider>
-);
-
-export default DriveNormalPage;
+export default ClassicDrive;
