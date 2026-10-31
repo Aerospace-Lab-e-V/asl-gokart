@@ -8,7 +8,7 @@ import { Routes, Route, HashRouter, Navigate } from "react-router-dom";
 import { Battery, Car, Gauge, LifeBuoy, Settings } from "lucide-react";
 import { NavBarItemData } from "./data/models";
 import NavBar from "./components/navbar/navbar";
-import DriveNormalPage from "./pages/drive-normal";
+import DrivePage from "./pages/drive";
 import SettingsPage from "./pages/settings";
 import CarPage from "./pages/car";
 import BatteryPage from "./pages/battery";
@@ -21,7 +21,7 @@ import AdminUnlockPage from "./pages/settings/admin-unlock";
 import DrivetrainPage from "./pages/settings/drivetrain";
 import SystemPage from "./pages/settings/system";
 import AppUpdatePage from "./pages/settings/app-update";
-import { useSession } from "@/stores/session";
+import { setDriveStylePickerOpen, useSession } from "@/stores/session";
 import { Toaster } from "@/components/ui/sonner"
 import MotorPage from "./pages/motor";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
@@ -49,6 +49,8 @@ function MainAppContent() {
             Icon: Gauge,
             label: "Drive",
             linkTo: "/",
+            // Tapping Drive again picks the drive style.
+            onReselect: () => setDriveStylePickerOpen(true),
         },
         {
             Icon: LifeBuoy,
@@ -78,7 +80,7 @@ function MainAppContent() {
                 <div className="flex-1">
                     <>
                         <Routes>
-                            <Route path="/" element={<ErrorBoundary><DriveNormalPage /></ErrorBoundary>} />
+                            <Route path="/" element={<ErrorBoundary><DrivePage /></ErrorBoundary>} />
                             <Route path="/motor" element={<ErrorBoundary><MotorPage /></ErrorBoundary>} />
                             <Route path="/car" element={<ErrorBoundary><CarPage /></ErrorBoundary>} />
                             <Route path="/settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />

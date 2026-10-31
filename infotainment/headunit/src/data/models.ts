@@ -6,6 +6,8 @@ export interface NavBarItemData {
   linkTo: string;
   /** Other routes that keep this item highlighted, e.g. pages reached from it. */
   alsoActiveOn?: string[];
+  /** Called instead of navigating when the item is tapped while already active. */
+  onReselect?: () => void;
 }
 
 export interface ValueCardProps {
