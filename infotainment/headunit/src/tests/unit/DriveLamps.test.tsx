@@ -1,6 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import React from "react";
-import DriveNormalPage from "@/pages/drive-normal";
+import DriveNormalPage from "@/pages/drive/classic";
 import { gearFor, tempTone } from "@/components/drive/lamps";
 import { Gears } from "@/data/controlling_models/drivetrain";
 import { EcuPresence, EcuStatusMap } from "@/data/ecu/ecu-types";

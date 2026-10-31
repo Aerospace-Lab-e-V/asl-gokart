@@ -8,7 +8,7 @@ import { Routes, Route, HashRouter, Navigate } from "react-router-dom";
 import { Battery, Car, Gauge, LifeBuoy, Settings } from "lucide-react";
 import { NavBarItemData } from "./data/models";
 import NavBar from "./components/navbar/navbar";
-import DriveNormalPage from "./pages/drive-normal";
+import DriveNormalPage from "./pages/drive/classic";
 import SettingsPage from "./pages/settings";
 import CarPage from "./pages/car";
 import BatteryPage from "./pages/battery";
