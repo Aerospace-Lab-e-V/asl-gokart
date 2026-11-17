@@ -1,148 +1,119 @@
-import { HeaderBar } from "@/components/shared/header-bar";
-import React, { useState } from "react";
-import { ColorPicker } from "@/components/color-picker";
-import { CirclePicker, ColorResult } from "react-color";
+import React from "react";
+import { CarFront, Lightbulb, Presentation, RectangleHorizontal, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-import { PRESET_COLORS } from "@/data/lighting/color-definitions";
-import { Button } from "@/components/ui/button";
-import { hexToRgb } from "@/lib/utils";
+import { HeaderBar } from "@/components/shared/header-bar";
+import { KartVisual } from "@/components/lights/kart-visual";
+import { readLightState, useSyncedWelcome } from "@/components/lights/light-state";
+import { PlayWelcomeButton } from "@/components/lights/play-welcome-button";
+import { SettingsLinkRow, SettingsRow, SettingsSection, SettingsSliderRow, SettingsSwitchRow } from "@/components/settings/settings-list";
+import { findAnimation } from "@/domain/lights";
 import type { Command } from "@/domain/commands";
-import { send, useCommand } from "@/services/commands";
-import { useSent } from "@/stores/sent";
+import { useCommand } from "@/services/commands";
+import { useSession } from "@/stores/session";
+import { useSignal } from "@/stores/signals";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Slider } from "@/components/ui/slider";
+/*
+ * The kart's lights: a live picture of what they show right now (and of the welcome while it plays) on
+ * the left, the welcome settings on the right. Every value is zc_lights' own echo; nothing changes here
+ * until the ECU confirms it.
+ */
 
-const presetColors = PRESET_COLORS.map(color => color.hex);
+const toPercent = (v: number) => Math.round((v * 100) / 255);
+const fromPercent = (p: number) => Math.round((p * 255) / 100);
 
-const toHex = (rgb: [number, number, number]) => "#" + rgb.map((c) => c.toString(16).padStart(2, "0")).join("");
-
-const TESTS: [string, Command][] = [
-    ["Trigger Welcome", { type: "lights.welcome" }],
-    ["Toggle Left Turn", { type: "lights.toggle", light: "turn_left" }],
-    ["Toggle Right Turn", { type: "lights.toggle", light: "turn_right" }],
-    ["Toggle Hazards", { type: "lights.toggle", light: "hazard" }],
-    ["Toggle High Beams", { type: "lights.toggle", light: "high_beam" }],
-    ["Toggle Brake", { type: "lights.toggle", light: "brake" }],
-    ["Toggle Reverse", { type: "lights.toggle", light: "reverse" }],
-    ["Toggle DRL", { type: "lights.toggle", light: "drl" }],
-];
-
-const fire = async (label: string, command: Command) => {
-    const result = await send(command);
-    if (!result.ok) toast.error(`${label} failed: ${result.error}`);
-};
-
-/** Global LED brightness: zc_lights has one value for all strips and does not echo it. */
-const BrightnessCard = () => {
-    const sent = useSent((s) => s["lights.setBrightness"]?.value);
-    const sentPct = sent === undefined ? null : Math.round((sent * 100) / 255);
-    const [pct, setPct] = useState(sentPct ?? 100);
+function useSetting() {
     const { run, pending } = useCommand();
-
-    const commit = async (value: number) => {
-        const result = await run({ type: "lights.setBrightness", value: Math.round((value * 255) / 100) });
-        if (!result.ok) toast.error(`Failed to set brightness: ${result.error}`);
+    const set = async (command: Command, what: string) => {
+        const result = await run(command);
+        if (!result.ok) toast.error(`Could not change ${what}: ${result.error}`);
     };
+    return { set, pending };
+}
 
-    return (
-        <Card className="w-1/2">
-            <CardHeader>
-                <CardTitle>Brightness</CardTitle>
-                <CardDescription>All light strips. Last sent: {sentPct === null ? "unknown" : `${sentPct}%`}</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <Slider
-                    value={[pct]}
-                    min={0}
-                    max={100}
-                    step={1}
-                    disabled={pending}
-                    onValueChange={(value) => setPct(value[0])}
-                    onValueCommit={(value) => commit(value[0])}
+const WelcomeSettings = () => {
+    const enabled = useSignal("lights.welcome_enabled");
+    const front = findAnimation("front", useSignal("lights.welcome_front"));
+    const rear = findAnimation("rear", useSignal("lights.welcome_rear"));
+    const ambient = useSignal("lights.ambient");
+    const catalog = useSignal("lights.front_anims");
+    const { set, pending } = useSetting();
+
+    if (catalog === 0) {
+        return (
+            <SettingsSection title="Welcome">
+                <SettingsRow
+                    icon={Sparkles}
+                    title="Welcome light"
+                    description="The zc_lights firmware is too old. Update it in Settings → ECU Manager."
                 />
-            </CardContent>
-        </Card>
-    );
-};
-
-const WelcomeLightCard = () => {
-    const sent = useSent((s) => s["lights.setWelcomeColor"]?.rgb);
-    const sentHex = sent ? toHex(sent) : null;
-    // Picker position only; what the ECU has is the last sent value.
-    const [color, setColor] = useState(sentHex ?? "#ffffff");
-    const { run } = useCommand();
-
-    const commit = async (c: ColorResult) => {
-        const result = await run({ type: "lights.setWelcomeColor", rgb: hexToRgb(c.hex) });
-        if (!result.ok) toast.error(`Failed to set welcome light color: ${result.error}`);
-    };
+            </SettingsSection>
+        );
+    }
 
     return (
-        <Card className="w-1/2">
-            <CardHeader>
-                <CardTitle>Welcome Light</CardTitle>
-                <CardDescription>Front eyebrows glow color on startup. Last sent: {sentHex ?? "unknown"}</CardDescription>
-            </CardHeader>
-            <CardContent>
-                {/* TODO(firmware): zc_lights has no method to enable/disable the welcome light. */}
-                <div className="flex flex-col gap-4">
-                    <ColorPicker
-                        color={color}
-                        onChange={(c: any) => setColor(c.hex)}
-                        onChangeComplete={commit}
-                    />
-                    <CirclePicker
-                        color={color}
-                        onChange={(c) => setColor(c.hex)}
-                        onChangeComplete={commit}
-                        circleSize={28}
-                        circleSpacing={14}
-                        colors={presetColors}
-                    />
-                </div>
-            </CardContent>
-        </Card>
+        <SettingsSection title="Welcome">
+            <SettingsSwitchRow
+                id="welcome-enabled"
+                icon={Sparkles}
+                title="Welcome light"
+                description="Plays when the kart is switched on"
+                checked={enabled === 1}
+                disabled={enabled === null || pending}
+                onCheckedChange={(on) => set({ type: "lights.setWelcome", enabled: on }, "the welcome light")}
+            />
+            <SettingsLinkRow to="/car/welcome/front" icon={CarFront} title="Front" value={front?.name ?? "--"} />
+            <SettingsLinkRow to="/car/welcome/rear" icon={RectangleHorizontal} title="Rear" value={rear?.name ?? "--"} />
+            {ambient === null ? (
+                <SettingsRow icon={Lightbulb} title="Brightness">
+                    <span className="text-muted-foreground text-lg">--</span>
+                </SettingsRow>
+            ) : (
+                <SettingsSliderRow
+                    icon={Lightbulb}
+                    title="Brightness"
+                    unit="%"
+                    value={toPercent(ambient)}
+                    min={5}
+                    max={100}
+                    step={5}
+                    onCommit={(p) => set({ type: "lights.setWelcome", ambient: fromPercent(p) }, "the brightness")}
+                />
+            )}
+        </SettingsSection>
     );
 };
 
 const CarPage = () => {
+    const plan = useSyncedWelcome();
+    const adminMode = useSession((s) => s.adminMode);
+
     return (
-        <div className="flex flex-col h-screen overflow-hidden bg-background">
+        <div className="flex h-full w-full flex-col">
             <HeaderBar />
-            <div className="flex-1 flex flex-col items-center justify-start p-8 overflow-hidden">
-                <div className="flex flex-col items-center justify-center gap-2 w-full max-w-5xl">
-                    <div className="flex flex-col md:flex-row w-full gap-8">
-
-                    {/* TODO(firmware): underglow not implemented in zc_lights; re-enable <UnderglowCard /> (components/drive/underglow-card.tsx) when it is */}
-                    <BrightnessCard />
-                    <WelcomeLightCard />
-                    </div>
-
-                    {/* Lights Tester Panel */}
-                    <Card className="w-full">
-                        <CardHeader>
-                            <CardTitle>Lights Tester</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="flex flex-wrap gap-4">
-                                {TESTS.map(([label, command]) => (
-                                    <Button key={label} onClick={() => fire(label, command)}>{label}</Button>
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
-
+            <div className="grid min-h-0 flex-1 grid-cols-[9fr_11fr] gap-8 px-8 pb-6">
+                <div className="flex min-h-0 flex-col gap-4 pt-4">
+                    <KartVisual state={readLightState} plan={plan} className="min-h-0 flex-1" />
+                    <PlayWelcomeButton />
+                </div>
+                <div className="min-h-0 overflow-y-auto">
+                    <WelcomeSettings />
+                    {adminMode && (
+                        <SettingsSection title="Showroom">
+                            <SettingsLinkRow
+                                to="/car/showroom"
+                                icon={Presentation}
+                                title="Showroom"
+                                description="Light test and welcome loop for exhibitions"
+                            />
+                        </SettingsSection>
+                    )}
+                    <p className="text-muted-foreground py-6 text-base">
+                        Brake, reverse, the indicators or driving off stop the welcome at once.
+                    </p>
                 </div>
             </div>
         </div>
     );
-}
+};
 
 export default CarPage;
