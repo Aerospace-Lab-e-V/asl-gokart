@@ -1,130 +1,92 @@
 #pragma once
 /// @file lights_service.hpp
-/// Sero service that dispatches incoming method calls to the light controllers.
-/// Coordinates turn signals across all three ARGB strips (rear + front L/R).
+/// Sero service: turns incoming method calls into LightsModel changes.
+/// Protocol: see the ID table in config.hpp and the blob in core/lights_config.hpp.
 
 #include <sero.hpp>
 #include <config.hpp>
-#include <rear_light_bar_controller.hpp>
-#include <front_drl_controller.hpp>
 #include <high_beam_controller.hpp>
+#include <hw/lights_model.hpp>
 #include "ota_handler.hpp"
 
-/// @tparam FrontLeftMethod   NeoPixelBus method type for the front-left DRL strip
-/// @tparam FrontRightMethod  NeoPixelBus method type for the front-right DRL strip
-template<typename FrontLeftMethod, typename FrontRightMethod>
-class LightsService
-    : public sero::IService<LightsService<FrontLeftMethod, FrontRightMethod>>
-{
+class LightsService : public sero::IService<LightsService> {
 public:
-    explicit LightsService(
-            RearLightBarController&                    rear,
-            FrontDrlController<FrontLeftMethod>&        front_left,
-            FrontDrlController<FrontRightMethod>&       front_right,
-            HighBeamController&                         high_beams)
-        : rear_(rear)
-        , front_left_(front_left)
-        , front_right_(front_right)
-        , high_beams_(high_beams)
-    {}
+    LightsService(LightsModel& model, HighBeamController& high_beams, EventOutbox& outbox)
+        : model_(model), high_beams_(high_beams), outbox_(outbox) {}
 
     bool impl_is_ready() const { return true; }
 
-    sero::ReturnCode impl_on_request(
-        uint16_t       method_id,
-        const uint8_t* payload, std::size_t payload_length,
-        uint8_t*       /*response*/, std::size_t& response_length)
-    {
+    sero::ReturnCode impl_on_request(uint16_t method_id, const uint8_t* payload, std::size_t len,
+                                     uint8_t* response, std::size_t& response_length) {
+        using C = Esp32ServiceConfig;
         response_length = 0;
 
         switch (method_id) {
+            // ── Turn signals ────────────────────────────────────────────
+            case C::ZC_LIGHTS_LEFT_ID:   model_.toggle_left();   return sero::ReturnCode::E_OK;
+            case C::ZC_LIGHTS_RIGHT_ID:  model_.toggle_right();  return sero::ReturnCode::E_OK;
+            case C::ZC_LIGHTS_HAZARD_ID: model_.toggle_hazard(); return sero::ReturnCode::E_OK;
 
-            // ── Turn signals (coordinated across rear + both front strips) ──
-
-            case Esp32ServiceConfig::ZC_LIGHTS_LEFT_ID:
-                rear_.toggle_left();
+            // ── Lights: [] toggles, [on] sets ───────────────────────────
+            case C::ZC_LIGHTS_HIGH_BEAMS_ID:
+                if (len > 0) high_beams_.set(payload[0] != 0, payload[0] != 0);
+                else high_beams_.toggle();
+                return sero::ReturnCode::E_OK;
+            case C::ZC_LIGHTS_BRAKE_ID:
+                model_.set_brake(len > 0 ? payload[0] != 0 : !model_.brake());
+                return sero::ReturnCode::E_OK;
+            case C::ZC_LIGHTS_REVERSE_ID:
+                model_.set_reverse(len > 0 ? payload[0] != 0 : !model_.reverse());
+                return sero::ReturnCode::E_OK;
+            case C::ZC_LIGHTS_DRL_ID:
+                model_.set_drl(len > 0 ? payload[0] != 0 : !model_.drl());
+                return sero::ReturnCode::E_OK;
+            case C::ZC_LIGHTS_TAIL_ID:
+                model_.set_tail(len > 0 ? payload[0] != 0 : !model_.tail());
                 return sero::ReturnCode::E_OK;
 
-            case Esp32ServiceConfig::ZC_LIGHTS_RIGHT_ID:
-                rear_.toggle_right();
-                return sero::ReturnCode::E_OK;
-
-            case Esp32ServiceConfig::ZC_LIGHTS_HAZARD_ID:
-                rear_.toggle_hazard();
-                return sero::ReturnCode::E_OK;
-
-            // ── High beam relay ─────────────────────────────────────────────
-
-            case Esp32ServiceConfig::ZC_LIGHTS_HIGH_BEAMS_ID:
-                if (payload_length > 0) {
-                    bool on = payload[0] != 0;
-                    high_beams_.set(on, on);
-                } else {
-                    high_beams_.toggle();
-                }
-                return sero::ReturnCode::E_OK;
-
-            // ── Rear light bar ──────────────────────────────────────────────
-
-            case Esp32ServiceConfig::ZC_LIGHTS_BRAKE_ID:
-                rear_.set_brake(!rear_.is_brake_on());
-                return sero::ReturnCode::E_OK;
-
-            case Esp32ServiceConfig::ZC_LIGHTS_REVERSE_ID:
-                rear_.set_reverse(!rear_.is_reverse_on());
-                return sero::ReturnCode::E_OK;
-
-            case Esp32ServiceConfig::ZC_LIGHTS_TAIL_ID:
-                rear_.set_tail(!rear_.is_tail_on());
-                return sero::ReturnCode::E_OK;
-
-            // ── Front DRLs ──────────────────────────────────────────────────
-
-            case Esp32ServiceConfig::ZC_LIGHTS_DRL_ID: {
-                bool new_state = !front_left_.is_drl_on();
-                front_left_.set_drl(new_state);
-                front_right_.set_drl(new_state);
-                return sero::ReturnCode::E_OK;
+            // ── Welcome ─────────────────────────────────────────────────
+            case C::ZC_LIGHTS_WELCOME_ID: {
+                const auto r = model_.play_welcome(millis(), /*at_boot=*/false);
+                if (r == LightsModel::PlayResult::Started) return sero::ReturnCode::E_OK;
+                Serial.printf("[lights] welcome refused (%s)\n",
+                              r == LightsModel::PlayResult::RefusedMoving ? "moving" : "safety light on");
+                return sero::ReturnCode::E_NOT_READY;
             }
 
-            // ── Welcome animation ───────────────────────────────────────────
-
-            case Esp32ServiceConfig::ZC_LIGHTS_WELCOME_ID:
-                rear_.trigger_welcome(welcome_color_);
-                front_left_.trigger_welcome(welcome_color_);
-                front_right_.trigger_welcome(welcome_color_);
+            case C::ZC_LIGHTS_SET_WELCOME_CONFIG_ID:
+                if (len < 5) return sero::ReturnCode::E_MALFORMED_MESSAGE;
+                if (!model_.apply_welcome_config(payload[0], payload[1] != 0, payload[2], payload[3], payload[4]))
+                    return sero::ReturnCode::E_NOT_OK;
+                response_length = encode_config(model_.config(), response, Esp32Config::MaxPayloadSize, true);
                 return sero::ReturnCode::E_OK;
 
-            // ── Set brightness ──────────────────────────────────────────────
-            // payload[0] = target: 0=rear, 1=front_left, 2=front_right, 0xFF=all
-            // payload[1] = brightness value (0–255)
+            case C::ZC_LIGHTS_SET_ANIM_COLOR_ID:
+                if (len < 5 || payload[0] > 1) return sero::ReturnCode::E_MALFORMED_MESSAGE;
+                if (!model_.set_anim_color(static_cast<AnimLayer>(payload[0]), payload[1],
+                                           Rgb8{payload[2], payload[3], payload[4]}))
+                    return sero::ReturnCode::E_NOT_OK;
+                response_length = encode_config(model_.config(), response, Esp32Config::MaxPayloadSize, true);
+                return sero::ReturnCode::E_OK;
 
-            case Esp32ServiceConfig::ZC_LIGHTS_SET_BRIGHTNESS_ID:
-                return handle_set_brightness(payload, payload_length);
+            case C::ZC_LIGHTS_GET_CONFIG_ID:
+                // A (re)started client has no state yet: send every event once more.
+                outbox_.mark(EV_ALL);
+                response_length = encode_config(model_.config(), response, Esp32Config::MaxPayloadSize, true);
+                return sero::ReturnCode::E_OK;
 
-            // ── Set welcome color ───────────────────────────────────────────
-            // payload = [R, G, B]
-
-            case Esp32ServiceConfig::ZC_LIGHTS_SET_WELCOME_COLOR_ID:
-                return handle_set_welcome_color(payload, payload_length);
-
-            // ── OTA Trigger ──────────────────────────────────────────────────
-
-            case Esp32ServiceConfig::ZC_LIGHTS_OTA_METHOD_ID: {
-                if (payload_length == 0 || payload_length >= 512) {
+            // ── OTA trigger ─────────────────────────────────────────────
+            case C::ZC_LIGHTS_OTA_METHOD_ID: {
+                if (len == 0 || len >= 512) {
                     Serial.println("[ota] Invalid URL length");
                     return sero::ReturnCode::E_NOT_OK;
                 }
                 char url[512];
-                memcpy(url, payload, payload_length);
-                url[payload_length] = '\0';
+                memcpy(url, payload, len);
+                url[len] = '\0';
                 Serial.printf("[ota] Received URL: %s\n", url);
-                // Acknowledge immediately — OTA task runs in background,
-                // device will reboot automatically on success.
-                if (!start_ota(url)) {
-                    return sero::ReturnCode::E_NOT_OK;
-                }
-                return sero::ReturnCode::E_OK;
+                // Acknowledge immediately — the OTA task reboots the device on success.
+                return start_ota(url) ? sero::ReturnCode::E_OK : sero::ReturnCode::E_NOT_OK;
             }
 
             default:
@@ -133,48 +95,7 @@ public:
     }
 
 private:
-    RearLightBarController&                    rear_;
-    FrontDrlController<FrontLeftMethod>&        front_left_;
-    FrontDrlController<FrontRightMethod>&       front_right_;
-    HighBeamController&                         high_beams_;
-
-    RgbColor welcome_color_ = FrontDrlConfig::COLOR_WELCOME;
-
-    // ── Brightness handler ──────────────────────────────────────────────
-
-    sero::ReturnCode handle_set_brightness(const uint8_t* payload, std::size_t len) {
-        if (!payload || len < 2) return sero::ReturnCode::E_NOT_OK;
-
-        uint8_t target     = payload[0];
-        uint8_t brightness = payload[1];
-
-        switch (target) {
-            case 0:    rear_.set_brightness(brightness);        break;
-            case 1:    front_left_.set_brightness(brightness);  break;
-            case 2:    front_right_.set_brightness(brightness); break;
-            case 0xFF: // all
-                rear_.set_brightness(brightness);
-                front_left_.set_brightness(brightness);
-                front_right_.set_brightness(brightness);
-                break;
-            default:
-                return sero::ReturnCode::E_NOT_OK;
-        }
-        Serial.printf("[lights] brightness target=%u val=%u\n", target, brightness);
-        return sero::ReturnCode::E_OK;
-    }
-
-    // ── Welcome color handler ───────────────────────────────────────────
-
-    sero::ReturnCode handle_set_welcome_color(const uint8_t* payload, std::size_t len) {
-        if (!payload || len < 3) return sero::ReturnCode::E_NOT_OK;
-
-        welcome_color_ = RgbColor(payload[0], payload[1], payload[2]);
-        front_left_.set_welcome_color(welcome_color_);
-        front_right_.set_welcome_color(welcome_color_);
-        rear_.set_welcome_color(welcome_color_);
-        Serial.printf("[lights] welcome color R=%u G=%u B=%u\n",
-                      payload[0], payload[1], payload[2]);
-        return sero::ReturnCode::E_OK;
-    }
+    LightsModel&        model_;
+    HighBeamController& high_beams_;
+    EventOutbox&        outbox_;
 };

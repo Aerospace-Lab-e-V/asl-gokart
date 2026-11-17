@@ -6,15 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <sero/core/log.hpp>
-#include <NeoPixelBus.h>
-
-/// Unified enum for turn signal / hazard states.
-enum class BlinkerState : uint8_t {
-    OFF = 0,
-    LEFT = 1,
-    RIGHT = 2,
-    HAZARD = 3
-};
+#include <Arduino.h>
 
 struct Esp32Config {
     static constexpr std::size_t MaxPayloadSize         = 512;
@@ -46,30 +38,45 @@ struct Esp32ServiceConfig {
     // ── Service ID ──────────────────────────────────────────────
     static constexpr uint16_t ZC_LIGHTS_ID           = 0x0001;
 
-    // ── Method IDs (bit 15 = 0, range 0x0000–0x7FFF) ───────────
-    static constexpr uint16_t ZC_LIGHTS_LEFT_ID              = 0x0002;  // Toggle left turn signal
-    static constexpr uint16_t ZC_LIGHTS_RIGHT_ID             = 0x0003;  // Toggle right turn signal
-    static constexpr uint16_t ZC_LIGHTS_HAZARD_ID            = 0x0004;  // Toggle hazard lights
-    static constexpr uint16_t ZC_LIGHTS_HIGH_BEAMS_ID        = 0x0006;  // Toggle high beams (relay)
-    static constexpr uint16_t ZC_LIGHTS_BRAKE_ID             = 0x0007;  // Toggle brake light
-    static constexpr uint16_t ZC_LIGHTS_REVERSE_ID           = 0x0008;  // Toggle reverse light
-    static constexpr uint16_t ZC_LIGHTS_DRL_ID               = 0x0009;  // Toggle front DRLs on/off
-    static constexpr uint16_t ZC_LIGHTS_WELCOME_ID           = 0x000A;  // Trigger welcome light animation
-    static constexpr uint16_t ZC_LIGHTS_SET_BRIGHTNESS_ID    = 0x000B;  // Set brightness [target, value]
-    static constexpr uint16_t ZC_LIGHTS_SET_WELCOME_COLOR_ID = 0x000C;  // Set welcome color [R, G, B]
-    static constexpr uint16_t ZC_LIGHTS_TAIL_ID              = 0x000D;  // Toggle rear tail light
+    // ── Protocol of the lights service ─────────────────────────
+    // Mirrored by hand in infotainment/headunit/src/main/adapters/sero.ts and
+    // analytics/crates/ecu-sero/src/lib.rs — change all three together.
+    //
+    // Methods (bit 15 = 0). Light methods toggle with an empty payload and set the
+    // state with [on]; zc_buttons relies on the toggle form.
+    static constexpr uint16_t ZC_LIGHTS_LEFT_ID              = 0x0002;  // toggle left turn signal
+    static constexpr uint16_t ZC_LIGHTS_RIGHT_ID             = 0x0003;  // toggle right turn signal
+    static constexpr uint16_t ZC_LIGHTS_HAZARD_ID            = 0x0004;  // toggle hazard lights
+    static constexpr uint16_t ZC_LIGHTS_HIGH_BEAMS_ID        = 0x0006;  // [] toggle | [on]
+    static constexpr uint16_t ZC_LIGHTS_BRAKE_ID             = 0x0007;  // [] toggle | [on]
+    static constexpr uint16_t ZC_LIGHTS_REVERSE_ID           = 0x0008;  // [] toggle | [on]
+    static constexpr uint16_t ZC_LIGHTS_DRL_ID               = 0x0009;  // [] toggle | [on]
+    static constexpr uint16_t ZC_LIGHTS_WELCOME_ID           = 0x000A;  // play the welcome now; E_NOT_READY when
+                                                                        // brake/reverse/turn is on or the kart moves
+    // 0x000B (SET_BRIGHTNESS) and 0x000C (SET_WELCOME_COLOR) are retired — never reuse.
+    static constexpr uint16_t ZC_LIGHTS_TAIL_ID              = 0x000D;  // [] toggle | [on]
+    static constexpr uint16_t ZC_LIGHTS_SET_WELCOME_CONFIG_ID = 0x000E; // [mask, enabled, front_id, rear_id, ambient]
+                                                                        // mask: b0 enabled, b1 front, b2 rear, b3 ambient
+                                                                        // → response: config blob (core/lights_config.hpp)
+    static constexpr uint16_t ZC_LIGHTS_SET_ANIM_COLOR_ID    = 0x000F;  // [layer 0 front | 1 rear, anim_id, r, g, b]
+                                                                        // → response: config blob
+    static constexpr uint16_t ZC_LIGHTS_GET_CONFIG_ID        = 0x0010;  // [] → response: config blob; also re-sends
+                                                                        // every light event (subscriptions carry no
+                                                                        // initial value)
 
     // Reserved OTA trigger method (present on every ZC, bit 15 = 0).
     // Payload: UTF-8 URL string of the firmware binary served by the headunit.
     static constexpr uint16_t ZC_LIGHTS_OTA_METHOD_ID        = 0x00FF;
 
-    // ── Event IDs (bit 15 = 1, range 0x8000–0xFFFF) ────────────
-    static constexpr uint16_t ZC_LIGHTS_EVENT_TURN_STATE_ID    = 0x8001;  // Turn signal state [left, right]
-    static constexpr uint16_t ZC_LIGHTS_EVENT_HIGH_BEAM_STATE_ID = 0x8003;  // High beam state [left, right]
-    static constexpr uint16_t ZC_LIGHTS_EVENT_BRAKE_STATE_ID   = 0x8004;  // Brake state [on]
-    static constexpr uint16_t ZC_LIGHTS_EVENT_REVERSE_STATE_ID = 0x8005;  // Reverse state [on]
-    static constexpr uint16_t ZC_LIGHTS_EVENT_DRL_STATE_ID     = 0x8006;  // DRL state [on]
-    static constexpr uint16_t ZC_LIGHTS_EVENT_TAIL_STATE_ID    = 0x8007;  // Tail state [on]
+    // Events (bit 15 = 1), sent on change.
+    static constexpr uint16_t ZC_LIGHTS_EVENT_TURN_STATE_ID      = 0x8001;  // [left, right] physical blink state
+    static constexpr uint16_t ZC_LIGHTS_EVENT_HIGH_BEAM_STATE_ID = 0x8003;  // [left, right]
+    static constexpr uint16_t ZC_LIGHTS_EVENT_BRAKE_STATE_ID     = 0x8004;  // [on]
+    static constexpr uint16_t ZC_LIGHTS_EVENT_REVERSE_STATE_ID   = 0x8005;  // [on]
+    static constexpr uint16_t ZC_LIGHTS_EVENT_DRL_STATE_ID       = 0x8006;  // [on]
+    static constexpr uint16_t ZC_LIGHTS_EVENT_TAIL_STATE_ID      = 0x8007;  // [on]
+    static constexpr uint16_t ZC_LIGHTS_EVENT_CONFIG_ID          = 0x8008;  // config blob with catalog
+    static constexpr uint16_t ZC_LIGHTS_EVENT_WELCOME_STATE_ID   = 0x8009;  // [playing]
 
     // ── zc_motor service (consumer side — reverse lights follow the Kelly controllers) ──
     static constexpr uint16_t    ZC_MOTOR_ID                     = 0x0004;
@@ -77,7 +84,14 @@ struct Esp32ServiceConfig {
     static constexpr std::size_t ZC_MOTOR_EVENT_RPM_PAYLOAD_SIZE = 19;
     // 1 = both Kelly controllers report reverse over UART, see zc_motor main.cpp
     static constexpr std::size_t ZC_MOTOR_EVENT_REVERSE_INDEX    = 18;
-    // zc_motor notifies every 100 ms; without a notification for this long the reverse lights go off
+    // Big-endian rpm of the left / right Kelly controller
+    static constexpr std::size_t ZC_MOTOR_EVENT_LEFT_RPM_INDEX   = 0;
+    static constexpr std::size_t ZC_MOTOR_EVENT_RIGHT_RPM_INDEX  = 8;
+    // Above this rpm on either side the kart counts as moving: the welcome is cancelled
+    // and cannot be started.
+    static constexpr uint16_t    ZC_MOTOR_MOVING_RPM             = 30;
+    // zc_motor notifies every 100 ms; without a notification for this long the reverse lights go
+    // off and the kart no longer counts as moving
     static constexpr uint32_t    ZC_MOTOR_REVERSE_TIMEOUT_MS     = 1000;
 };
 
@@ -93,93 +107,5 @@ struct Esp32HwConfig {
     static constexpr int LED_PIN_ARGB_FRONT_RIGHT = GPIO_NUM_13;
 };
 
-// ── Rear Light Bar Configuration ────────────────────────────────
-//
-//  Zone layout (per row of 144 columns):
-//  ┌─────────────┬───────┬──────────┬───────┬─────────────┐
-//  │ TURN LEFT   │ REV L │  BRAKE   │ REV R │ TURN RIGHT  │
-//  │ cols  0–35  │ 36–53 │  54–89   │ 90–107│ cols 108–143│
-//  └─────────────┴───────┴──────────┴───────┴─────────────┘
-//
-struct RearLightBarConfig {
-    // Matrix dimensions
-    static constexpr uint16_t WIDTH    = 144;
-    static constexpr uint16_t HEIGHT   = 3;
-    static constexpr uint16_t NUM_LEDS = WIDTH * HEIGHT; // 432
-
-    // ── Zone boundaries (column indices) ────────────────────────
-    // Turn signal zones: 36 columns from each end
-    static constexpr uint16_t TURN_SIGNAL_WIDTH = 36;
-
-    // Derived zone boundaries
-    static constexpr uint16_t TURN_LEFT_START  = 0;
-    static constexpr uint16_t TURN_LEFT_END    = TURN_SIGNAL_WIDTH;             // 36 (exclusive)
-    static constexpr uint16_t TURN_RIGHT_START = WIDTH - TURN_SIGNAL_WIDTH;     // 108
-    static constexpr uint16_t TURN_RIGHT_END   = WIDTH;                         // 144 (exclusive)
-
-    // Center zone = cols 36–107 (72 columns)
-    static constexpr uint16_t CENTER_START = TURN_LEFT_END;                     // 36
-    static constexpr uint16_t CENTER_END   = TURN_RIGHT_START;                  // 108
-
-    // Reverse zones: 18 columns inside center, bordering turn zones
-    static constexpr uint16_t REVERSE_ZONE_WIDTH = 18;
-    static constexpr uint16_t REVERSE_LEFT_START  = CENTER_START;               // 36
-    static constexpr uint16_t REVERSE_LEFT_END    = CENTER_START + REVERSE_ZONE_WIDTH; // 54
-    static constexpr uint16_t REVERSE_RIGHT_START = CENTER_END - REVERSE_ZONE_WIDTH;   // 90
-    static constexpr uint16_t REVERSE_RIGHT_END   = CENTER_END;                // 108
-
-    // Brake zone: between reverse zones (cols 54–89, 36 columns)
-    static constexpr uint16_t BRAKE_START = REVERSE_LEFT_END;                   // 54
-    static constexpr uint16_t BRAKE_END   = REVERSE_RIGHT_START;                // 90
-
-    // ── Sweep animation settings ────────────────────────────────
-    static constexpr uint32_t BLINK_SWEEP_DURATION_MS = 400;
-    static constexpr uint32_t BLINK_OFF_DURATION_MS   = 300;
-
-    // ── Brightness defaults (0–255) ─────────────────────────────
-    static constexpr uint8_t BRIGHTNESS_TAIL    = 80;
-    static constexpr uint8_t BRIGHTNESS_BRAKE   = 255;
-    static constexpr uint8_t BRIGHTNESS_REVERSE = 200;
-    static constexpr uint8_t BRIGHTNESS_TURN    = 255;
-
-    // ── Colors ──────────────────────────────────────────────────
-    inline static const RgbColor COLOR_OFF     = RgbColor(  0,   0,   0);
-    inline static const RgbColor COLOR_TAIL    = RgbColor(255,   0,   0);
-    inline static const RgbColor COLOR_BRAKE   = RgbColor(255,   0,   0);
-    inline static const RgbColor COLOR_TURN    = RgbColor(255,  40,   0);
-    inline static const RgbColor COLOR_REVERSE = RgbColor(255, 255, 255);
-};
-
-// ── Welcome Animation Configuration (shared by DRL + rear bar) ──
-struct WelcomeConfig {
-    // Shared default welcome color (both DRL glow and rear sweep)
-    inline static const RgbColor COLOR_DEFAULT = RgbColor(  0, 100, 255);  // blue
-
-    // ── Rear welcome animation phase durations ──────────────────
-    static constexpr uint32_t REAR_PHASE_SWEEP_MS = 800;   // per sweep phase
-    static constexpr uint32_t REAR_PHASE_PAUSE_MS = 0;   // pause between phases
-
-    // ── DRL welcome glow duration ───────────────────────────────
-    static constexpr uint32_t DRL_GLOW_DURATION_MS = 3000;
-};
-
-// ── Front DRL Strip Configuration ───────────────────────────────
-struct FrontDrlConfig {
-    // Strip dimensions (1D)
-    static constexpr uint16_t NUM_LEDS = 15;
-
-    // ── Animation timing ────────────────────────────────────────
-    static constexpr uint32_t BLINK_SWEEP_DURATION_MS  = 400;
-    static constexpr uint32_t BLINK_OFF_DURATION_MS    = 300;
-    static constexpr uint32_t WELCOME_GLOW_DURATION_MS = WelcomeConfig::DRL_GLOW_DURATION_MS;
-
-    // ── Brightness defaults ─────────────────────────────────────
-    static constexpr uint8_t BRIGHTNESS_DRL  = 128;
-    static constexpr uint8_t BRIGHTNESS_TURN = 128;
-
-    // ── Colors ──────────────────────────────────────────────────
-    inline static const RgbColor COLOR_OFF     = RgbColor(  0,   0,   0);
-    inline static const RgbColor COLOR_DRL     = RgbColor(255, 255, 255);
-    inline static const RgbColor COLOR_TURN    = RgbColor(255,  40,   0);
-    inline static const RgbColor COLOR_WELCOME = WelcomeConfig::COLOR_DEFAULT;
-};
+// Light geometry, zones, levels and colours: core/light_layout.hpp.
+// Welcome animations: animations/registry.hpp.
