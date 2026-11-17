@@ -84,6 +84,21 @@ test("the picker lists the styles and switches to the one picked", async () => {
     expect(screen.getByRole("button", { name: "hazard lights" })).toBeInTheDocument();
 });
 
+test("the Map style puts a map beside the speed", async () => {
+    await renderDrive();
+    act(() => setDriveStylePickerOpen(true));
+    expect(screen.getByRole("radio", { name: /^Map/ })).toHaveAttribute("aria-checked", "false");
+
+    fireEvent.click(screen.getByRole("radio", { name: /^Map/ }));
+
+    expect(useSession.getState().driveStyle).toBe("map");
+    expect(screen.getByTestId("drive-map")).toBeInTheDocument();
+    expect(screen.getByText("GPS unavailable")).toBeInTheDocument();
+    expect(screen.getByText("km/h")).toBeInTheDocument();
+    expect(screen.getByText("Battery")).toBeInTheDocument();
+    expect(screen.queryByText("Throttle")).toBeNull();
+});
+
 test("switching styles during the bulb check keeps it running to its end", async () => {
     await renderDrive({ bulbCheck: true });
     const motorFault = () => document.querySelector(".telltale-motor-fault");

@@ -2,7 +2,7 @@ jest.mock("@asl-gokart/sero-node", () => ({ SeroRuntime: jest.fn() }));
 jest.mock("electron-log/main", () => ({ info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() }));
 jest.mock("@/helpers/ipc/hardware/network-config", () => ({ getBindAddress: () => "0.0.0.0" }));
 
-import { MockRuntime } from "@/main/adapters/mock";
+import { MockRuntime, TRACK_LENGTH_M, trackPosition } from "@/main/adapters/mock";
 import { handleEvent } from "@/main/adapters/sero";
 import { getFresh, resetSignalHub } from "@/main/signal-hub";
 import { resetDerive } from "@/main/derive";
@@ -48,4 +48,38 @@ test("two laps drive the kart through every state", () => {
 test("hazard toggle blinks both sides and reads as hazard", () => {
     const seen = run(3, (rt, ms) => ms === 0 && rt.fireAndForget(0x0001, 0x0004));
     expect(seen["lights.hazard"]).toContain(1);
+});
+
+test("GPS searches for a fix first, then drives the loop", () => {
+    const rt = new MockRuntime();
+    const track: { lat: number; lon: number; heading?: number }[] = [];
+    const satellitesBeforeFix: number[] = [];
+    for (let ms = 0; ms <= 30_000; ms += 100) {
+        rt.process(ms);
+        const lat = getFresh("gps.lat");
+        if (lat === undefined) {
+            const sats = getFresh("gps.satellites");
+            if (sats !== undefined) satellitesBeforeFix.push(sats);
+            continue;
+        }
+        track.push({ lat, lon: getFresh("gps.lon")!, heading: getFresh("gps.heading") });
+    }
+
+    expect(getFresh("gps.fix")).toBe(3);
+    expect(satellitesBeforeFix.length).toBeGreaterThan(0);
+    expect(satellitesBeforeFix.at(-1)!).toBeGreaterThan(satellitesBeforeFix[0]);
+    // Moves once the driver pulls away, near Herrenberg.
+    expect(new Set(track.map((p) => `${p.lat},${p.lon}`)).size).toBeGreaterThan(20);
+    expect(track.every((p) => Math.abs(p.lat - 48.594) < 0.01 && Math.abs(p.lon - 8.866) < 0.01)).toBe(true);
+    expect(track.some((p) => p.heading !== undefined)).toBe(true);
+});
+
+test("the GPS loop is closed and its course follows each leg", () => {
+    const start = trackPosition(0);
+    expect(trackPosition(TRACK_LENGTH_M)).toEqual(start);
+    expect(trackPosition(-1).lat).toBeCloseTo(trackPosition(TRACK_LENGTH_M - 1).lat, 9);
+    // First leg runs due east, the last one due south back to the start.
+    expect(trackPosition(10).bearing).toBeCloseTo(90);
+    expect(trackPosition(10).lon).toBeGreaterThan(start.lon);
+    expect(trackPosition(TRACK_LENGTH_M - 10).bearing).toBeCloseTo(180);
 });
