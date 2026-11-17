@@ -18,6 +18,7 @@ import {
     throttlePercent,
 } from "@/main/derive";
 import { MockRuntime } from "@/main/adapters/mock";
+import { configSignals, decodeLightsConfig } from "@/main/adapters/lights-config-codec";
 
 /*
  * Sero adapter: the only main module that knows the zone controllers' wire format. It decodes events into
@@ -29,7 +30,18 @@ import { MockRuntime } from "@/main/adapters/mock";
 export const SERVICE = { LIGHTS: 0x0001, BUTTONS: 0x0002, BATTERY: 0x0003, MOTOR: 0x0004 } as const;
 
 export const EVENT = {
-    lights: { TURN: 0x8001, HIGH_BEAM: 0x8003, BRAKE: 0x8004, REVERSE: 0x8005, DRL: 0x8006, TAIL: 0x8007 },
+    lights: {
+        TURN: 0x8001,
+        HIGH_BEAM: 0x8003,
+        BRAKE: 0x8004,
+        REVERSE: 0x8005,
+        DRL: 0x8006,
+        TAIL: 0x8007,
+        /** Welcome settings blob (lights-config-codec.ts); headunit only, not in ecu-sero SUBSCRIPTIONS. */
+        CONFIG: 0x8008,
+        /** `[playing]`; headunit only. */
+        WELCOME_STATE: 0x8009,
+    },
     battery: { VOLTAGE: 0x8001, CURRENT: 0x8002, TEMPS: 0x8003 },
     motor: { TELEMETRY: 0x8001 },
 } as const;
@@ -43,12 +55,16 @@ export const METHOD = {
         BRAKE: 0x0007,
         REVERSE: 0x0008,
         DRL: 0x0009,
+        /** Plays the welcome; E_NOT_READY while moving or brake/reverse/turn is on. */
         WELCOME: 0x000a,
-        /** `[strip, value]`, strip 0xFF = all */
-        BRIGHTNESS: 0x000b,
-        /** `[r, g, b]` */
-        WELCOME_COLOR: 0x000c,
+        // 0x000b (brightness) and 0x000c (welcome colour) are retired in the firmware.
         TAIL: 0x000d,
+        /** `[mask, enabled, front_id, rear_id, ambient]` → config blob. mask: b0 enabled, b1 front, b2 rear, b3 ambient. */
+        SET_WELCOME_CONFIG: 0x000e,
+        /** `[layer 0 front | 1 rear, id, r, g, b]` → config blob. */
+        SET_ANIM_COLOR: 0x000f,
+        /** `[]` → config blob; the ECU also re-sends every lights event. */
+        GET_CONFIG: 0x0010,
     },
     motor: {
         /** `[relay]`, 0 = relay 1 */
@@ -90,7 +106,11 @@ const SINGLE_LIGHTS: Record<number, SignalName> = {
     [EVENT.lights.REVERSE]: "lights.reverse",
     [EVENT.lights.DRL]: "lights.drl",
     [EVENT.lights.TAIL]: "lights.tail",
+    [EVENT.lights.WELCOME_STATE]: "lights.welcome_playing",
 };
+
+/** Sero return codes (sero/core/types.hpp). */
+export const RC = { E_OK: 0, E_NOT_OK: 1, E_UNKNOWN_METHOD: 3, E_NOT_READY: 4, E_TIMEOUT: 6 } as const;
 
 // --- decoding ----------------------------------------------------------------------------
 
@@ -104,7 +124,22 @@ function reject(service: number, event: number, len: number, expected: string): 
     log.warn(`[SERO] service 0x${service.toString(16)} event 0x${event.toString(16)}: ${len} bytes, expected ${expected}`);
 }
 
+/** Publishes zc_lights' welcome settings from a config blob (event or method answer). False for a bad blob. */
+export function publishLightsConfig(p: Buffer, ts = Date.now()): boolean {
+    const config = decodeLightsConfig(p);
+    if (!config) {
+        reject(SERVICE.LIGHTS, EVENT.lights.CONFIG, p.length, `a version 1 config blob (got version ${p[0]})`);
+        return false;
+    }
+    for (const [name, value] of configSignals(config)) publish(name, value, ts);
+    return true;
+}
+
 function lightsEvent(event: number, p: Buffer, ts: number): void {
+    if (event === EVENT.lights.CONFIG) {
+        publishLightsConfig(p, ts);
+        return;
+    }
     if (event === EVENT.lights.TURN || event === EVENT.lights.HIGH_BEAM) {
         if (p.length !== 2) return reject(SERVICE.LIGHTS, event, p.length, "2");
         if (event === EVENT.lights.TURN) {
@@ -214,10 +249,14 @@ export function startSeroAdapter(): void {
     // when a service is found again (e.g. after an OTA restart), so each is subscribed only once;
     // a second subscribeEvent would only swap the handler and leak the old JS callback.
     const subscribedServices = new Set<number>();
+    // Subscriptions carry no initial value, so the lights state is asked for once per discovery of
+    // zc_lights: on the first ack of the config subscription (renewals ack again and are skipped).
+    let lightsSynced = false;
 
     runtime.onServiceFound((serviceId, address) => {
         log.info("Service found:", serviceId, "at", address);
         markServiceFound(serviceId, address.ip);
+        if (serviceId === SERVICE.LIGHTS) lightsSynced = false;
         if (subscribedServices.has(serviceId)) return;
         subscribedServices.add(serviceId);
         for (const [service, event] of SUBSCRIPTIONS) {
@@ -228,15 +267,38 @@ export function startSeroAdapter(): void {
     runtime.onServiceLost((serviceId) => {
         log.info("Service lost:", serviceId);
         markServiceLost(serviceId);
+        if (serviceId === SERVICE.LIGHTS) lightsSynced = false;
         const ecuId = ecuIdFor(serviceId);
         if (ecuId) markEcuLost(ecuId);
     });
 
-    runtime.onSubscriptionAck((ack) => {
-        log.debug("Subscription acknowledged:", ack);
+    runtime.onSubscriptionAck((serviceId, eventId, returnCode) => {
+        log.debug("Subscription acknowledged:", serviceId, eventId, returnCode);
+        if (serviceId !== SERVICE.LIGHTS || eventId !== EVENT.lights.CONFIG || returnCode !== RC.E_OK || lightsSynced) return;
+        lightsSynced = true;
+        void syncLights(runtime);
     });
 
     Object.values(SERVICE).forEach((s) => runtime.findService(s));
+}
+
+/** Asks zc_lights for its settings; the answer and the re-sent events arrive as signals. */
+async function syncLights(lights: Runtime): Promise<void> {
+    try {
+        const result = await lights.request(SERVICE.LIGHTS, METHOD.lights.GET_CONFIG, Buffer.alloc(0));
+        if (result.returnCode === RC.E_OK) {
+            publishLightsConfig(result.payload);
+        } else if (result.returnCode === RC.E_UNKNOWN_METHOD) {
+            // Firmware before the welcome settings: no animations to offer.
+            log.warn("[SERO] zc_lights has no GET_CONFIG; its firmware is too old for the welcome settings");
+            publish("lights.front_anims", 0);
+            publish("lights.rear_anims", 0);
+        } else {
+            log.warn(`[SERO] zc_lights GET_CONFIG failed (returnCode=${result.returnCode})`);
+        }
+    } catch (err) {
+        log.warn("[SERO] zc_lights GET_CONFIG failed:", err);
+    }
 }
 
 export function stopSeroAdapter(): void {
