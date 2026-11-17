@@ -1,0 +1,11 @@
+# Areas the headunit can download an offline map for (Settings → Offline maps).
+# One pack per area: our own monochrome tiles, rendered from OpenStreetMap data when the
+# map-packs image is built (README.md). Add a venue here and rebuild the image.
+#
+#   id:    file name and key on the headunit; lowercase, digits, dashes
+#   title: shown in the headunit's list
+#   bbox:  [west, south, east, north] in degrees; keep it to a few km², every km² is ~1 MB per theme
+
+- id: herrenberg
+  title: Herrenberg
+  bbox: [8.8456, 48.5805, 8.8864, 48.6075]

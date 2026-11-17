@@ -83,6 +83,12 @@ services:
       RUST_LOG: info
     restart: on-failure
 
+  # Offline map packs (../../maps/areas.yaml), rendered when the image is built; on :8080/maps/ via pit-wall.
+  map-packs:
+    profiles: [sim, sero]
+    build:
+      context: ../../maps
+
   pit-wall:
     profiles: [sim, sero]
     build:
@@ -92,6 +98,8 @@ services:
       pit-api:
         condition: service_started
       mosquitto:
+        condition: service_started
+      map-packs:
         condition: service_started
     ports:
       - "8080:8080" # http://localhost:8080

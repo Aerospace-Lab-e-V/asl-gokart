@@ -1,0 +1,12 @@
+# Static map packs under /maps/; pit-wall's Caddy forwards /maps/* here unchanged.
+{
+	admin off
+	auto_https off
+}
+
+:8080 {
+	root * /srv
+	# The index changes with every image build; the packs are replaced, never edited in place.
+	header /maps/index.json Cache-Control no-cache
+	file_server
+}

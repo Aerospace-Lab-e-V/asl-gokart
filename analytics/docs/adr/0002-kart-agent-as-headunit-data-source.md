@@ -77,7 +77,8 @@ headunit gets GPS from the agent.
 
 ### Who owns the upcoming features
 - **GPS map.** The data comes from the stream. The Pi 4 has no working WebGL, so MapLibre GL is out. Use an SVG/CSS
-  track map.
+  track map. Built as the Drive page's Map style: raster tiles moved with one CSS transform per frame. The tiles come
+  from offline map packs that the analytics stack renders (`analytics/maps`) and the headunit downloads on request.
 - **Lap times.** The agent subscribes to `kart/{id}/laps` while online and forwards each crossing as a `lap` event.
 - **Voice.** The media runs in the headunit renderer, using Chromium's WebRTC (Opus, echo cancellation, jitter buffer,
   device selection) and WHIP/WHEP to MediaMTX in the analytics stack. The Pi's PipeWire and Bluetooth audio live in the
