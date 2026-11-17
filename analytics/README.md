@@ -76,6 +76,7 @@ analytics/
 ├── web/
 │   ├── pit-wall/    # real-time live view (Bun, React, Vite)
 │   └── param-app/   # TypeScript parameter UI
+├── maps/            # offline map packs for the headunit: areas.yaml → PMTiles, served at /maps/
 ├── db/migrations/   # TimescaleDB schema, hypertables, continuous aggregates
 ├── grafana/
 │   ├── dashboards/  # dashboard JSON (provisioned, read-only in prod)

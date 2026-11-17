@@ -8,7 +8,7 @@ import { Routes, Route, HashRouter, Navigate } from "react-router-dom";
 import { Battery, Car, Gauge, LifeBuoy, Settings } from "lucide-react";
 import { NavBarItemData } from "./data/models";
 import NavBar from "./components/navbar/navbar";
-import DriveNormalPage from "./pages/drive-normal";
+import DrivePage from "./pages/drive";
 import SettingsPage from "./pages/settings";
 import CarPage from "./pages/car";
 import BatteryPage from "./pages/battery";
@@ -21,7 +21,8 @@ import AdminUnlockPage from "./pages/settings/admin-unlock";
 import DrivetrainPage from "./pages/settings/drivetrain";
 import SystemPage from "./pages/settings/system";
 import AppUpdatePage from "./pages/settings/app-update";
-import { useSession } from "@/stores/session";
+import OfflineMapsPage from "./pages/settings/offline-maps";
+import { setDriveStylePickerOpen, useSession } from "@/stores/session";
 import { Toaster } from "@/components/ui/sonner"
 import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { BuildWatermark } from "@/components/shared/build-watermark";
@@ -51,6 +52,8 @@ function MainAppContent() {
             Icon: Gauge,
             label: "Drive",
             linkTo: "/",
+            // Tapping Drive again picks the drive style.
+            onReselect: () => setDriveStylePickerOpen(true),
         },
         {
             Icon: LifeBuoy,
@@ -80,13 +83,14 @@ function MainAppContent() {
                 <div className="flex-1">
                     <>
                         <Routes>
-                            <Route path="/" element={<ErrorBoundary><DriveNormalPage /></ErrorBoundary>} />
+                            <Route path="/" element={<ErrorBoundary><DrivePage /></ErrorBoundary>} />
                             <Route path="/motor" element={<ErrorBoundary><Suspense fallback={null}><MotorPage /></Suspense></ErrorBoundary>} />
                             <Route path="/car" element={<ErrorBoundary><CarPage /></ErrorBoundary>} />
                             <Route path="/settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
                             <Route path="/battery" element={<ErrorBoundary><BatteryPage /></ErrorBoundary>} />
                             <Route path="/settings/network" element={<ErrorBoundary><NetworkInterfacePage /></ErrorBoundary>} />
                             <Route path="/settings/power" element={<ErrorBoundary><PowerPage /></ErrorBoundary>} />
+                            <Route path="/settings/maps" element={<ErrorBoundary><OfflineMapsPage /></ErrorBoundary>} />
                             <Route path="/settings/unlock" element={<ErrorBoundary><AdminUnlockPage /></ErrorBoundary>} />
                             <Route path="/settings/drivetrain" element={<ErrorBoundary><AdminOnly><DrivetrainPage /></AdminOnly></ErrorBoundary>} />
                             <Route path="/settings/system" element={<ErrorBoundary><AdminOnly><SystemPage /></AdminOnly></ErrorBoundary>} />

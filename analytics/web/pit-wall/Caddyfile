@@ -1,4 +1,4 @@
-# Pit wall: one origin for the SPA, pit-api and the MQTT WebSocket.
+# Pit wall: one origin for the SPA, pit-api, the MQTT WebSocket and the headunit's map packs.
 # TLS (wss://) and Keycloak go in front of this later (reverse proxy on the host).
 {
 	admin off
@@ -9,6 +9,11 @@
 	handle /api/* {
 		encode zstd gzip
 		reverse_proxy {$PIT_API_UPSTREAM:pit-api:8081}
+	}
+
+	# Offline map packs for the headunit (analytics/maps); served by the map-packs image.
+	handle /maps/* {
+		reverse_proxy {$MAP_PACKS_UPSTREAM:map-packs:8080}
 	}
 
 	# MQTT over WebSocket; Caddy passes the upgrade through.

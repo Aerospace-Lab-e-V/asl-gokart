@@ -8,12 +8,18 @@ const matchesPath = (pathname: string, path: string) =>
   path === "/" ? pathname === "/" : pathname === path || pathname.startsWith(`${path}/`);
 
 /** One equal-height zone of the sidebar; the whole zone is the tap target. */
-const NavBarItem = ({ Icon, label, linkTo, alsoActiveOn = [] }: NavBarItemData) => {
+const NavBarItem = ({ Icon, label, linkTo, alsoActiveOn = [], onReselect }: NavBarItemData) => {
   const { pathname } = useLocation();
   const isActive = [linkTo, ...alsoActiveOn].some((path) => matchesPath(pathname, path));
 
+  const handleClick = (e: React.MouseEvent) => {
+    if (!isActive || !onReselect) return;
+    e.preventDefault();
+    onReselect();
+  };
+
   return (
-    <Link to={linkTo} aria-current={isActive ? "page" : undefined} className="relative flex min-h-0 flex-1 p-1.5">
+    <Link to={linkTo} aria-current={isActive ? "page" : undefined} onClick={handleClick} className="relative flex min-h-0 flex-1 p-1.5">
       {isActive && <span className="bg-foreground absolute top-1/2 left-0 h-12 w-1 -translate-y-1/2 rounded-r-full" />}
       <div
         className={cn(

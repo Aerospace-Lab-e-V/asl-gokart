@@ -13,6 +13,8 @@ import { registerKartAgentListeners } from "@/main/kart-agent";
 import { registerSignalIpc } from "@/main/signal-ipc";
 import { startSeroAdapter } from "@/main/adapters/sero";
 import { startAgentStream } from "@/main/adapters/kart-agent";
+import { createMapPacks, registerMapPacksListeners } from "@/main/map-packs";
+import { handleMapTiles, TileServer } from "@/main/map-tiles-protocol";
 
 export default function registerListeners(mainWindow: BrowserWindow) {
     registerAdminListeners(mainWindow);
@@ -25,8 +27,14 @@ export default function registerListeners(mainWindow: BrowserWindow) {
     registerUpdaterListeners(mainWindow);
     registerKartAgentListeners(mainWindow);
     registerSignalIpc(mainWindow);
-    // Loopback: kart-agent's stream does not need the car network.
-    startAgentStream();
+    // Offline map packs, and their tiles for the Drive page's map; both work without the car network.
+    const packs = createMapPacks(() => tiles.reset());
+    const tiles = new TileServer(packs);
+    handleMapTiles(tiles);
+    registerMapPacksListeners(mainWindow, packs);
+    // Loopback: kart-agent's stream does not need the car network. With HEADUNIT_MOCK the mock kart sends
+    // the agent's signals (GPS) itself, so every signal keeps one writer.
+    if (!process.env.HEADUNIT_MOCK) startAgentStream();
 
     // ponytail: Defer network-bound services until car network interface is available
     waitForCarNetwork(mainWindow).then(() => {

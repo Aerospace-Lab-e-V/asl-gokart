@@ -55,6 +55,12 @@ services:
       DATABASE_URL: postgres://pit_api_ro:${PIT_API_DB_PASSWORD}@timescaledb:5432/telemetry
       RUST_LOG: info
 
+  # Offline map packs for the headunits, rendered at build time from ../../maps/areas.yaml.
+  map-packs:
+    build:
+      context: ../../maps
+    restart: unless-stopped
+
   pit-wall:
     build:
       context: ../..
@@ -63,6 +69,7 @@ services:
     depends_on:
       - pit-api
       - mosquitto
+      - map-packs
     ports:
       - "8080:8080" # TODO: behind the TLS reverse proxy (wss://) + Keycloak
     volumes:

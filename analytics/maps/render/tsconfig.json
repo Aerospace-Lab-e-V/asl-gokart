@@ -1,0 +1,17 @@
+{
+    "compilerOptions": {
+        "target": "es2022",
+        "lib": ["es2023", "dom"],
+        "module": "esnext",
+        "moduleResolution": "bundler",
+        "types": ["bun"],
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "verbatimModuleSyntax": true,
+        "skipLibCheck": true,
+        "noEmit": true
+    },
+    "include": ["src"]
+}

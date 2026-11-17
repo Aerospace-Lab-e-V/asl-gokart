@@ -2,6 +2,7 @@ import type { Address, RequestResult } from "@asl-gokart/sero-node";
 import { BATTERY_MAX_VOLTAGE, BATTERY_MIN_VOLTAGE } from "@/data/battery-config";
 import { WHEEL_CIRCUMFERENCE_M } from "@/main/derive";
 import { EVENT, METHOD, SERVICE, type Runtime } from "@/main/adapters/sero";
+import { publish } from "@/main/signal-hub";
 
 /*
  * A simulated kart behind the Sero runtime interface (HEADUNIT_MOCK=1). It sends the zone controllers'
@@ -96,6 +97,41 @@ export function step(s: Sim, dt: number): void {
     s.packTemp += (0.000005 * i2 - (s.packTemp - AMBIENT_C) / 600) * dt;
 }
 
+/*
+ * GPS as kart-agent would stream it (with HEADUNIT_MOCK the agent stream is not started, so this is the only
+ * writer of gps.*): the kart drives a closed loop near Herrenberg at the simulated speed, 5 Hz epochs, and
+ * the receiver needs a few seconds to get a fix after start.
+ */
+const GPS_ORIGIN = { lat: 48.5941, lon: 8.866 };
+/** Loop corners in metres east/north of GPS_ORIGIN, closed back to the first. */
+const TRACK: [number, number][] = [
+    [0, 0], [180, 0], [220, 20], [240, 60], [220, 100], [180, 120], [60, 120], [20, 100], [0, 60],
+];
+const TRACK_LEGS = TRACK.map((p, i) => {
+    const q = TRACK[(i + 1) % TRACK.length];
+    return { from: p, dx: q[0] - p[0], dy: q[1] - p[1], length: Math.hypot(q[0] - p[0], q[1] - p[1]) };
+});
+export const TRACK_LENGTH_M = TRACK_LEGS.reduce((sum, leg) => sum + leg.length, 0);
+const M_PER_DEG_LAT = 111_320;
+const GPS_EVERY_S = 0.2;
+export const GPS_FIX_AFTER_S = 5;
+/** The receiver sends no course below this (signals.yaml, gps.heading). */
+const GPS_HEADING_MIN_KMH = 3;
+
+/** Position and course on the loop `distance` metres from the start, either direction. */
+export function trackPosition(distance: number): { lat: number; lon: number; bearing: number } {
+    let d = ((distance % TRACK_LENGTH_M) + TRACK_LENGTH_M) % TRACK_LENGTH_M;
+    const leg = TRACK_LEGS.find((l) => (d -= l.length) < 0) ?? TRACK_LEGS[TRACK_LEGS.length - 1];
+    const f = 1 + d / leg.length;
+    const east = leg.from[0] + leg.dx * f;
+    const north = leg.from[1] + leg.dy * f;
+    return {
+        lat: GPS_ORIGIN.lat + north / M_PER_DEG_LAT,
+        lon: GPS_ORIGIN.lon + east / (M_PER_DEG_LAT * Math.cos((GPS_ORIGIN.lat * Math.PI) / 180)),
+        bearing: ((Math.atan2(leg.dx, leg.dy) * 180) / Math.PI + 360) % 360,
+    };
+}
+
 const voltage = (s: Sim) => BATTERY_MIN_VOLTAGE + ((BATTERY_MAX_VOLTAGE - BATTERY_MIN_VOLTAGE) * s.soc) / 100 + s.current * PACK_OHM;
 
 const byte = (v: number) => clamp(Math.round(v), 0, 255);
@@ -133,6 +169,10 @@ export class MockRuntime implements Runtime {
     private sim = initialSim();
     private last: number | null = null;
     private sinceTemps = TEMPS_EVERY_S;
+    private uptime = 0;
+    private sinceGps = GPS_EVERY_S;
+    /** Along the GPS loop; reversing drives it back. */
+    private distance = 0;
     private handlers = new Map<string, EventHandler>();
     /** Last lights payload per event, so lights are sent on change like zc_lights does. */
     private sentLights = new Map<number, string>();
@@ -167,6 +207,31 @@ export class MockRuntime implements Runtime {
         this.light(EVENT.lights.REVERSE, [s.reverse ? 1 : 0]);
         this.light(EVENT.lights.DRL, [this.user.drl]);
         this.light(EVENT.lights.TAIL, [this.user.tail]);
+
+        this.uptime += dt;
+        this.distance += (s.reverse ? -1 : 1) * (Math.abs(s.speed) / 3.6) * dt;
+        this.sinceGps += dt;
+        if (this.sinceGps >= GPS_EVERY_S) {
+            this.sinceGps = 0;
+            this.gps(nowMs);
+        }
+    }
+
+    private gps(nowMs: number): void {
+        const searching = this.uptime < GPS_FIX_AFTER_S;
+        publish("gps.fix", searching ? 0 : 3, nowMs);
+        publish("gps.satellites", searching ? 3 + Math.floor(this.uptime) : 9, nowMs);
+        if (searching) return;
+        const s = this.sim;
+        const { lat, lon, bearing } = trackPosition(this.distance);
+        const kmh = Math.abs(s.speed);
+        publish("gps.lat", lat, nowMs);
+        publish("gps.lon", lon, nowMs);
+        publish("gps.speed", kmh, nowMs);
+        publish("gps.altitude", 432, nowMs);
+        publish("gps.hdop", 0.9, nowMs);
+        // Course over ground: backwards along the loop when reversing.
+        if (kmh >= GPS_HEADING_MIN_KMH) publish("gps.heading", s.reverse ? (bearing + 180) % 360 : bearing, nowMs);
     }
 
     private emit(service: number, event: number, payload: Buffer): void {
