@@ -1,4 +1,5 @@
 /** @jest-environment node */
+import { getEventListeners } from "events";
 import fs from "fs";
 import path from "path";
 
@@ -72,4 +73,32 @@ test("a lost connection marks the agent's signals stale and reconnects", async (
     expect(get("gps.lat")?.value).toBe(48.59412);
     await until(() => fetchMock.mock.calls.length >= 2);
     expect(fetchMock.mock.calls[0][0]).toBe("http://127.0.0.1:7411/v1/stream");
+});
+
+test("reconnecting does not pile up abort listeners on any signal", async () => {
+    jest.useFakeTimers();
+    // Like Node's fetch: adds an abort listener to the signal it is given and never removes it.
+    const fetchMock = jest.fn((_url: string, init?: RequestInit) => {
+        init?.signal?.addEventListener("abort", () => {});
+        return Promise.reject(new TypeError("fetch failed"));
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const targets = new Set<EventTarget>();
+    const original = EventTarget.prototype.addEventListener;
+    const spy = jest
+        .spyOn(EventTarget.prototype, "addEventListener")
+        .mockImplementation(function (this: EventTarget, ...args: Parameters<EventTarget["addEventListener"]>) {
+            if (args[0] === "abort") targets.add(this);
+            return original.apply(this, args);
+        });
+    try {
+        startAgentStream();
+        for (let i = 0; i < 20; i++) await jest.advanceTimersByTimeAsync(1000);
+        expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(20);
+        const most = Math.max(...[...targets].map((t) => getEventListeners(t, "abort").length));
+        expect(most).toBeLessThanOrEqual(2);
+    } finally {
+        spy.mockRestore();
+        jest.useRealTimers();
+    }
 });
