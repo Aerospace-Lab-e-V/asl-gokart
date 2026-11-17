@@ -72,6 +72,16 @@ export const CH = {
         getConfig: "agent:get-config",
         putConfig: "agent:put-config",
     },
+    mapPacks: {
+        /** invoke -> MapPacksState, after reading the map server's list again */
+        list: "map-packs:list",
+        /** invoke(id): resolves once the pack is installed */
+        install: "map-packs:install",
+        cancel: "map-packs:cancel",
+        remove: "map-packs:remove",
+        /** push MapPacksState: download progress and every change */
+        state: "map-packs:state",
+    },
     admin: {
         /** invoke(pin) -> boolean */
         unlock: "admin:unlock",

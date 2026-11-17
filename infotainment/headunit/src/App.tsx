@@ -21,6 +21,7 @@ import AdminUnlockPage from "./pages/settings/admin-unlock";
 import DrivetrainPage from "./pages/settings/drivetrain";
 import SystemPage from "./pages/settings/system";
 import AppUpdatePage from "./pages/settings/app-update";
+import OfflineMapsPage from "./pages/settings/offline-maps";
 import { setDriveStylePickerOpen, useSession } from "@/stores/session";
 import { Toaster } from "@/components/ui/sonner"
 import MotorPage from "./pages/motor";
@@ -87,6 +88,7 @@ function MainAppContent() {
                             <Route path="/battery" element={<ErrorBoundary><BatteryPage /></ErrorBoundary>} />
                             <Route path="/settings/network" element={<ErrorBoundary><NetworkInterfacePage /></ErrorBoundary>} />
                             <Route path="/settings/power" element={<ErrorBoundary><PowerPage /></ErrorBoundary>} />
+                            <Route path="/settings/maps" element={<ErrorBoundary><OfflineMapsPage /></ErrorBoundary>} />
                             <Route path="/settings/unlock" element={<ErrorBoundary><AdminUnlockPage /></ErrorBoundary>} />
                             <Route path="/settings/drivetrain" element={<ErrorBoundary><AdminOnly><DrivetrainPage /></AdminOnly></ErrorBoundary>} />
                             <Route path="/settings/system" element={<ErrorBoundary><AdminOnly><SystemPage /></AdminOnly></ErrorBoundary>} />

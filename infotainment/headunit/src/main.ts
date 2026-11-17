@@ -5,6 +5,7 @@ import path from "path";
 import { stopSeroAdapter } from "./main/adapters/sero";
 import { stopAgentStream } from "./main/adapters/kart-agent";
 import { stopKartAgent } from "./main/kart-agent";
+import { registerMapTilesScheme } from "./main/map-tiles-protocol";
 import { getFullscreenOnStartup, getDevToolsEnabled, getTheme } from "./helpers/ipc/application/system-config";
 
 // Initialize electron-log before anything else
@@ -15,6 +16,9 @@ log.transports.file.level = "info";
 if (require("electron-squirrel-startup")) {
     app.quit();
 }
+
+// Before ready: the Drive page's map loads offline map tiles from maptiles://.
+registerMapTilesScheme();
 
 function createWindow() {
     const preload = path.join(__dirname, "preload.js");

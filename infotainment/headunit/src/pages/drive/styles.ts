@@ -1,6 +1,7 @@
 import type React from "react";
 import ClassicDrive from "./classic";
 import MinimalDrive from "./minimal";
+import MapDrive from "./map";
 
 /*
  * The looks the Drive page can take; the driver picks one by tapping the Drive navbar item again.
@@ -9,7 +10,7 @@ import MinimalDrive from "./minimal";
  * by the Drive page, so a style only renders its layout.
  */
 
-export type DriveStyleId = "classic" | "minimal";
+export type DriveStyleId = "classic" | "minimal" | "map";
 
 interface DriveStyle {
     label: string;
@@ -22,4 +23,5 @@ interface DriveStyle {
 export const DRIVE_STYLES: Record<DriveStyleId, DriveStyle> = {
     classic: { label: "Classic", description: "Speed with throttle and RPM gauges, temperatures below", Page: ClassicDrive },
     minimal: { label: "Minimal", description: "Large speed, gear and battery only", Page: MinimalDrive },
+    map: { label: "Map", description: "Large speed with a live map beside it", Page: MapDrive },
 };

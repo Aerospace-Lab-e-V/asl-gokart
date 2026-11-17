@@ -7,6 +7,7 @@ import type { ResolvedInterface } from "@/helpers/ipc/hardware/network-config";
 import type { EcuId, EcuStatusMap, FirmwareRelease, FlashHistory, OtaProgress } from "@/data/ecu/ecu-types";
 import type { AppRelease, UpdateProgress } from "@/data/updater/updater-types";
 import type { AgentState, ConfigPatch, ConfigReply } from "@/services/kart-agent/schema";
+import type { MapPacksState } from "@/data/map-packs";
 import type { LogLevel } from "@/lib/logger";
 import type { NetworkInterfaceInfo } from "os";
 
@@ -96,6 +97,13 @@ export const api = {
         onState: listen<AgentState>(CH.agent.state),
         getConfig: call<ConfigReply>(CH.agent.getConfig),
         putConfig: call<ConfigReply, [ConfigPatch]>(CH.agent.putConfig),
+    },
+    mapPacks: {
+        list: call<MapPacksState>(CH.mapPacks.list),
+        install: call<void, [id: string]>(CH.mapPacks.install),
+        cancel: call<void>(CH.mapPacks.cancel),
+        remove: call<void, [id: string]>(CH.mapPacks.remove),
+        onState: listen<MapPacksState>(CH.mapPacks.state),
     },
     admin: {
         unlock: call<boolean, [pin: string]>(CH.admin.unlock),

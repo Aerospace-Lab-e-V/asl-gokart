@@ -18,6 +18,7 @@ import {
   Download,
   EthernetPort,
   Lock,
+  Map as MapIcon,
   Power,
   RadioTower,
   Unlock,
@@ -115,6 +116,7 @@ const SettingsPage = () => {
             </label>
           </div>
           <SettingsLinkRow to="/settings/network" icon={EthernetPort} title="Network interface" value={networkInterface} />
+          <SettingsLinkRow to="/settings/maps" icon={MapIcon} title="Offline maps" description="Map areas for the Drive page" />
           <SettingsLinkRow to="/settings/power" icon={Power} title="Power" description="Minimize, maximize or close the app" />
         </SettingsSection>
 

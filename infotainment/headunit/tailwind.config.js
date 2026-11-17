@@ -96,6 +96,11 @@ module.exports = {
                 "lamp-blink": {
                     "50%": { opacity: "0" },
                 },
+                // Map loading: a ring grows out of the kart arrow and fades
+                "map-ping": {
+                    from: { opacity: "0.6", transform: "scale(0.25)" },
+                    to: { opacity: "0", transform: "scale(1)" },
+                },
             },
             animation: {
                 "accordion-down": "accordion-down 0.2s ease-out",
@@ -109,6 +114,8 @@ module.exports = {
                 "band-sink": "band-sink 2.4s ease-in infinite",
                 // Six blinks, 3 s in all, then steady
                 "lamp-blink": "lamp-blink 0.5s step-end 6",
+                // Two rings, the second with [animation-delay:1s]
+                "map-ping": "map-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite",
             },
         },
     },
