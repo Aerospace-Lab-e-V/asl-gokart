@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { Suspense, lazy, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { syncThemeWithLocal } from "./services/theme";
 import { useTranslation } from "react-i18next";
@@ -24,12 +24,14 @@ import AppUpdatePage from "./pages/settings/app-update";
 import OfflineMapsPage from "./pages/settings/offline-maps";
 import { setDriveStylePickerOpen, useSession } from "@/stores/session";
 import { Toaster } from "@/components/ui/sonner"
-import MotorPage from "./pages/motor";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { BuildWatermark } from "@/components/shared/build-watermark";
 import NetworkGateScreen from "./components/shared/network-gate-screen";
 import type { NetworkGateStatus } from "./helpers/ipc/network-gate";
 import { networkGate } from "./services/app";
+
+// Lazy, so three.js is only parsed when the motor page is opened.
+const MotorPage = lazy(() => import("./pages/motor"));
 
 /** Sends back to Settings when admin mode is locked. */
 function AdminOnly({ children }: { children: React.ReactNode }) {
@@ -82,7 +84,7 @@ function MainAppContent() {
                     <>
                         <Routes>
                             <Route path="/" element={<ErrorBoundary><DrivePage /></ErrorBoundary>} />
-                            <Route path="/motor" element={<ErrorBoundary><MotorPage /></ErrorBoundary>} />
+                            <Route path="/motor" element={<ErrorBoundary><Suspense fallback={null}><MotorPage /></Suspense></ErrorBoundary>} />
                             <Route path="/car" element={<ErrorBoundary><CarPage /></ErrorBoundary>} />
                             <Route path="/settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
                             <Route path="/battery" element={<ErrorBoundary><BatteryPage /></ErrorBoundary>} />

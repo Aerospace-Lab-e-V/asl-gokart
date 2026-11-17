@@ -3,29 +3,40 @@ import { MakerDeb } from "@electron-forge/maker-deb";
 import { VitePlugin } from "@electron-forge/plugin-vite";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
+import fs from "node:fs";
+import path from "node:path";
 import { bundleKartAgent } from "./packaging/kart-agent";
+
+/** Chromium UI locales to keep, it falls back to en-US for the rest. Saves ~37 MB. */
+const LOCALES = new Set(["en-US.pak", "de.pak"]);
+
+async function pruneLocales(buildPath: string): Promise<void> {
+    const dir = path.join(buildPath, "locales");
+    for (const file of await fs.promises.readdir(dir)) {
+        if (!LOCALES.has(file)) await fs.promises.rm(path.join(dir, file));
+    }
+}
 
 const config: ForgeConfig = {
     hooks: {
-        packageAfterExtract: async (_config, buildPath, _electronVersion, _platform, arch) =>
-            bundleKartAgent(buildPath, arch),
+        packageAfterExtract: async (_config, buildPath, _electronVersion, _platform, arch) => {
+            await bundleKartAgent(buildPath, arch);
+            await pruneLocales(buildPath);
+        },
     },
     packagerConfig: {
         asar: {
             unpack: "**/*.node",
         },
-        // prune removes devDependencies from the packaged node_modules copy,
-        // which is what keeps the artifact size manageable when we include the
-        // full node_modules below.
         prune: true,
-        // The Vite plugin's default ignore strips everything except .vite/,
-        // but main-process externals (sero-node, electron-log
-        // and their transitive deps) must be present in node_modules at runtime.
+        // Vite bundles everything except the native sero-node addon (see vite.main.config.ts),
+        // so that is the only node_modules entry shipped. It has no runtime dependencies.
         ignore: (file: string) => {
             if (!file) return false;
             if (file.startsWith("/.vite")) return false;
             if (file === "/package.json") return false;
-            if (file.startsWith("/node_modules")) return false;
+            if (file === "/node_modules" || file === "/node_modules/@asl-gokart") return false;
+            if (file.startsWith("/node_modules/@asl-gokart/sero-node")) return false;
 
             return true;
         },
