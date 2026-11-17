@@ -192,6 +192,8 @@ const ParticleFlow: React.FC<ParticleFlowProps> = ({
     containerHeight,
 }) => {
     const pointsRef = useRef<THREE.Points>(null);
+    // Reused every frame, allocating them per particle churns the GC on the Pi.
+    const scratch = useMemo(() => ({ primary: new THREE.Color(), secondary: new THREE.Color(), color: new THREE.Color() }), []);
 
     // Scale factor for control point variance (based on screen size)
     const pathVariance = Math.min(containerWidth, containerHeight) * 0.1;
@@ -287,8 +289,8 @@ const ParticleFlow: React.FC<ParticleFlowProps> = ({
         const baseSpeed = 0.2 + currentMagnitude * 0.6;
 
         // Parse colors
-        const primaryColor = new THREE.Color(colors.primary);
-        const secondaryColor = new THREE.Color(colors.secondary);
+        const primaryColor = scratch.primary.set(colors.primary);
+        const secondaryColor = scratch.secondary.set(colors.secondary);
 
         // Determine active particle count per motor based on flow state
         const activePerMotor = flowState === FlowState.IDLE ? IDLE_PARTICLES_PER_MOTOR : PARTICLES_PER_MOTOR;
@@ -388,7 +390,7 @@ const ParticleFlow: React.FC<ParticleFlowProps> = ({
             positionAttr.setXYZ(i, pos.x, pos.y, 0);
 
             // Color gradient based on progress
-            const color = new THREE.Color().lerpColors(
+            const color = scratch.color.lerpColors(
                 primaryColor,
                 secondaryColor,
                 particle.t
