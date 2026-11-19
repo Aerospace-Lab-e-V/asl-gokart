@@ -16,7 +16,8 @@ import {
     type TelltaleIcon,
 } from "@/components/icons/telltale";
 import { THROTTLE_BOUNDARIES, RPM_BOUNDARIES, throttleSegments, rpmSegments, Segment } from "@/data/gauge-config";
-import { BATTERY_TEMP_HOT_C, BATTERY_TEMP_WARN_C, SOC_LOW_PCT, SOC_WARN_PCT } from "@/data/battery-config";
+import { BATTERY_TEMP_HOT_C, BATTERY_TEMP_WARN_C } from "@/data/battery-config";
+import { socTone } from "@/components/shared/battery-indicator";
 import { MOTOR_TEMP_HOT_C, MOTOR_TEMP_WARN_C } from "@/data/motor-config";
 import type { EcuId } from "@/data/ecu/ecu-types";
 import { interpolateColor } from "@/lib/utils/gauge-utils";
@@ -113,12 +114,11 @@ const Speed = () => {
 
 const BatteryBar = () => {
   const soc = useSignal("battery.soc");
-  const tone = soc !== null && soc <= SOC_LOW_PCT ? "bg-red-500" : soc !== null && soc <= SOC_WARN_PCT ? "bg-amber-500" : "bg-foreground";
   return (
     <div className="flex w-96 items-center gap-x-3 text-lg text-muted-foreground">
       <span>Battery</span>
       <div className="h-3 flex-1 overflow-hidden rounded-full bg-foreground/20">
-        <div className={cn("h-full rounded-full transition-[width] duration-300", tone)} style={{ width: `${soc ?? 0}%` }} />
+        <div className={cn("h-full rounded-full transition-[width] duration-300", socTone(soc))} style={{ width: `${soc ?? 0}%` }} />
       </div>
       <span className="w-16 text-right tabular-nums">{fmt(soc, 1)}%</span>
     </div>
