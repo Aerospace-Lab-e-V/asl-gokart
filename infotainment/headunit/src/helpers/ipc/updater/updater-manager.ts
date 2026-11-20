@@ -51,9 +51,17 @@ export function installDeb(debPath: string): Promise<void> {
  * helper without allow_new_privs, so Chromium sets PR_SET_NO_NEW_PRIVS on it and the relaunched
  * app inherits it, which makes the next update's `sudo dpkg -i` fail. The shell waits for EOF on
  * stdin, which comes when this process exits.
+ *
+ * Node's spawn keeps every fd that lacks FD_CLOEXEC, and sero-node's sockets lack it. The shell
+ * closes all fds above stderr before exec, or the new app would hold the old SO_REUSEPORT sockets
+ * on the sero port and the kernel would hand some ZCs' events to sockets nobody reads. Bash, not
+ * sh: dash can't redirect fds above 9.
  */
+export const RELAUNCH_SCRIPT =
+    'cat >/dev/null; for fd in /proc/$$/fd/*; do fd=${fd##*/}; [ "$fd" -gt 2 ] && eval "exec $fd<&-"; done; exec "$@" </dev/null';
+
 export function relaunchAfterExit(argv: string[]): ChildProcess {
-    const child = spawn('/bin/sh', ['-c', 'cat >/dev/null; exec "$@" </dev/null', 'relaunch', ...argv], {
+    const child = spawn('/bin/bash', ['-c', RELAUNCH_SCRIPT, 'relaunch', ...argv], {
         detached: true,
         stdio: ['pipe', 'ignore', 'ignore'],
     });
