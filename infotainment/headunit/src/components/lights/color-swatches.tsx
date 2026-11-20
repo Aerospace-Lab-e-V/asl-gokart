@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import type { Color, ColorResult } from "react-color";
 import { ColorPicker } from "@/components/color-picker";
 import { rgbToHex, type Rgb } from "@/domain/lights";
@@ -34,18 +34,33 @@ interface ColorSwatchesProps {
     /** The ECU's colour. */
     value: Rgb;
     disabled?: boolean;
-    /** Called once per choice (tap, or the finger lifting off the hue bar). */
-    onCommit: (rgb: Rgb) => void;
+    /** Called once per choice (tap, or the finger lifting off the hue bar). Resolves false when the ECU refused it. */
+    onCommit: (rgb: Rgb) => Promise<boolean> | void;
 }
+
+/** How long a chosen colour is shown while waiting for the ECU to report it. */
+const ECHO_TIMEOUT_MS = 3000;
 
 /** Large preset swatches plus a hue bar for any other colour. */
 export function ColorSwatches({ value, disabled, onCommit }: ColorSwatchesProps) {
-    // The hue bar follows the finger; everything else shows the ECU's value.
+    // The hue bar follows the finger; once dropped, the chosen colour stays until the ECU reports a
+    // colour (or refuses, or stays silent), so the bar does not jump back to the old value meanwhile.
     const [dragging, setDragging] = useState<Rgb | null>(null);
-    const shown = dragging ?? value;
-    const commit = (rgb: Rgb) => {
+    const [chosen, setChosen] = useState<Rgb | null>(null);
+    const shown = dragging ?? chosen ?? value;
+    const valueKey = rgbToHex(value);
+
+    useEffect(() => setChosen(null), [valueKey]);
+    useEffect(() => {
+        if (!chosen) return;
+        const t = setTimeout(() => setChosen(null), ECHO_TIMEOUT_MS);
+        return () => clearTimeout(t);
+    }, [chosen]);
+
+    const commit = async (rgb: Rgb) => {
         setDragging(null);
-        onCommit(rgb);
+        setChosen(rgb);
+        if ((await onCommit(rgb)) === false) setChosen(null);
     };
 
     return (

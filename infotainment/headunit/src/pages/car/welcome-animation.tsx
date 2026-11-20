@@ -45,6 +45,7 @@ function ColorSection({ animation }: { animation: AnimationInfo }) {
     const commit = async (rgb: Rgb) => {
         const result = await run({ type: "lights.setAnimationColor", layer: animation.layer, id: animation.id, rgb });
         if (!result.ok) toast.error(`Could not change the colour: ${result.error}`);
+        return result.ok;
     };
 
     return (
