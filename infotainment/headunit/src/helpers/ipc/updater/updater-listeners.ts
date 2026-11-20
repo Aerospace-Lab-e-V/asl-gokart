@@ -5,7 +5,7 @@ import log from 'electron-log/main';
 import { CH } from '@/ipc/channels';
 import { requireAdmin } from '@/main/admin';
 import { fetchAppReleases, resolveAppRelease } from './updater-github-releases';
-import { downloadDeb, installDeb } from './updater-manager';
+import { downloadDeb, installDeb, relaunchAfterExit } from './updater-manager';
 
 export function registerUpdaterListeners(mainWindow: BrowserWindow): void {
     ipcMain.handle(CH.updater.getReleases, async () => {
@@ -44,7 +44,7 @@ export function registerUpdaterListeners(mainWindow: BrowserWindow): void {
         CH.updater.relaunch,
         requireAdmin(() => {
             log.info('[updater] Relaunching app after update');
-            app.relaunch();
+            relaunchAfterExit([process.execPath, ...process.argv.slice(1)]);
             app.quit();
         })
     );

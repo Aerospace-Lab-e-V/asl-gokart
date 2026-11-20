@@ -25,7 +25,7 @@ const DigitalClock = () => {
     return () => clearInterval(intervalId);
   }, []); // Empty dependency array ensures the effect runs only once on mount
 
-  return <p className="font-bold text-3xl">{time}</p>;
+  return <p className="text-2xl font-semibold tabular-nums">{time}</p>;
 };
 
 export default DigitalClock;

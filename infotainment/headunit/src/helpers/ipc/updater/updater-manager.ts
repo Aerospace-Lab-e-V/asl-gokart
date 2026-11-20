@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { pipeline } from 'stream/promises';
-import { execFile } from 'child_process';
+import { ChildProcess, execFile, spawn } from 'child_process';
 import log from 'electron-log/main';
 import { UpdateProgress } from '@/data/updater/updater-types';
 import { httpsGet } from '@/main/https-get';
@@ -44,4 +44,19 @@ export function installDeb(debPath: string): Promise<void> {
             }
         });
     });
+}
+
+/**
+ * Starts argv once this process has exited. Not app.relaunch(): Electron spawns its relauncher
+ * helper without allow_new_privs, so Chromium sets PR_SET_NO_NEW_PRIVS on it and the relaunched
+ * app inherits it, which makes the next update's `sudo dpkg -i` fail. The shell waits for EOF on
+ * stdin, which comes when this process exits.
+ */
+export function relaunchAfterExit(argv: string[]): ChildProcess {
+    const child = spawn('/bin/sh', ['-c', 'cat >/dev/null; exec "$@" </dev/null', 'relaunch', ...argv], {
+        detached: true,
+        stdio: ['pipe', 'ignore', 'ignore'],
+    });
+    child.unref();
+    return child;
 }
