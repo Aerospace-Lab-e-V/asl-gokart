@@ -51,7 +51,20 @@ function createWindow() {
     }
 }
 
-app.whenReady().then(createWindow);
+// One headunit per kart. A second instance (e.g. a double tap on the desktop icon) binds the sero port as
+// well, and SO_REUSEPORT then gives it some ZCs' events. It shows the running window and quits instead.
+if (!app.requestSingleInstanceLock()) {
+    log.info("[main] Headunit already running, quitting this instance");
+    app.quit();
+} else {
+    app.on("second-instance", () => {
+        const win = BrowserWindow.getAllWindows()[0];
+        if (!win) return;
+        if (win.isMinimized()) win.restore();
+        win.focus();
+    });
+    app.whenReady().then(createWindow);
+}
 
 app.on("before-quit", () => {
     stopSeroAdapter();
