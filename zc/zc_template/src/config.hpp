@@ -38,6 +38,14 @@ struct Esp32Config {
 // TODO: Replace 0x00FF with the real service ID assigned to this ZC.
 // Method IDs must have bit 15 = 0 (range 0x0001–0x7FFF).
 // Event  IDs must have bit 15 = 1 (range 0x8001–0xFFFF).
+//
+// Protocol conventions (see zc_lights/src/config.hpp for a full example):
+//  - Every consumer mirrors these IDs by hand (headunit src/main/adapters/sero.ts, analytics
+//    crates/ecu-sero/src/lib.rs, other ZCs). Change all of them together, and say so in a comment here.
+//  - Never reuse the ID of a removed method or event; mark it "retired" instead.
+//  - A method that switches something toggles with an empty payload and sets with [value].
+//  - Subscriptions carry no initial value. If clients need this ZC's state, add a GET_STATE method that
+//    returns it and re-sends every event once, so a client that starts late catches up.
 
 struct Esp32ServiceConfig {
     static constexpr uint16_t ESP32_UNICAST_PORT = 30491;

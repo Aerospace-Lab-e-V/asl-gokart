@@ -3,6 +3,7 @@
 #include <sero.hpp>
 #include "udp_transport_esp32.hpp"
 #include "template_service.hpp"
+#include "core/payload.hpp"
 
 const char* FIRMWARE_VERSION = "0.1.0";
 
@@ -93,6 +94,9 @@ void connect_ethernet() {
 // ── setup ─────────────────────────────────────────────────────────────────────
 
 void setup() {
+    // TODO: If this ZC drives something the kart needs without a network (lights, brakes, ...),
+    //       initialise and start that hardware HERE, before connect_ethernet(): it blocks until the
+    //       link is up, and without a link the hardware would stay dead. See zc_lights/src/main.cpp.
     connect_ethernet();
 
     // ── Transport ────────────────────────────────────────────────────────────
@@ -145,6 +149,10 @@ void loop() {
     // Drive the Sero protocol — must be called every iteration.
     rt.process(now);
 
+    // Events: only call notify_event from loop(), never from another task: the runtime's transmit
+    // buffer is not thread-safe. If this ZC gets a task (render, sensor, ...), let it only mark what
+    // changed (std::atomic bit mask) and publish the marked events here. See zc_lights/src/hw/event_outbox.hpp.
+
     // Emit the example event periodically.
     static uint32_t last_event_ms = 0;
     if (now - last_event_ms >= EVENT_INTERVAL_MS) {
@@ -152,10 +160,7 @@ void loop() {
 
         // TODO: Replace with real sensor / state payload.
         uint8_t payload[4];
-        payload[0] = static_cast<uint8_t>(now >> 24);
-        payload[1] = static_cast<uint8_t>(now >> 16);
-        payload[2] = static_cast<uint8_t>(now >> 8);
-        payload[3] = static_cast<uint8_t>(now);
+        put_u32_be(payload, now);
 
         if (!rt.notify_event(
                 Esp32ServiceConfig::ZC_TEMPLATE_ID,
