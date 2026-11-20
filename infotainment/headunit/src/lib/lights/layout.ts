@@ -1,12 +1,19 @@
 // Port of zc/zc_lights/src/core/light_layout.hpp and core/blink.hpp — keep in sync.
 import type { Rgb } from "@/domain/lights";
 
+/**
+ * Indicator colour as drawn on screen. The LEDs need [255, 40, 0] to look orange (they are not true
+ * colour), but on a display that is hardly distinguishable from the red tail/brake light, so the
+ * preview uses a yellower orange. Not a firmware value.
+ */
+const PREVIEW_COLOR_TURN: Rgb = [255, 160, 0];
+
 export const FRONT = {
     NUM_LEDS: 15,
     BRIGHTNESS_DRL: 128,
     BRIGHTNESS_TURN: 128,
     COLOR_DRL: [255, 255, 255] as Rgb,
-    COLOR_TURN: [255, 40, 0] as Rgb,
+    COLOR_TURN: PREVIEW_COLOR_TURN,
 } as const;
 
 /** Rear bar: 144 × 3, column 0 = left seen from behind. */
@@ -26,7 +33,7 @@ export const REAR = {
     BRIGHTNESS_TURN: 255,
     COLOR_TAIL: [255, 0, 0] as Rgb,
     COLOR_BRAKE: [255, 0, 0] as Rgb,
-    COLOR_TURN: [255, 40, 0] as Rgb,
+    COLOR_TURN: PREVIEW_COLOR_TURN,
     COLOR_REVERSE: [255, 255, 255] as Rgb,
 } as const;
 
