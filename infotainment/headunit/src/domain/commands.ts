@@ -3,16 +3,23 @@
  * State never changes because a command succeeded: it changes when the ECU echoes the new state as a signal.
  */
 
-/** Lights the firmware toggles (zc_lights has no set-to-state methods except high beams). */
+import type { AnimationLayer, Rgb } from "@/domain/lights";
+
+/** Lights the firmware toggles. */
 export type ToggleLight = "turn_left" | "turn_right" | "hazard" | "drl" | "high_beam" | "tail" | "brake" | "reverse";
+
+/** Lights that can also be set to a state. */
+export type SettableLight = "drl" | "high_beam" | "tail" | "brake" | "reverse";
 
 export type Command =
     | { type: "lights.toggle"; light: ToggleLight }
-    /** Plays the welcome animation. */
+    | { type: "lights.set"; light: SettableLight; on: boolean }
+    /** Plays the welcome animation now; refused while moving or while brake/reverse/turn is on. */
     | { type: "lights.welcome" }
-    | { type: "lights.setWelcomeColor"; rgb: [number, number, number] }
-    /** Global LED brightness 0-255, all strips. The ECU does not echo it. */
-    | { type: "lights.setBrightness"; value: number }
+    /** Welcome settings; at least one field. Ambient is 0-255 and dims the welcome only. */
+    | { type: "lights.setWelcome"; enabled?: boolean; front?: number; rear?: number; ambient?: number }
+    /** Colour of one custom-colour animation. */
+    | { type: "lights.setAnimationColor"; layer: AnimationLayer; id: number; rgb: Rgb }
     /** Relay index as the firmware counts: 0 = relay 1, 1 = relay 2. */
     | { type: "motor.toggleRelay"; relay: 0 | 1 };
 

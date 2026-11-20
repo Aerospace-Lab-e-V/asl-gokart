@@ -49,6 +49,18 @@ jobs:
                         echo "::endgroup::"
                       done
 
+            # Host-side unit tests for projects that define a native test env.
+            - name: Run native unit tests
+              run: |
+                  grep -l '^\[env:native\]' zc/zc_*/platformio.ini \
+                    | sort \
+                    | while read ini; do
+                        dir=$(dirname "$ini")
+                        echo "::group::Testing $dir"
+                        pio test -d "$dir" -e native
+                        echo "::endgroup::"
+                      done
+
             # Collect firmware binaries and rename to avoid collisions
             - name: Collect firmware binaries
               if: inputs.is-tag

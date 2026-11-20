@@ -17,7 +17,7 @@ afterEach(() => {
 function run(seconds: number, beforeTick?: (rt: MockRuntime, ms: number) => void) {
     const rt = new MockRuntime();
     rt.onServiceFound((service) => {
-        for (let event = 0x8001; event <= 0x8007; event++) rt.subscribeEvent(service, event, (s, e, p) => handleEvent(s, e, p));
+        for (let event = 0x8001; event <= 0x8009; event++) rt.subscribeEvent(service, event, (s, e, p) => handleEvent(s, e, p));
     });
     [1, 2, 3, 4].forEach((s) => rt.findService(s));
     const seen: Partial<Record<SignalName, number[]>> = {};
@@ -48,4 +48,30 @@ test("two laps drive the kart through every state", () => {
 test("hazard toggle blinks both sides and reads as hazard", () => {
     const seen = run(3, (rt, ms) => ms === 0 && rt.fireAndForget(0x0001, 0x0004));
     expect(seen["lights.hazard"]).toContain(1);
+});
+
+test("zc_lights welcome settings: GET, SET and the playing pulse", async () => {
+    const rt = new MockRuntime();
+    rt.onServiceFound((service) => {
+        for (let event = 0x8001; event <= 0x8009; event++) rt.subscribeEvent(service, event, (s, e, p) => handleEvent(s, e, p));
+    });
+    [1, 2, 3, 4].forEach((s) => rt.findService(s));
+    rt.process(0);
+
+    const get = await rt.request(0x0001, 0x0010, Buffer.alloc(0));
+    expect(get.returnCode).toBe(0);
+    expect(get.payload[0]).toBe(1); // blob version
+
+    const set = await rt.request(0x0001, 0x000e, Buffer.from([0b0110, 0, 2, 1, 0]));
+    expect(set.returnCode).toBe(0);
+    expect(getFresh("lights.welcome_front")).toBe(2); // the config event
+    expect(getFresh("lights.welcome_rear")).toBe(1);
+
+    expect((await rt.request(0x0001, 0x000f, Buffer.from([1, 1, 0, 0, 255]))).returnCode).toBe(1); // wing: fixed colour
+
+    expect((await rt.request(0x0001, 0x000a, Buffer.alloc(0))).returnCode).toBe(0);
+    rt.process(100);
+    expect(getFresh("lights.welcome_playing")).toBe(1);
+    rt.process(100 + 4000); // sweep 1500 / cue 1100 + wing 1700 + settle 400 = 3200 ms
+    expect(getFresh("lights.welcome_playing")).toBe(0);
 });

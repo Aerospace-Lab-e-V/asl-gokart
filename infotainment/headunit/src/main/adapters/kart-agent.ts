@@ -86,6 +86,22 @@ function setConnected(now: boolean, reason?: string): void {
         );
 }
 
+/**
+ * Runs `fn` with a signal of its own that aborts with `parent`, and detaches it from `parent` afterwards.
+ * fetch never removes the abort listener it adds to its signal, so passing the long-lived stream signal
+ * straight in would add a listener per reconnect (MaxListenersExceededWarning when the agent is not running).
+ */
+async function withChildSignal<T>(parent: AbortSignal, fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const child = new AbortController();
+    const abort = () => child.abort();
+    parent.addEventListener("abort", abort, { once: true });
+    try {
+        return await fn(child.signal);
+    } finally {
+        parent.removeEventListener("abort", abort);
+    }
+}
+
 /** Reads one connection until the agent ends it (e.g. a configuration restart); rejects on errors. */
 async function readStream(signal: AbortSignal): Promise<void> {
     const res = await fetch(STREAM_URL, { signal });
@@ -104,8 +120,9 @@ async function readStream(signal: AbortSignal): Promise<void> {
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
     return new Promise((resolve) => {
-        const timer = setTimeout(resolve, ms);
-        signal.addEventListener("abort", () => (clearTimeout(timer), resolve()), { once: true });
+        const abort = () => (clearTimeout(timer), resolve());
+        const timer = setTimeout(() => (signal.removeEventListener("abort", abort), resolve()), ms);
+        signal.addEventListener("abort", abort, { once: true });
     });
 }
 
@@ -118,7 +135,7 @@ export function startAgentStream(): void {
         while (!c.signal.aborted) {
             let reason: string | undefined;
             try {
-                await readStream(c.signal);
+                await withChildSignal(c.signal, readStream);
             } catch (err) {
                 reason = err instanceof Error ? err.message : String(err);
             }

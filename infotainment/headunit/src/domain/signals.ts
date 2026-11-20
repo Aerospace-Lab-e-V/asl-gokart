@@ -104,6 +104,28 @@ export const SIGNALS = {
     /** Headunit-derived: hazard mode, held through the blink-off phase. */
     "lights.hazard": lights,
 
+    // --- welcome light settings (zc_lights LIGHTS_CONFIG / WELCOME_STATE echo; headunit-only, not in the
+    //     catalog). Published from the ECU's answer, never optimistically. See domain/lights.ts. ---
+    /** 1 = the welcome plays automatically at boot. */
+    "lights.welcome_enabled": lights,
+    /** Selected animation ids. */
+    "lights.welcome_front": lights,
+    "lights.welcome_rear": lights,
+    /** 0-255, scales the welcome only. */
+    "lights.ambient": lights,
+    /** 1 while a welcome is playing. */
+    "lights.welcome_playing": lights,
+    /** Bitmask of the animation ids the firmware has (bit n = id n). */
+    "lights.front_anims": lights,
+    "lights.rear_anims": lights,
+    /** User colour per custom-colour animation, 0xRRGGBB (colorSignal in domain/lights.ts). */
+    "lights.color.front.glow": lights,
+    "lights.color.front.pods": lights,
+    "lights.color.front.sweep": lights,
+    "lights.color.front.scan": lights,
+    "lights.color.rear.classic": lights,
+    "lights.color.rear.pulse": lights,
+
     // --- GPS (kart-agent, u-blox receiver on the Pi) ---
     // Position, altitude and HDOP only arrive with a fix, heading only above 3 km/h: they go stale when the
     // kart loses the fix or stops. Use useSample where a held value makes sense (e.g. the heading on a map).

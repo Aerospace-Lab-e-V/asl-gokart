@@ -27,6 +27,11 @@ pub mod ids {
         pub const REVERSE: u16 = 0x8005;
         pub const DRL: u16 = 0x8006;
         pub const TAIL: u16 = 0x8007;
+        /// Welcome-light settings blob (`zc_lights/src/core/lights_config.hpp`). A settings
+        /// echo for the headunit, not telemetry: not subscribed, [`crate::decode`] ignores it.
+        pub const CONFIG: u16 = 0x8008;
+        /// `[playing]`, welcome animation running. Headunit only, like [`CONFIG`].
+        pub const WELCOME_STATE: u16 = 0x8009;
     }
 
     pub mod battery {

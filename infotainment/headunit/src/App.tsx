@@ -11,6 +11,8 @@ import NavBar from "./components/navbar/navbar";
 import DriveNormalPage from "./pages/drive-normal";
 import SettingsPage from "./pages/settings";
 import CarPage from "./pages/car";
+import WelcomeAnimationPage from "./pages/car/welcome-animation";
+import ShowroomPage from "./pages/car/showroom";
 import BatteryPage from "./pages/battery";
 import EcuManagerPage from "./pages/ecu-manager";
 import EcuControllerPage from "./pages/ecu-controller";
@@ -33,9 +35,10 @@ import { networkGate } from "./services/app";
 const MotorPage = lazy(() => import("./pages/motor"));
 
 /** Sends back to Settings when admin mode is locked. */
-function AdminOnly({ children }: { children: React.ReactNode }) {
+/** Leaves for `fallback` once admin mode is locked. */
+function AdminOnly({ children, fallback = "/settings" }: { children: React.ReactNode; fallback?: string }) {
     const adminMode = useSession((state) => state.adminMode);
-    return adminMode ? <>{children}</> : <Navigate to="/settings" replace />;
+    return adminMode ? <>{children}</> : <Navigate to={fallback} replace />;
 }
 
 function MainAppContent() {
@@ -83,6 +86,8 @@ function MainAppContent() {
                             <Route path="/" element={<ErrorBoundary><DriveNormalPage /></ErrorBoundary>} />
                             <Route path="/motor" element={<ErrorBoundary><Suspense fallback={null}><MotorPage /></Suspense></ErrorBoundary>} />
                             <Route path="/car" element={<ErrorBoundary><CarPage /></ErrorBoundary>} />
+                            <Route path="/car/welcome/:layer" element={<ErrorBoundary><WelcomeAnimationPage /></ErrorBoundary>} />
+                            <Route path="/car/showroom" element={<ErrorBoundary><AdminOnly fallback="/car"><ShowroomPage /></AdminOnly></ErrorBoundary>} />
                             <Route path="/settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
                             <Route path="/battery" element={<ErrorBoundary><BatteryPage /></ErrorBoundary>} />
                             <Route path="/settings/network" element={<ErrorBoundary><NetworkInterfacePage /></ErrorBoundary>} />

@@ -1,7 +1,9 @@
 import type { Address, RequestResult } from "@asl-gokart/sero-node";
 import { BATTERY_MAX_VOLTAGE, BATTERY_MIN_VOLTAGE } from "@/data/battery-config";
 import { WHEEL_CIRCUMFERENCE_M } from "@/main/derive";
-import { EVENT, METHOD, SERVICE, type Runtime } from "@/main/adapters/sero";
+import { EVENT, METHOD, RC, SERVICE, type Runtime } from "@/main/adapters/sero";
+import { defaultLightsConfig, encodeLightsConfig, type LightsConfig } from "@/main/adapters/lights-config-codec";
+import { findAnimation, welcomeTotalMs, type AnimationLayer } from "@/domain/lights";
 
 /*
  * A simulated kart behind the Sero runtime interface (HEADUNIT_MOCK=1). It sends the zone controllers'
@@ -10,6 +12,10 @@ import { EVENT, METHOD, SERVICE, type Runtime } from "@/main/adapters/sero";
  */
 
 type EventHandler = (serviceId: number, eventId: number, payload: Buffer) => void;
+type AckHandler = (serviceId: number, eventId: number, returnCode: number, grantedTtl: number) => void;
+
+const ok = (payload = Buffer.alloc(0)): RequestResult => ({ returnCode: RC.E_OK, payload });
+const refused = (returnCode: number): RequestResult => ({ returnCode, payload: Buffer.alloc(0) });
 
 /** `[t s, target km/h]`, linear in between, looping; negative is reverse. */
 const LAP: [number, number][] = [
@@ -137,9 +143,14 @@ export class MockRuntime implements Runtime {
     /** Last lights payload per event, so lights are sent on change like zc_lights does. */
     private sentLights = new Map<number, string>();
     private found: ((serviceId: number, address: Address) => void) | null = null;
+    private ack: AckHandler | null = null;
     private relays: [number, number] = [1, 1];
-    /** Lights the user toggled; the turn signals also follow the driver. */
-    private user = { drl: 1, tail: 1, highBeam: 0, hazard: 0, turnLeft: 0, turnRight: 0 };
+    /** Lights the user switched; the turn signals, brake and reverse also follow the driver. */
+    private user = { drl: 1, tail: 1, highBeam: 0, hazard: 0, turnLeft: 0, turnRight: 0, brake: 0, reverse: 0 };
+    /** zc_lights' stored welcome settings. */
+    private lights: LightsConfig = defaultLightsConfig();
+    /** When the running welcome ends, or null. */
+    private welcomeUntil: number | null = null;
 
     process(nowMs = Date.now()): void {
         if (this.last !== null && nowMs - this.last < 100) return;
@@ -163,8 +174,15 @@ export class MockRuntime implements Runtime {
         const right = this.user.hazard || this.user.turnRight || signal === "right" ? blink : 0;
         this.light(EVENT.lights.TURN, [left, right]);
         this.light(EVENT.lights.HIGH_BEAM, [this.user.highBeam, this.user.highBeam]);
-        this.light(EVENT.lights.BRAKE, [s.brake > 5 ? 1 : 0]);
-        this.light(EVENT.lights.REVERSE, [s.reverse ? 1 : 0]);
+        const brake = this.user.brake || s.brake > 5 ? 1 : 0;
+        const reverse = this.user.reverse || s.reverse ? 1 : 0;
+        this.light(EVENT.lights.BRAKE, [brake]);
+        this.light(EVENT.lights.REVERSE, [reverse]);
+        // Like the firmware: brake, reverse, a turn signal or moving cancel the welcome.
+        if (this.welcomeUntil !== null && (nowMs >= this.welcomeUntil || brake || reverse || left || right || Math.abs(s.speed) > 0.5)) {
+            this.welcomeUntil = null;
+        }
+        this.light(EVENT.lights.WELCOME_STATE, [this.welcomeUntil === null ? 0 : 1]);
         this.light(EVENT.lights.DRL, [this.user.drl]);
         this.light(EVENT.lights.TAIL, [this.user.tail]);
     }
@@ -195,7 +213,9 @@ export class MockRuntime implements Runtime {
 
     onServiceLost(): void {}
 
-    onSubscriptionAck(): void {}
+    onSubscriptionAck(callback: AckHandler): void {
+        this.ack = callback;
+    }
 
     /** Every zone controller is "found" right away. */
     findService(serviceId: number): boolean {
@@ -205,29 +225,76 @@ export class MockRuntime implements Runtime {
 
     subscribeEvent(serviceId: number, eventId: number, handler: EventHandler): boolean {
         this.handlers.set(`${serviceId}:${eventId}`, handler);
+        this.ack?.(serviceId, eventId, RC.E_OK, 15);
         return true;
     }
 
-    fireAndForget(serviceId: number, methodId: number): boolean {
+    /** Light methods: an empty payload toggles, `[on]` sets, like zc_lights. */
+    fireAndForget(serviceId: number, methodId: number, payload?: Buffer): boolean {
         if (serviceId !== SERVICE.LIGHTS) return true;
         const u = this.user;
-        const flip = (v: number) => (v ? 0 : 1);
-        if (methodId === METHOD.lights.TURN_LEFT) [u.turnLeft, u.turnRight] = [flip(u.turnLeft), 0];
-        else if (methodId === METHOD.lights.TURN_RIGHT) [u.turnLeft, u.turnRight] = [0, flip(u.turnRight)];
-        else if (methodId === METHOD.lights.HAZARD) u.hazard = flip(u.hazard);
-        else if (methodId === METHOD.lights.HIGH_BEAM) u.highBeam = flip(u.highBeam);
-        else if (methodId === METHOD.lights.DRL) u.drl = flip(u.drl);
-        else if (methodId === METHOD.lights.TAIL) u.tail = flip(u.tail);
+        const next = (v: number) => (payload && payload.length > 0 ? (payload[0] ? 1 : 0) : v ? 0 : 1);
+        if (methodId === METHOD.lights.TURN_LEFT) [u.turnLeft, u.turnRight] = [next(u.turnLeft), 0];
+        else if (methodId === METHOD.lights.TURN_RIGHT) [u.turnLeft, u.turnRight] = [0, next(u.turnRight)];
+        else if (methodId === METHOD.lights.HAZARD) u.hazard = next(u.hazard);
+        else if (methodId === METHOD.lights.HIGH_BEAM) u.highBeam = next(u.highBeam);
+        else if (methodId === METHOD.lights.DRL) u.drl = next(u.drl);
+        else if (methodId === METHOD.lights.TAIL) u.tail = next(u.tail);
+        else if (methodId === METHOD.lights.BRAKE) u.brake = next(u.brake);
+        else if (methodId === METHOD.lights.REVERSE) u.reverse = next(u.reverse);
         return true;
     }
 
-    /** Relay toggles succeed; anything else (e.g. an OTA trigger) is refused with E_NOT_OK. */
-    async request(serviceId: number, methodId: number, payload?: Buffer): Promise<RequestResult> {
-        const relay = payload?.[0];
+    /** Relay toggles and the zc_lights welcome methods succeed; anything else (e.g. an OTA trigger) is refused. */
+    async request(serviceId: number, methodId: number, payload: Buffer = Buffer.alloc(0)): Promise<RequestResult> {
+        const relay = payload[0];
         if (serviceId === SERVICE.MOTOR && methodId === METHOD.motor.TOGGLE_RELAY && (relay === 0 || relay === 1)) {
             this.relays[relay] = this.relays[relay] ? 0 : 1;
-            return { returnCode: 0, payload: Buffer.alloc(0) };
+            return ok();
         }
-        return { returnCode: 1, payload: Buffer.alloc(0) };
+        if (serviceId === SERVICE.LIGHTS) return this.lightsRequest(methodId, payload);
+        return refused(RC.E_NOT_OK);
+    }
+
+    private lightsRequest(methodId: number, p: Buffer): RequestResult {
+        const c = this.lights;
+        switch (methodId) {
+            case METHOD.lights.GET_CONFIG:
+                this.sentLights.clear(); // re-send every lights event, like the firmware
+                return ok(encodeLightsConfig(c));
+            case METHOD.lights.SET_WELCOME_CONFIG: {
+                const [mask, enabled, front, rear, ambient] = p;
+                if (p.length < 5 || !(mask & 0x0f)) return refused(RC.E_NOT_OK);
+                if ((mask & 2 && !findAnimation("front", front)) || (mask & 4 && !findAnimation("rear", rear))) return refused(RC.E_NOT_OK);
+                if (mask & 1) c.enabled = enabled === 1;
+                if (mask & 2) c.front = front;
+                if (mask & 4) c.rear = rear;
+                if (mask & 8) c.ambient = ambient;
+                return this.configChanged();
+            }
+            case METHOD.lights.SET_ANIM_COLOR: {
+                const layer: AnimationLayer = p[0] === 0 ? "front" : "rear";
+                const entry = c.colors.find((e) => e.layer === layer && e.id === p[1]);
+                if (p.length < 5 || p[0] > 1 || !entry) return refused(RC.E_NOT_OK);
+                entry.rgb = [p[2], p[3], p[4]];
+                return this.configChanged();
+            }
+            case METHOD.lights.WELCOME: {
+                const u = this.user;
+                if (u.brake || u.reverse || u.hazard || u.turnLeft || u.turnRight || Math.abs(this.sim.speed) > 0.5) return refused(RC.E_NOT_READY);
+                const front = findAnimation("front", c.front);
+                const rear = findAnimation("rear", c.rear);
+                if (front && rear) this.welcomeUntil = (this.last ?? Date.now()) + welcomeTotalMs(front, rear);
+                return ok();
+            }
+            default:
+                return refused(RC.E_UNKNOWN_METHOD);
+        }
+    }
+
+    private configChanged(): RequestResult {
+        const blob = encodeLightsConfig(this.lights);
+        this.emit(SERVICE.LIGHTS, EVENT.lights.CONFIG, blob);
+        return ok(blob);
     }
 }

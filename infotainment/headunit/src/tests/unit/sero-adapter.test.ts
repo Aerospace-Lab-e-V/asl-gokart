@@ -7,6 +7,7 @@ const mockRuntime = {
     onSubscriptionAck: jest.fn(),
     findService: jest.fn(),
     subscribeEvent: jest.fn(),
+    request: jest.fn(),
 };
 
 jest.mock("@asl-gokart/sero-node", () => ({ SeroRuntime: jest.fn(() => mockRuntime) }));
@@ -17,6 +18,7 @@ import { handleEvent, startSeroAdapter, stopSeroAdapter } from "@/main/adapters/
 import { get, getFresh, resetSignalHub } from "@/main/signal-hub";
 import { resetDerive } from "@/main/derive";
 import { FlowState } from "@/domain/signals";
+import { defaultLightsConfig, encodeLightsConfig } from "@/main/adapters/lights-config-codec";
 
 const LIGHTS = 0x0001;
 const BATTERY = 0x0003;
@@ -121,9 +123,78 @@ test("subscribes every event once and marks a lost ECU stale", () => {
     found(LIGHTS, { ip: "192.168.1.21", port: 30491 });
     found(LIGHTS, { ip: "192.168.1.21", port: 30491 });
     const events = mockRuntime.subscribeEvent.mock.calls.map(([, e]) => e);
-    expect(events).toEqual([0x8001, 0x8003, 0x8004, 0x8005, 0x8006, 0x8007]);
+    expect(events).toEqual([0x8001, 0x8003, 0x8004, 0x8005, 0x8006, 0x8007, 0x8008, 0x8009]);
 
     handleEvent(LIGHTS, 0x8006, Buffer.from([1]), Date.now());
     lost(LIGHTS);
     expect(getFresh("lights.drl")).toBeUndefined();
+});
+
+// --- zc_lights welcome settings -------------------------------------------------------------
+
+/** zc_lights LightsConfig{} encoded with the catalog (lights_config.hpp); front 1, rear 2, ambient 77. */
+const CONFIG_BLOB =
+    "01 01 01 02 4D 06" +
+    " 00 00 00 64 FF  00 01 FF FF FF  00 02 00 64 FF  00 03 00 64 FF" + // front colours
+    " 01 00 00 64 FF  01 02 0A 14 1E" + // rear classic, rear pulse = 0A141E
+    " 04 00 01 02 03  03 00 01 02"; // catalog
+
+test("config event publishes the welcome settings", () => {
+    handleEvent(LIGHTS, 0x8008, hex(CONFIG_BLOB), 1);
+    expect(value("lights.welcome_enabled")).toBe(1);
+    expect(value("lights.welcome_front")).toBe(1);
+    expect(value("lights.welcome_rear")).toBe(2);
+    expect(value("lights.ambient")).toBe(77);
+    expect(value("lights.color.front.pods")).toBe(0xffffff);
+    expect(value("lights.color.rear.pulse")).toBe(0x0a141e);
+    expect(value("lights.front_anims")).toBe(0b1111);
+    expect(value("lights.rear_anims")).toBe(0b111);
+});
+
+test("the codec writes what the firmware sends", () => {
+    const c = { ...defaultLightsConfig(), front: 1, rear: 2, ambient: 77 };
+    c.colors.find((e) => e.layer === "rear" && e.id === 2)!.rgb = [10, 20, 30];
+    expect(encodeLightsConfig(c)).toEqual(hex(CONFIG_BLOB));
+});
+
+test("a config blob of another version or truncated is rejected", () => {
+    handleEvent(LIGHTS, 0x8008, hex("02 01 01 02 4D 00"), 1);
+    handleEvent(LIGHTS, 0x8008, hex("01 01 01 02 4D 03 00 00"), 1);
+    expect(value("lights.welcome_front")).toBeUndefined();
+});
+
+test("welcome state event", () => {
+    handleEvent(LIGHTS, 0x8009, hex("01"), 1);
+    expect(value("lights.welcome_playing")).toBe(1);
+});
+
+test("asks zc_lights for its state once per discovery, not on subscription renewals", async () => {
+    mockRuntime.request.mockResolvedValue({ returnCode: 0, payload: hex(CONFIG_BLOB) });
+    startSeroAdapter();
+    const found = mockRuntime.onServiceFound.mock.calls[0][0];
+    const ack = mockRuntime.onSubscriptionAck.mock.calls[0][0];
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+
+    found(LIGHTS, { ip: "10.77.0.4", port: 30491 });
+    ack(LIGHTS, 0x8001, 0, 15); // another event: no request
+    expect(mockRuntime.request).not.toHaveBeenCalled();
+    ack(LIGHTS, 0x8008, 0, 15);
+    ack(LIGHTS, 0x8008, 0, 15); // renewal
+    await flush();
+    expect(mockRuntime.request).toHaveBeenCalledTimes(1);
+    expect(mockRuntime.request).toHaveBeenCalledWith(LIGHTS, 0x0010, Buffer.alloc(0));
+    expect(value("lights.ambient")).toBe(77);
+
+    found(LIGHTS, { ip: "10.77.0.4", port: 30491 }); // e.g. after an OTA reboot
+    ack(LIGHTS, 0x8008, 0, 15);
+    await flush();
+    expect(mockRuntime.request).toHaveBeenCalledTimes(2);
+});
+
+test("old zc_lights firmware without GET_CONFIG offers no animations", async () => {
+    mockRuntime.request.mockResolvedValue({ returnCode: 3, payload: Buffer.alloc(0) });
+    startSeroAdapter();
+    mockRuntime.onSubscriptionAck.mock.calls[0][0](LIGHTS, 0x8008, 0, 15);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(value("lights.front_anims")).toBe(0);
 });
