@@ -95,7 +95,8 @@ const CarPage = () => {
                     <KartVisual state={readLightState} plan={plan} className="min-h-0 flex-1" />
                     <PlayWelcomeButton />
                 </div>
-                <div className="min-h-0 overflow-y-auto">
+                {/* The rows bleed 16px sideways (-mx-4); the column's own padding takes that, or it scrolls sideways. */}
+                <div className="-mx-4 min-h-0 overflow-y-auto px-4">
                     <WelcomeSettings />
                     {adminMode && (
                         <SettingsSection title="Showroom">
