@@ -19,7 +19,7 @@ ECUs ──Sero/UDP──► Raspberry Pi: kart-agent (systemd service, ships wi
                                                                      ▼
                          WireGuard tunnel over LTE/5G hotspot
                                                                      ▼
-Proxmox VM (Docker Compose)
+Proxmox VE: LXC container (Docker Compose)
   MQTT broker ──► ingest ──► TimescaleDB ──► Grafana (history, near-live overview)
        │
        └──(MQTT over WebSocket)──► pit wall in the browser (real-time)
@@ -46,7 +46,7 @@ Proxmox VM (Docker Compose)
 | Dashboards | Grafana OSS on TimescaleDB (history, near-live overview) |
 | Session deep dive | Lichtblick / PlotJuggler (open MCAP files directly) |
 | Auth | Keycloak (OIDC to all services; upstream SAML brokered by Keycloak) |
-| Platform | Docker Compose on a Proxmox VM |
+| Platform | Docker Compose in an unprivileged LXC container on Proxmox VE; images on GHCR, pulled by a systemd timer |
 | Later | Parquet archive on S3-compatible storage, analysis tooling, MediaMTX for video, LoRa fallback link (ChirpStack if LoRaWAN) |
 
 > Grafana OSS supports OIDC but not SAML (SAML is Enterprise-only). Connect Grafana to Keycloak via OIDC; Keycloak handles any SAML identity provider upstream.
@@ -90,7 +90,8 @@ analytics/
 │   ├── mosquitto/   # broker config (dev: anonymous, prod: auth)
 │   ├── kart/        # WireGuard templates (planned); the agent itself ships with the headunit
 │   ├── keycloak/    # realm export
-│   └── infra/       # Proxmox VM for the Docker host via OpenTofu (optional)
+│   ├── lxc/         # production host: runbook, updater script, systemd units
+│   └── bundle.Dockerfile # deploy bundle (compose + config) published next to the images
 └── testdata/sessions/      # small recorded sessions (Git LFS)
 ```
 
@@ -305,6 +306,17 @@ Historical dashboards, track maps (Geomap) and speed-vs-distance overlays (XY ch
 | `kart/{id}/cmd/ack` | kart → cloud | 1 | accepted / rejected + reason |
 
 Only `command-api` may publish to `cmd`. The kart authenticates to the broker with an mTLS client certificate. The timing device may only publish to `laps`. Browser clients (pit wall) connect through the WebSocket listener and may only subscribe to `live`, `status` and `laps`.
+
+---
+
+## Deployment
+
+Production runs in an unprivileged LXC container on the a Proxmox VE node, with Docker Compose inside it. Deploys are pull-based.
+
+1. Push a tag `analytics-vX.Y.Z`. `ci-analytics-release.yml` runs the checks, then pushes `kart-ingest`, `kart-pit-api` and `kart-pit-wall` to GHCR, and last the deploy bundle `kart-analytics-deploy` (compose files, Grafana dashboards, broker config).
+2. In the container, `kart-analytics-update.timer` checks GHCR every 5 minutes for the highest stable version, takes a `pg_dump`, pulls and restarts the stack, and goes back to the previous version if it doesn't come up healthy.
+
+Pre-release tags (`analytics-v1.2.0-rc.1`) are published but only deployed when pinned. Setting up the container, secrets, pinning and rollback: [deploy/lxc/README.md](deploy/lxc/README.md).
 
 ---
 
