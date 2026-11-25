@@ -1,0 +1,10 @@
+# Context is analytics/; only send the deploy files. Never host secrets.
+**
+!deploy/compose/**
+!deploy/mosquitto/**
+!deploy/lxc/**
+!grafana/**
+**/.env
+**/*.passwd
+**/passwd
+deploy/compose/pit-wall.config.json
