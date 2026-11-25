@@ -1,0 +1,12 @@
+[Unit]
+Description=Deploy the newest kart analytics release from GHCR
+Documentation=https://github.com/Aerospace-Lab-e-V/asl-gokart/tree/main/analytics/deploy/lxc
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/kart-analytics-update
+# Image pulls and the health wait can take a while.
+TimeoutStartSec=30min

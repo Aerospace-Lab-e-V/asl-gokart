@@ -1,0 +1,11 @@
+[Unit]
+Description=Check GHCR for a new kart analytics release
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
