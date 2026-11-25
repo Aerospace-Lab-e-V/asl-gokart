@@ -1,0 +1,108 @@
+# Release — Analytics
+# A tag analytics-vX.Y.Z runs the checks, pushes the server images to GHCR and then the deploy
+# bundle. The production LXC polls GHCR for new bundle tags (analytics/deploy/lxc/), so the
+# bundle goes last: a version is only visible there once all of its images exist.
+# Pre-release tags (analytics-v1.2.0-rc.1) are published too, but only deployed when pinned.
+
+name: Release — Analytics
+
+on:
+    push:
+        tags:
+            - 'analytics-v*'
+
+permissions:
+    contents: read
+
+env:
+    REGISTRY: ghcr.io/aerospace-lab-e-v
+
+jobs:
+    checks:
+        uses: ./.github/workflows/_analytics.yml
+
+    images:
+        name: Image ${{ matrix.image }}
+        needs: checks
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            packages: write
+        strategy:
+            fail-fast: true
+            matrix:
+                include:
+                    - image: kart-ingest
+                      dockerfile: crates/ingest/Dockerfile
+                    - image: kart-pit-api
+                      dockerfile: crates/pit-api/Dockerfile
+                    - image: kart-pit-wall
+                      dockerfile: web/pit-wall/Dockerfile
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  submodules: true # sero headers (sero-sys is part of the workspace)
+
+            - uses: docker/setup-buildx-action@v4
+
+            - uses: docker/login-action@v4
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - id: meta
+              uses: docker/metadata-action@v6
+              with:
+                  images: ${{ env.REGISTRY }}/${{ matrix.image }}
+                  flavor: latest=false
+                  tags: |
+                      type=match,pattern=analytics-v(.*),group=1
+                      type=sha
+
+            - uses: docker/build-push-action@v7
+              with:
+                  context: analytics
+                  file: analytics/${{ matrix.dockerfile }}
+                  platforms: linux/amd64
+                  push: true
+                  tags: ${{ steps.meta.outputs.tags }}
+                  labels: ${{ steps.meta.outputs.labels }}
+                  cache-from: type=gha,scope=${{ matrix.image }}
+                  cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+    bundle:
+        name: Deploy bundle
+        needs: images
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            packages: write
+        steps:
+            - uses: actions/checkout@v7
+
+            - uses: docker/setup-buildx-action@v4
+
+            - uses: docker/login-action@v4
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - id: meta
+              uses: docker/metadata-action@v6
+              with:
+                  images: ${{ env.REGISTRY }}/kart-analytics-deploy
+                  flavor: latest=false
+                  tags: |
+                      type=match,pattern=analytics-v(.*),group=1
+                      type=sha
+
+            - uses: docker/build-push-action@v7
+              with:
+                  context: analytics
+                  file: analytics/deploy/bundle.Dockerfile
+                  platforms: linux/amd64
+                  push: true
+                  tags: ${{ steps.meta.outputs.tags }}
+                  labels: ${{ steps.meta.outputs.labels }}

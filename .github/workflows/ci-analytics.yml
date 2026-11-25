@@ -1,23 +1,22 @@
 # CI — Analytics
-# Currently disabled. Uncomment the trigger below to enable.
+# Checks the Rust workspace and the pit wall on PRs and main. Releases (analytics-v* tags)
+# run the same checks in ci-analytics-release.yml before images are published.
 
 name: CI — Analytics
 
-# on:
-#     pull_request:
-#         paths:
-#             - 'analytics/**'
-#             - '.github/workflows/_analytics.yml'
-#             - '.github/workflows/ci-analytics.yml'
-#     push:
-#         branches: [main]
-#         paths:
-#             - 'analytics/**'
-#             - '.github/workflows/_analytics.yml'
-#             - '.github/workflows/ci-analytics.yml'
-
 on:
-    workflow_dispatch: # Manual trigger only — remove this and uncomment above to enable
+    pull_request:
+        paths:
+            - 'analytics/**'
+            - '.github/workflows/_analytics.yml'
+            - '.github/workflows/ci-analytics.yml'
+    push:
+        branches: [main]
+        paths:
+            - 'analytics/**'
+            - '.github/workflows/_analytics.yml'
+            - '.github/workflows/ci-analytics.yml'
+    workflow_dispatch:
 
 jobs:
     analytics:
