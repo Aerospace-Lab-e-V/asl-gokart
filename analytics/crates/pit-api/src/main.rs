@@ -72,10 +72,7 @@ fn router(pool: PgPool) -> Router {
             "/api/karts/{kart_id}/sessions/{session_id}/samples",
             get(samples),
         )
-        .route(
-            "/api/karts/{kart_id}/sessions/{session_id}/laps",
-            get(laps),
-        )
+        .route("/api/karts/{kart_id}/sessions/{session_id}/laps", get(laps))
         .layer(TraceLayer::new_for_http())
         .with_state(pool)
 }
@@ -124,7 +121,11 @@ async fn laps(
     Path((kart_id, session_id)): Path<(String, Uuid)>,
 ) -> Result<Response, AppError> {
     let crossings = db::crossings(&pool, &kart_id, session_id).await?;
-    Ok(([(header::CACHE_CONTROL, "no-store")], Json(LapsResponse { crossings })).into_response())
+    Ok((
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(LapsResponse { crossings }),
+    )
+        .into_response())
 }
 
 fn clamp_since(since_us: Option<i64>, now: DateTime<Utc>) -> DateTime<Utc> {
