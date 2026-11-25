@@ -1,7 +1,11 @@
-# Production overrides (Proxmox VM). Not tested yet: a stub to grow into.
-# Secrets come from an untracked .env next to this file (see .env.example).
+# Production overrides (LXC container on Proxmox VE, see deploy/lxc/README.md).
+# Images come from GHCR; the updater (deploy/lxc/kart-analytics-update) sets KART_VERSION
+# and passes the host's secrets file:
 #
-#   docker compose -f compose.yml -f compose.prod.yml up -d
+#   KART_VERSION=1.2.3 docker compose --env-file /etc/kart-analytics/.env \
+#       -f compose.yml -f compose.prod.yml up -d
+#
+# Host files (never in Git): /etc/kart-analytics/{.env,mosquitto.passwd,pit-wall.config.json}
 
 services:
   mosquitto:
@@ -10,6 +14,8 @@ services:
       - "1883:1883" # TODO: bind to the WireGuard interface only; mTLS for karts
     volumes:
       - ../mosquitto/mosquitto.prod.conf:/mosquitto/config/mosquitto.conf:ro
+      - ${MOSQUITTO_PASSWD:-/etc/kart-analytics/mosquitto.passwd}:/mosquitto/config/passwd:ro
+      - mosquitto-data:/mosquitto/data
 
   timescaledb:
     restart: unless-stopped
@@ -29,9 +35,7 @@ services:
       GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?set in .env}
 
   ingest:
-    build:
-      context: ../..
-      dockerfile: crates/ingest/Dockerfile
+    image: ${REGISTRY:-ghcr.io/aerospace-lab-e-v}/kart-ingest:${KART_VERSION:?set by the updater}
     restart: unless-stopped
     depends_on:
       timescaledb:
@@ -40,13 +44,12 @@ services:
         condition: service_started
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb:5432/telemetry
-      MQTT_URL: mqtt://mosquitto:1883
+      # The broker needs a login (allow_anonymous false); user from mosquitto.passwd.
+      MQTT_URL: mqtt://${INGEST_MQTT_USER:?set in .env}:${INGEST_MQTT_PASSWORD:?set in .env}@mosquitto:1883
       RUST_LOG: info
 
   pit-api:
-    build:
-      context: ../..
-      dockerfile: crates/pit-api/Dockerfile
+    image: ${REGISTRY:-ghcr.io/aerospace-lab-e-v}/kart-pit-api:${KART_VERSION:?set by the updater}
     restart: unless-stopped
     depends_on:
       timescaledb:
@@ -56,9 +59,7 @@ services:
       RUST_LOG: info
 
   pit-wall:
-    build:
-      context: ../..
-      dockerfile: web/pit-wall/Dockerfile
+    image: ${REGISTRY:-ghcr.io/aerospace-lab-e-v}/kart-pit-wall:${KART_VERSION:?set by the updater}
     restart: unless-stopped
     depends_on:
       - pit-api
@@ -66,5 +67,8 @@ services:
     ports:
       - "8080:8080" # TODO: behind the TLS reverse proxy (wss://) + Keycloak
     volumes:
-      # Read-only broker credentials for browsers; copy from pit-wall.config.example.json.
-      - ./pit-wall.config.json:/srv/config.json:ro
+      # Read-only broker credentials for browsers; see pit-wall.config.example.json.
+      - ${PIT_WALL_CONFIG:-/etc/kart-analytics/pit-wall.config.json}:/srv/config.json:ro
+
+volumes:
+  mosquitto-data:
