@@ -18,6 +18,15 @@ const liveTopic = (kartId: string) => `kart/${kartId}/live`;
 const lapsTopic = (kartId: string) => `kart/${kartId}/laps`;
 
 /**
+ * Random hex string. Not crypto.randomUUID(): browsers only offer that in secure contexts
+ * (HTTPS or localhost), and the pit wall is also served over plain http://<host>:8080.
+ */
+const randomHex = (bytes: number) =>
+    Array.from(crypto.getRandomValues(new Uint8Array(bytes)), (b) =>
+        b.toString(16).padStart(2, "0")
+    ).join("");
+
+/**
  * The single MQTT-over-WebSocket connection. Read-only: it subscribes to every kart's
  * status and to the live and laps topics of the kart on screen, and never publishes.
  * Live batches and lap crossings go straight into their stores, bypassing React.
@@ -33,7 +42,7 @@ class LiveConnection {
         this.update({ broker: "connecting" });
         const client = mqtt.connect(config.mqttUrl, {
             protocolVersion: 5,
-            clientId: `pit-wall-${crypto.randomUUID().slice(0, 8)}`,
+            clientId: `pit-wall-${randomHex(4)}`,
             username: config.mqttUsername,
             password: config.mqttPassword,
             clean: true,
