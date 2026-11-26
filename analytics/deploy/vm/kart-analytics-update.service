@@ -1,6 +1,6 @@
 [Unit]
 Description=Deploy the newest kart analytics release from GHCR
-Documentation=https://github.com/Aerospace-Lab-e-V/asl-gokart/tree/main/analytics/deploy/lxc
+Documentation=https://github.com/Aerospace-Lab-e-V/asl-gokart/tree/main/analytics/deploy/vm
 Wants=network-online.target
 After=network-online.target docker.service
 Requires=docker.service

@@ -1,11 +1,13 @@
-# Production host: LXC container on Proxmox VE
+# Production host: Debian 13 VM on Proxmox VE
 
-The analytics stack runs with Docker Compose inside an unprivileged LXC container on a Proxmox VE node. Deploys are **pull-based**: CI publishes images to GHCR, and a systemd timer in the container fetches and starts new releases.
+The analytics stack runs with Docker Compose inside a Debian 13 VM on a Proxmox VE node in the DMZ. Deploys are **pull-based**: CI publishes images to GHCR, and a systemd timer on the VM fetches and starts new releases.
+
+**Why a VM and not an LXC container:** a container shares the Proxmox host's kernel. A Docker or kernel escape out of a container in the DMZ would therefore land on the hypervisor itself. A VM has its own kernel, so an attacker would also have to break out of KVM/QEMU. The lab admins require a VM for anything that runs Docker in the DMZ.
 
 ```
 git tag analytics-vX.Y.Z ─► CI (ci-analytics-release.yml): checks → kart-ingest, kart-pit-api, kart-pit-wall → kart-analytics-deploy
                                                                          ghcr.io/aerospace-lab-e-v/<image>:X.Y.Z
-container: kart-analytics-update.timer (every 5 min)
+VM: kart-analytics-update.timer (every 5 min)
    newest stable X.Y.Z of kart-analytics-deploy (or PIN_VERSION)
    → extract the bundle to /opt/kart-analytics/releases/X.Y.Z
    → pg_dump → docker compose pull → up --wait
@@ -15,7 +17,7 @@ container: kart-analytics-update.timer (every 5 min)
 The deploy bundle (`deploy/bundle.Dockerfile`) carries the compose files, broker config, Grafana provisioning and this directory. It never contains secrets.
 
 
-| Path in the container | What |
+| Path on the VM | What |
 |---|---|
 | `/etc/kart-analytics/.env` | secrets for compose (from `deploy/compose/.env.example`) |
 | `/etc/kart-analytics/mosquitto.passwd` | broker users (`ingest`, `pit-wall`) |
@@ -28,41 +30,71 @@ The deploy bundle (`deploy/bundle.Dockerfile`) carries the compose files, broker
 
 ---
 
-## 1. Create the container (Proxmox host)
+## 1. Create the VM (Proxmox host)
 
 Check first:
-- **Storage** for the root disk must support Docker's overlay2 driver inside the container: ext4 / LVM-thin are fine, ZFS needs OpenZFS ≥ 2.2 (Proxmox VE ≥ 8.1). Check with `pveversion -v | grep zfs`.
-- **Outbound HTTPS** from the container's network to `ghcr.io` and `pkg-containers.githubusercontent.com` (image pulls), and to the Debian and Docker apt mirrors.
+- **Outbound HTTPS** from the VM's network to `ghcr.io` and `pkg-containers.githubusercontent.com` (image pulls), and to the Debian and Docker apt mirrors.
+- **Inbound**: decide with the lab admins where the port rules live (section 1.1). They have to sit outside the VM.
+
+The VM is built from Debian's official cloud image and configured with cloud-init, so no installer has to be clicked through:
 
 ```bash
-pveam update
-pveam download <TEMPLATE_STORAGE> debian-13-standard_<VERSION>_amd64.tar.zst
+# on the Proxmox node, as root
+cd /var/lib/vz/template
+wget https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2
+wget https://cloud.debian.org/images/cloud/trixie/latest/SHA512SUMS
+sha512sum --ignore-missing -c SHA512SUMS
 
-pct create <CTID> <TEMPLATE_STORAGE>:vztmpl/debian-13-standard_<VERSION>_amd64.tar.zst \
-  --hostname <HOSTNAME> \
-  --unprivileged 1 \
-  --features nesting=1,keyctl=1 \
-  --cores 2 --memory 4096 --swap 1024 \
-  --rootfs <STORAGE>:32 \
-  --net0 name=eth0,bridge=<BRIDGE>,tag=<VLAN_TAG>,ip=<CT_IP>/<PREFIX>,gw=<GATEWAY> \
-  --nameserver <DNS_SERVER> --searchdomain <SEARCH_DOMAIN> \
-  --onboot 1 \
-  --ssh-public-keys <ADMIN_KEYS_FILE>
-pct start <CTID>
+qm create <VMID> --name <HOSTNAME> --ostype l26 \
+  --cores 2 --memory 4096 \
+  --scsihw virtio-scsi-single \
+  --scsi0 <STORAGE>:0,import-from=/var/lib/vz/template/debian-13-genericcloud-amd64.qcow2,discard=on,iothread=1 \
+  --ide2 <STORAGE>:cloudinit \
+  --boot order=scsi0 \
+  --net0 virtio,bridge=<BRIDGE>,tag=<VLAN_TAG>,firewall=1 \
+  --serial0 socket --vga serial0 \
+  --agent enabled=1 \
+  --onboot 1
+qm disk resize <VMID> scsi0 32G
+
+qm set <VMID> --ciuser <ADMIN_USER> --sshkeys <ADMIN_KEYS_FILE> \
+  --ipconfig0 ip=<VM_IP>/<PREFIX>,gw=<GATEWAY> \
+  --nameserver <DNS_SERVER> --searchdomain <SEARCH_DOMAIN>
+qm start <VMID>
 ```
 
-- `nesting=1,keyctl=1` are what Docker needs in an unprivileged container. Don't make it privileged.
-- The network is configured by Proxmox through `net0`. There is no `/etc/network/interfaces` to edit inside the container.
-- 32 GB is a starting point for TimescaleDB plus images. Grow it with `pct resize <CTID> rootfs +<N>G`.
-- Lab admins: add a DNS record for the container, firewall rules so team clients reach ports **3000** (Grafana) and **8080** (pit wall), and later **1883** for karts and the timing device. Also include the container in the scheduled `vzdump` backups.
+- The cloud image has no root password and no SSH password login. You log in as `<ADMIN_USER>` with your key and use `sudo`. The console is the serial terminal (`qm terminal <VMID>`, or *Console → xterm.js* in the GUI).
+- If you'd rather use the GUI installer, install from the Debian 13 netinst ISO with the same hardware settings (VirtIO SCSI single, VirtIO NIC with *Firewall* ticked, QEMU guest agent on), and select only *SSH server* and *standard system utilities*.
+- 32 GB is a starting point for TimescaleDB plus images. Grow it with `qm disk resize <VMID> scsi0 +<N>G`. The cloud image grows its root partition by itself on the next boot.
+- Lab admins: add a DNS record for the VM and include it in the scheduled `vzdump` backups.
 
-## 2. Prepare the container
+### 1.1 Firewall: outside the VM
+
+Docker writes its own nftables/iptables rules for published ports, and they **bypass** `ufw` or any INPUT rules inside the VM. Filtering inbound traffic inside the guest therefore doesn't work, and an attacker who got root on the VM could remove it anyway. Filter in front of the VM instead: in the DMZ firewall or in the Proxmox VM firewall (`firewall=1` on `net0` above). A Proxmox example, `/etc/pve/firewall/<VMID>.fw`:
+
+```
+[OPTIONS]
+enable: 1
+policy_in: DROP
+policy_out: ACCEPT
+
+[RULES]
+IN SSH(ACCEPT) -source <ADMIN_NET>
+IN ACCEPT -source <TEAM_NET> -p tcp -dport 3000 # Grafana
+IN ACCEPT -source <TEAM_NET> -p tcp -dport 8080 # pit wall
+# later: 1883 for the karts (WireGuard) and the timing device
+```
+
+The VM firewall only filters if the firewall is also enabled at datacenter level. Check with the admins whether `policy_out` should be restricted to the destinations listed above.
+
+## 2. Prepare the VM
+
+Log in with `ssh <ADMIN_USER>@<HOSTNAME>`, then run everything as root (`sudo -i`):
 
 ```bash
-pct enter <CTID>
-
 apt update && apt full-upgrade -y
-apt install -y ca-certificates curl jq
+apt install -y ca-certificates curl jq qemu-guest-agent unattended-upgrades
+systemctl enable --now qemu-guest-agent    # lets vzdump freeze the filesystem for backups
 
 # Docker CE from Docker's repository (https://docs.docker.com/engine/install/debian/)
 install -m 0755 -d /etc/apt/keyrings
@@ -71,30 +103,39 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.
   > /etc/apt/sources.list.d/docker.list
 apt update && apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
-docker info | grep -E 'Storage Driver|Cgroup'   # expect overlay2 and cgroup v2
+# Rotate container logs (the default json-file driver grows without limit).
+echo '{ "log-driver": "local" }' > /etc/docker/daemon.json
+systemctl restart docker
+
+docker info | grep -E 'Storage Driver|Cgroup'   # expect overlayfs (or overlay2) and cgroup v2
 docker run --rm hello-world
 ```
 
-Then enable unattended security updates (`apt install unattended-upgrades`).
+Hardening that matters in the DMZ:
+- Don't add anyone to the `docker` group. Access to the Docker socket is equivalent to root. Admins use `sudo`.
+- Leave SSH key-only (the cloud image's default). Check with `sshd -T | grep -E 'passwordauthentication|permitrootlogin'`.
+- `unattended-upgrades` installs Debian security updates. Docker's packages come from Docker's repository, so update them with `apt upgrade` from time to time. Reboot for kernel updates (`/run/reboot-required` exists when one is pending). The stack restarts by itself after a reboot.
 
 ## 3. Install the updater
 
 Take the updater from the release you want to run first:
 
 ```bash
-V=0.1.0
+V=<VERSION>    # e.g. the newest release, without the analytics-v prefix
 docker create --name bundle ghcr.io/aerospace-lab-e-v/kart-analytics-deploy:$V /bundle
 docker cp bundle:/bundle /root/bundle-$V && docker rm bundle
-/root/bundle-$V/deploy/lxc/install.sh     # script, units, /etc/kart-analytics/update.conf; enables the timer
+/root/bundle-$V/deploy/vm/install.sh     # script, units, /etc/kart-analytics/update.conf; enables the timer
 ```
+
+Releases up to 0.1.0 have this directory at `deploy/lxc/`. The scripts in it are the same.
 
 If the GHCR packages are private, first `docker login ghcr.io` with a token that has `read:packages`, and set `REGISTRY_AUTH=<user>:<token>` in `update.conf`. Making the packages public is simpler, since the repo is public anyway: on GitHub, open each package → *Package settings* → *Change visibility*.
 
-When a release changes the updater or its units, run `install.sh` from that release's directory again: `/opt/kart-analytics/current/deploy/lxc/install.sh`.
+When a release changes the updater or its units, run `install.sh` from that release's directory again: `/opt/kart-analytics/current/deploy/vm/install.sh`.
 
 ## 4. Secrets
 
-All of these are root-only (`chmod 600`) and never leave the container.
+All of these are root-only (`chmod 600`) and never leave the VM.
 
 ```bash
 cd /etc/kart-analytics
@@ -159,7 +200,7 @@ $C up -d
 systemctl start kart-analytics-update.timer
 ```
 
-Roles live outside the database, so `grafana_ro` and `pit_api_ro` survive the restore. Whole-container backups are Proxmox's job (`vzdump`). A snapshot of a running PostgreSQL is only crash-consistent, which is why the dumps exist.
+Roles live outside the database, so `grafana_ro` and `pit_api_ro` survive the restore. Whole-VM backups are Proxmox's job (`vzdump`; with the guest agent the filesystem is frozen for the snapshot). That snapshot is still only crash-consistent for a running PostgreSQL, which is why the dumps exist.
 
 ## Not done yet
 

@@ -2,7 +2,7 @@
 **
 !deploy/compose/**
 !deploy/mosquitto/**
-!deploy/lxc/**
+!deploy/vm/**
 !grafana/**
 **/.env
 **/*.passwd
