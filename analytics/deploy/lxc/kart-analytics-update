@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+# Pull-based deploy of the analytics stack on the production LXC (see README.md next to this file).
+#
+# Run by kart-analytics-update.timer. Finds the newest release on GHCR (or PIN_VERSION), extracts
+# its deploy bundle, backs up the database, then pulls and starts the stack. If the stack does not
+# come up, it starts the previous release again and exits non-zero.
+#
+#   kart-analytics-update            # deploy if a newer release exists
+#   kart-analytics-update --force    # deploy the target even if it is current or failed before
+set -euo pipefail
+
+CONF=${KART_ANALYTICS_CONF:-/etc/kart-analytics/update.conf}
+
+# Defaults; override in $CONF (see update.conf.example).
+REGISTRY=ghcr.io/aerospace-lab-e-v
+REGISTRY_API=        # default: https://<registry host>
+REGISTRY_AUTH=       # optional user:token for private packages
+PIN_VERSION=
+KEEP_RELEASES=3
+KEEP_BACKUPS=10
+WAIT_TIMEOUT=300
+ENV_FILE=/etc/kart-analytics/.env
+BASE_DIR=/opt/kart-analytics
+STATE_DIR=/var/lib/kart-analytics
+BACKUP_DIR=/var/backups/kart-analytics
+# shellcheck source=/dev/null
+[[ -f $CONF ]] && . "$CONF"
+
+PROJECT=kart-analytics
+APP_IMAGES=(kart-ingest kart-pit-api kart-pit-wall)
+BUNDLE=kart-analytics-deploy
+RELEASES=$BASE_DIR/releases
+VERSION_FILE=$STATE_DIR/current-version
+FAILED_FILE=$STATE_DIR/failed-version
+REGISTRY_HOST=${REGISTRY%%/*}
+REGISTRY_PATH=${REGISTRY#*/}
+REGISTRY_API=${REGISTRY_API:-https://$REGISTRY_HOST}
+
+FORCE=0
+case ${1:-} in
+--force) FORCE=1 ;;
+"") ;;
+*) echo "usage: $0 [--force]" >&2; exit 2 ;;
+esac
+
+log() { echo "$*"; }
+die() { echo "error: $*" >&2; exit 1; }
+
+# Highest stable version (X.Y.Z) of the deploy bundle on the registry.
+latest_version() {
+    local repo=$REGISTRY_PATH/$BUNDLE auth=() token
+    if [[ $REGISTRY_HOST == ghcr.io ]]; then
+        # GHCR wants a bearer token, anonymous for public packages.
+        local cred=()
+        [[ -n $REGISTRY_AUTH ]] && cred=(-u "$REGISTRY_AUTH")
+        token=$(curl -fsS "${cred[@]}" "$REGISTRY_API/token?scope=repository:$repo:pull" | jq -r .token)
+        auth=(-H "Authorization: Bearer $token")
+    fi
+    curl -fsS "${auth[@]}" "$REGISTRY_API/v2/$repo/tags/list?n=1000" |
+        jq -r '.tags // [] | .[]' |
+        grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' |
+        sort -V | tail -n 1
+}
+
+compose() {
+    local version=$1 dir=$2
+    shift 2
+    KART_VERSION=$version REGISTRY=$REGISTRY docker compose -p "$PROJECT" --env-file "$ENV_FILE" \
+        -f "$dir/deploy/compose/compose.yml" -f "$dir/deploy/compose/compose.prod.yml" "$@"
+}
+
+extract_bundle() {
+    local version=$1 dest=$2 cid tmp
+    docker pull -q "$REGISTRY/$BUNDLE:$version" >/dev/null
+    # The bundle is FROM scratch; the command is never run, create only needs one.
+    cid=$(docker create "$REGISTRY/$BUNDLE:$version" /bundle)
+    tmp=$(mktemp -d "$RELEASES/.extract.XXXXXX")
+    # mktemp makes it 0700; non-root services (mosquitto, grafana) read their bind mounts from it.
+    chmod 755 "$tmp"
+    if ! docker cp "$cid:/bundle/." "$tmp/"; then
+        docker rm "$cid" >/dev/null
+        rm -rf "$tmp"
+        return 1
+    fi
+    docker rm "$cid" >/dev/null
+    mv "$tmp" "$dest"
+}
+
+# Custom-format dump of the running database, before migrations of the new release run.
+backup_db() {
+    local version=$1 cid file
+    cid=$(docker ps -q --filter "label=com.docker.compose.project=$PROJECT" \
+        --filter "label=com.docker.compose.service=timescaledb")
+    [[ -n $cid ]] || { log "no running database, skipping backup"; return 0; }
+    mkdir -p "$BACKUP_DIR"
+    file=$BACKUP_DIR/telemetry-$(date -u +%Y%m%dT%H%M%SZ)-before-$version.dump
+    log "backing up database to $file"
+    install -m 600 /dev/null "$file.part"
+    docker exec "$cid" sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' >"$file.part"
+    mv "$file.part" "$file"
+    find "$BACKUP_DIR" -maxdepth 1 -name 'telemetry-*.dump' -printf '%T@ %p\n' |
+        sort -rn | tail -n +$((KEEP_BACKUPS + 1)) | cut -d' ' -f2- | xargs -r rm -f
+}
+
+deploy() {
+    local version=$1 dir=$2
+    compose "$version" "$dir" pull -q &&
+        compose "$version" "$dir" up -d --remove-orphans --wait --wait-timeout "$WAIT_TIMEOUT"
+}
+
+# Keep the KEEP_RELEASES most recently deployed releases (and their images), always the current one.
+# A release directory's mtime is set on each successful deploy; failed ones get epoch and go first.
+prune() {
+    local current=$1 old
+    while read -r old; do
+        [[ -n $old && $old != "$current" ]] || continue
+        log "pruning release $old"
+        rm -rf "${RELEASES:?}/$old"
+        for image in "${APP_IMAGES[@]}" "$BUNDLE"; do
+            docker image rm "$REGISTRY/$image:$old" >/dev/null 2>&1 || true
+        done
+    done < <(find "$RELEASES" -mindepth 1 -maxdepth 1 -type d ! -name '.*' -printf '%T@ %f\n' |
+        sort -rn | tail -n +$((KEEP_RELEASES + 1)) | cut -d' ' -f2-)
+    docker image prune -f >/dev/null
+}
+
+main() {
+    [[ -r $ENV_FILE ]] || die "$ENV_FILE missing (copy from deploy/compose/.env.example)"
+    mkdir -p "$RELEASES" "$STATE_DIR"
+
+    exec 9>"$STATE_DIR/update.lock"
+    flock -n 9 || { log "another update is running"; exit 0; }
+
+    local current target dir
+    current=$(cat "$VERSION_FILE" 2>/dev/null || true)
+    if [[ -n $PIN_VERSION ]]; then
+        target=$PIN_VERSION
+    else
+        target=$(latest_version) || die "could not list releases on $REGISTRY"
+        [[ -n $target ]] || die "no release of $BUNDLE found on $REGISTRY"
+    fi
+
+    if [[ $target == "$current" && $FORCE == 0 ]]; then
+        log "up to date ($current)"
+        exit 0
+    fi
+    if [[ $target == "$(cat "$FAILED_FILE" 2>/dev/null || true)" && $FORCE == 0 ]]; then
+        log "skipping $target: its deploy failed before (run with --force to retry)"
+        exit 0
+    fi
+
+    log "deploying $target (current: ${current:-none})"
+    dir=$RELEASES/$target
+    [[ -d $dir ]] || extract_bundle "$target" "$dir" || die "could not fetch the deploy bundle $target"
+
+    [[ -n $current ]] && backup_db "$target"
+
+    if deploy "$target" "$dir"; then
+        echo "$target" >"$VERSION_FILE"
+        rm -f "$FAILED_FILE"
+        ln -sfn "$dir" "$BASE_DIR/current"
+        touch "$dir"
+        prune "$target"
+        log "deployed $target"
+        return 0
+    fi
+
+    echo "$target" >"$FAILED_FILE"
+    touch -d @0 "$dir"
+    log "deploy of $target failed"
+    if [[ -n $current && -d $RELEASES/$current ]]; then
+        log "rolling back to $current"
+        deploy "$current" "$RELEASES/$current" || log "rollback to $current failed too"
+    fi
+    exit 1
+}
+
+main

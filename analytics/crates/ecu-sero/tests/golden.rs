@@ -110,8 +110,14 @@ fn unknown_events_are_ignored() {
     assert_eq!(decode(ids::MOTOR, 0x8099, &[1, 2, 3]).unwrap(), None);
     assert_eq!(decode(0x0042, 0x8001, &[]).unwrap(), None);
     // Headunit-only settings echoes of zc_lights
-    assert_eq!(decode(ids::LIGHTS, ids::lights::CONFIG, &[1, 1, 0, 0, 255, 0]).unwrap(), None);
-    assert_eq!(decode(ids::LIGHTS, ids::lights::WELCOME_STATE, &[1]).unwrap(), None);
+    assert_eq!(
+        decode(ids::LIGHTS, ids::lights::CONFIG, &[1, 1, 0, 0, 255, 0]).unwrap(),
+        None
+    );
+    assert_eq!(
+        decode(ids::LIGHTS, ids::lights::WELCOME_STATE, &[1]).unwrap(),
+        None
+    );
 }
 
 fn all_events() -> Vec<EcuEvent> {

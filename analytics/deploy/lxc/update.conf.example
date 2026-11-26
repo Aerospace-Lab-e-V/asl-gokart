@@ -1,0 +1,17 @@
+# /etc/kart-analytics/update.conf: settings of kart-analytics-update (all optional).
+
+# Registry and namespace of the images.
+#REGISTRY=ghcr.io/aerospace-lab-e-v
+
+# user:token with read:packages, only if the GHCR packages are private.
+#REGISTRY_AUTH=
+
+# Deploy exactly this version instead of the newest stable one (rollback, pre-releases).
+#PIN_VERSION=0.1.0
+
+# How many release directories and database dumps to keep.
+#KEEP_RELEASES=3
+#KEEP_BACKUPS=10
+
+# Seconds to wait for the stack to become healthy before rolling back.
+#WAIT_TIMEOUT=300

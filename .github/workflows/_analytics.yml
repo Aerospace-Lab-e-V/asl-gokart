@@ -1,5 +1,5 @@
 # Reusable workflow — Analytics build & check
-# Called by ci-analytics.yml (currently manual trigger only)
+# Called by ci-analytics.yml (PRs, main) and ci-analytics-release.yml (analytics-v* tags)
 
 name: Analytics
 
@@ -14,7 +14,7 @@ jobs:
             run:
                 working-directory: analytics
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v7
               with:
                   submodules: true # sero headers for sero-sys
 
@@ -42,7 +42,7 @@ jobs:
             run:
                 working-directory: analytics/web/pit-wall
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v7
 
             - uses: oven-sh/setup-bun@v2
               with:

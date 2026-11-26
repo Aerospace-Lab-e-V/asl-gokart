@@ -19,12 +19,13 @@ ECUs ──Sero/UDP──► Raspberry Pi: kart-agent (systemd service, ships wi
                                                                      ▼
                          WireGuard tunnel over LTE/5G hotspot
                                                                      ▼
-Proxmox VM (Docker Compose)
+Proxmox VE: LXC container (Docker Compose)
   MQTT broker ──► ingest ──► TimescaleDB ──► Grafana (history, near-live overview)
        │
        └──(MQTT over WebSocket)──► pit wall in the browser (real-time)
-  command-api ◄── param-app
-  Keycloak (OIDC, brokering SAML) in front of all user-facing services
+  command-api ◄── pit management UI (to be planned): driver profiles, limits
+  own user DB: users, profiles, roles and rights
+  Keycloak (OIDC, brokering SAML): SSO for the web services, identity only
 ```
 
 **Latency target:** aim for ≤ 250 ms from ECU to the pit wall screen; 500 ms is the hard limit. Budget: 25–50 ms batching, 50–150 ms LTE uplink, ~5 ms WireGuard and broker, leaving tens of milliseconds for the browser to decode and render. That is why the pit wall reads MQTT directly over WebSocket. Every path through Grafana adds a database poll or a fixed flush timer, which costs 100 ms to 1 s. LTE spikes cause gaps in the live view only; backfill restores them.
@@ -45,8 +46,8 @@ Proxmox VM (Docker Compose)
 | Live view (pit wall) | React + Vite SPA (Bun, TanStack Router/Query, Tailwind + daisyUI, Chart.js), MQTT over WebSocket straight from the broker; `pit-api` (Rust, axum) serves the recent past to seed the charts |
 | Dashboards | Grafana OSS on TimescaleDB (history, near-live overview) |
 | Session deep dive | Lichtblick / PlotJuggler (open MCAP files directly) |
-| Auth | Keycloak (OIDC to all services; upstream SAML brokered by Keycloak) |
-| Platform | Docker Compose on a Proxmox VM |
+| Auth | Keycloak SSO for the web services (OIDC; upstream SAML brokered by Keycloak), identity only. Users, driver profiles, roles and rights live in our own DB ([ADR-0003](docs/adr/0003-driver-profiles-and-remote-limits.md)) |
+| Platform | Docker Compose in an unprivileged LXC container on Proxmox VE; images on GHCR, pulled by a systemd timer |
 | Later | Parquet archive on S3-compatible storage, analysis tooling, MediaMTX for video, LoRa fallback link (ChirpStack if LoRaWAN) |
 
 > Grafana OSS supports OIDC but not SAML (SAML is Enterprise-only). Connect Grafana to Keycloak via OIDC; Keycloak handles any SAML identity provider upstream.
@@ -70,12 +71,12 @@ analytics/
 │   ├── kart-agent/        # runs on the Pi (dist/: systemd unit, example config)
 │   ├── ingest/            # MQTT → TimescaleDB, idempotent by (session, seq)
 │   ├── pit-api/           # read-only HTTP: recent samples for the pit wall charts
-│   ├── command-api/       # audited parameter writes
+│   ├── command-api/       # audited writes: driver profiles, parameters
 │   ├── lap-timing/        # (planned) GPS geofence → lap_crossings
 │   └── kart-sim/          # fake kart; replays recorded sessions
 ├── web/
 │   ├── pit-wall/    # real-time live view (Bun, React, Vite)
-│   └── param-app/   # TypeScript parameter UI
+│   └── param-app/   # (placeholder) pit management UI, location to be planned
 ├── db/migrations/   # TimescaleDB schema, hypertables, continuous aggregates
 ├── grafana/
 │   ├── dashboards/  # dashboard JSON (provisioned, read-only in prod)
@@ -90,7 +91,8 @@ analytics/
 │   ├── mosquitto/   # broker config (dev: anonymous, prod: auth)
 │   ├── kart/        # WireGuard templates (planned); the agent itself ships with the headunit
 │   ├── keycloak/    # realm export
-│   └── infra/       # Proxmox VM for the Docker host via OpenTofu (optional)
+│   ├── lxc/         # production host: runbook, updater script, systemd units
+│   └── bundle.Dockerfile # deploy bundle (compose + config) published next to the images
 └── testdata/sessions/      # small recorded sessions (Git LFS)
 ```
 
@@ -239,8 +241,12 @@ The ECU firmware accepts 4 subscribers per event.
 ### `ingest`
 Subscribes to live and backfill topics and writes to TimescaleDB. Inserts are idempotent on `(session_id, seq)`, so live data and backfill can overlap safely and gaps fill in automatically. Lap crossings from `kart/+/laps` go to `lap_crossings`, idempotent on `crossing_id`.
 
-### `command-api` + `param-app`
-The only path for changing vehicle parameters. Every request is authenticated through Keycloak, authorized by role, logged (who, what, old/new value, when), published to the command topic, and only reported as successful after the kart's acknowledgment. Some parameters may only be changed while the kart is stationary.
+### `command-api`
+The only path for changing what a kart is allowed to do. Admins change **driver profiles** (for example a skill level), not individual kart parameters: the kart a driver is signed into receives the new limits live and ramps to them, up or down, so the kart never brakes or gains power suddenly. Every request is authenticated (Keycloak SSO later; demo users for now), authorized from the roles and rights in our own database, logged (who, which driver, old/new values, when), published to the kart, and only reported as applied after the kart's acknowledgment.
+
+- **Sign-in on the kart** needs no password on the headunit (method to be decided) and needs the server: without a confirmed profile, or with nobody signed in, the kart drives with the most restrictive limits.
+- **Not enforced yet:** `zc_throttle` still runs hard-coded limits. Until it is integrated, limits are delivered, shown and logged only. What the Pi can enforce today, such as unlocking admin or engineering mode for users with that right, works from the start.
+- Roles and rights and the management interface are planned separately. Details: [ADR-0003](docs/adr/0003-driver-profiles-and-remote-limits.md).
 
 ### `pit-api`
 Read-only HTTP for the pit wall, connected as the `pit_api_ro` role. `GET /api/karts/{kart}/sessions/{session}/samples?since_us=…&signals=101,204` returns the session's samples since `since_us` (at most 15 min back, default 5 min) as columns per signal: `{"signals": {"101": {"t_us": […], "v": […]}}}`. `GET /api/karts/{kart}/sessions/{session}/laps` returns every timing-device crossing of the session in time order: `{"crossings": [{"crossing_id", "time" (Unix µs), "lap_number", "lap_us", "verdict", …}]}`. `GET /api/health` for probes.
@@ -303,8 +309,21 @@ Historical dashboards, track maps (Geomap) and speed-vs-distance overlays (XY ch
 | `kart/{id}/laps` | timing device → cloud | 1 | lap crossings of the light barrier (`timing.proto`) |
 | `kart/{id}/cmd` | cloud → kart | 1 | parameter change requests |
 | `kart/{id}/cmd/ack` | kart → cloud | 1 | accepted / rejected + reason |
+| `kart/{id}/driver` | kart → cloud | 1 | driver sign-in request, sign-out |
+| `kart/{id}/profile` | cloud → kart | 1, retained | signed-in driver's effective profile (limits, rights) |
 
-Only `command-api` may publish to `cmd`. The kart authenticates to the broker with an mTLS client certificate. The timing device may only publish to `laps`. Browser clients (pit wall) connect through the WebSocket listener and may only subscribe to `live`, `status` and `laps`.
+Only `command-api` may publish to `cmd` and `profile`. The kart authenticates to the broker with an mTLS client certificate. The timing device may only publish to `laps`. Browser clients (pit wall) connect through the WebSocket listener and may only subscribe to `live`, `status` and `laps`.
+
+---
+
+## Deployment
+
+Production runs in an unprivileged LXC container on the a Proxmox VE node, with Docker Compose inside it. Deploys are pull-based.
+
+1. Push a tag `analytics-vX.Y.Z`. `ci-analytics-release.yml` runs the checks, then pushes `kart-ingest`, `kart-pit-api` and `kart-pit-wall` to GHCR, and last the deploy bundle `kart-analytics-deploy` (compose files, Grafana dashboards, broker config).
+2. In the container, `kart-analytics-update.timer` checks GHCR every 5 minutes for the highest stable version, takes a `pg_dump`, pulls and restarts the stack, and goes back to the previous version if it doesn't come up healthy.
+
+Pre-release tags (`analytics-v1.2.0-rc.1`) are published but only deployed when pinned. Setting up the container, secrets, pinning and rollback: [deploy/lxc/README.md](deploy/lxc/README.md).
 
 ---
 
@@ -323,6 +342,6 @@ Only `command-api` may publish to `cmd`. The kart authenticates to the broker wi
 
 1. **Live MVP:** kart-agent with local logging (done: Sero, MCAP, live MQTT, packaged with the headunit), time sync, WireGuard, MQTT, ingest, TimescaleDB, pit wall live view, basic Grafana dashboards.
 2. **Complete data:** backfill with sequence numbers, lap timing, session and lap-overlay dashboards.
-3. **Team access:** Keycloak SSO for Grafana.
-4. **Remote parameters:** command-api, param-app, acknowledgments, audit log.
+3. **Driver profiles:** own user DB with demo users, sign-in on the kart, live profile delivery, acknowledgments, audit log ([ADR-0003](docs/adr/0003-driver-profiles-and-remote-limits.md)). Limits are applied once `zc_throttle` is integrated.
+4. **Team access:** Keycloak SSO for the pit wall, pit-api and Grafana; roles and rights model; pit management interface.
 5. **More data:** video (MediaMTX), LoRa fallback link, Parquet archive and analysis tooling.

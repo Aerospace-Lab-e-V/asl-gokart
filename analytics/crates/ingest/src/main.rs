@@ -172,7 +172,8 @@ async fn handle(pool: &PgPool, p: &Publish, last_touch: &mut HashMap<Uuid, Insta
         // Unknown when the device could not see the kart's status; the row still counts.
         let session_id = Uuid::parse_str(&crossing.kart_session_id).ok();
         let time = DateTime::<Utc>::from_timestamp_micros(crossing.t_us).context("invalid t_us")?;
-        let new = db::insert_crossing(pool, kart_id, crossing_id, session_id, time, &crossing).await?;
+        let new =
+            db::insert_crossing(pool, kart_id, crossing_id, session_id, time, &crossing).await?;
         info!(
             kart_id,
             device = %crossing.device_id,

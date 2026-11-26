@@ -162,8 +162,7 @@ mod tests {
             barrier_lon: 11.5,
             clock_synced: true,
         };
-        let decoded =
-            timing::v1::LapCrossing::decode(crossing.encode_to_vec().as_slice()).unwrap();
+        let decoded = timing::v1::LapCrossing::decode(crossing.encode_to_vec().as_slice()).unwrap();
         assert_eq!(decoded, crossing);
         assert_eq!(decoded.verdict(), timing::v1::Verdict::Accepted);
     }

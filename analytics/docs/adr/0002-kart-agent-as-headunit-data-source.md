@@ -87,10 +87,11 @@ headunit gets GPS from the agent.
   They do not gate driving.
   - The agent owns the active driver. That is kart state: it survives UI restarts and is stamped into the log and the
     uplink as a timed event, so laps stay attributable when drivers swap within a session.
-  - The agent keeps the profile cache and applies the limits to the ECUs. Applying limits depends on firmware that
+  - The agent holds the signed-in driver's profile and applies the limits to the ECUs. There is no cache of other
+    drivers' profiles: sign-in needs the server ([ADR-0003](0003-driver-profiles-and-remote-limits.md)). Applying limits depends on firmware that
     publishes ECU-owned settings (rule 6 of the dataflow audit). Speed limit and drive mode are dead UI today.
   - The headunit owns the login UX and the UI preferences, stored in the profile as an opaque `ui` object.
-  - Where profiles are created and managed is left to a later ADR.
+  - Where profiles are created and managed: [ADR-0003](0003-driver-profiles-and-remote-limits.md).
 - **Remote commands and per-driver limits.** These reach the ECUs through the agent's own Sero client. That needs
   method calls in `sero-sys`; its `Command` only has Find, Subscribe, Unsubscribe and Notify today. Local UI commands
   keep going through the headunit's client, so **two senders can command one ECU**. Safety interlocks such as
@@ -141,7 +142,7 @@ headunit gets GPS from the agent.
 - The decoder duplication is permanent until this decision is revisited.
 - Follow-ups:
   - `lap` events
-  - driver state and profiles (its own ADR)
+  - driver state and profiles ([ADR-0003](0003-driver-profiles-and-remote-limits.md))
   - voice
   - `sero-sys` method calls for remote commands and per-driver limits
   - shared decoder test vectors between `ecu-sero` and the headunit
