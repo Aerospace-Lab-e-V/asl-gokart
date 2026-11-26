@@ -54,6 +54,8 @@ Check first:
 3. **Installer** (console of the VM):
    - Network: configure by hand with `<VM_IP>/<PREFIX>`, gateway `<GATEWAY>`, DNS `<DNS_SERVER>`, hostname and domain.
    - **Leave the root password empty.** Root login is then locked and the first user (`<ADMIN_USER>`) gets `sudo`, which the rest of this guide assumes.
+
+     If you did set a root password, the installer gives your user no `sudo` (and may not install it), and SSH still refuses root's password (`Failed password for root` in `journalctl -u ssh`, even when it is correct). Fix it as root in the Proxmox console: `apt install -y sudo`, then `adduser <ADMIN_USER>` if no user exists yet, then `usermod -aG sudo <ADMIN_USER>`. Once `sudo` works for that user, lock root with `passwd -l root`.
    - Partitioning: *Guided – use entire disk and set up LVM*, *All files in one partition*. LVM makes growing the disk later simple (see below).
    - Software selection: only **SSH server** and **standard system utilities**. No desktop environment.
 4. After the first boot, detach the ISO (*Hardware → CD/DVD Drive → Do not use any media*) and switch to key-only SSH:
