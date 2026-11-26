@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pull-based deploy of the analytics stack on the production LXC (see README.md next to this file).
+# Pull-based deploy of the analytics stack on the production VM (see README.md next to this file).
 #
 # Run by kart-analytics-update.timer. Finds the newest release on GHCR (or PIN_VERSION), extracts
 # its deploy bundle, backs up the database, then pulls and starts the stack. If the stack does not

@@ -1,5 +1,5 @@
-# Production overrides (LXC container on Proxmox VE, see deploy/lxc/README.md).
-# Images come from GHCR; the updater (deploy/lxc/kart-analytics-update) sets KART_VERSION
+# Production overrides (Debian 13 VM on Proxmox VE, see deploy/vm/README.md).
+# Images come from GHCR; the updater (deploy/vm/kart-analytics-update) sets KART_VERSION
 # and passes the host's secrets file:
 #
 #   KART_VERSION=1.2.3 docker compose --env-file /etc/kart-analytics/.env \

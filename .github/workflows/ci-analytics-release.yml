@@ -1,6 +1,6 @@
 # Release — Analytics
 # A tag analytics-vX.Y.Z runs the checks, pushes the server images to GHCR and then the deploy
-# bundle. The production LXC polls GHCR for new bundle tags (analytics/deploy/lxc/), so the
+# bundle. The production VM polls GHCR for new bundle tags (analytics/deploy/vm/), so the
 # bundle goes last: a version is only visible there once all of its images exist.
 # Pre-release tags (analytics-v1.2.0-rc.1) are published too, but only deployed when pinned.
 
