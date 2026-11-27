@@ -268,10 +268,11 @@ input, button, textarea, :focus {
         @apply overflow-hidden bg-background text-foreground;
     }
 
-    /* Thin pill with no track: on the touchscreen it only hints that there's more to scroll */
+    /* Pill with no track: swiping scrolls (main/touch-emulation.ts), so it mostly hints that there's
+       more to scroll, but stays wide enough to grab with a finger if swiping ever fails */
     ::-webkit-scrollbar {
-        width: 4px;
-        height: 4px;
+        width: 10px;
+        height: 10px;
     }
 
     ::-webkit-scrollbar-track,
@@ -281,7 +282,7 @@ input, button, textarea, :focus {
 
     ::-webkit-scrollbar-thumb {
         border-radius: 9999px;
-        background-color: hsl(var(--muted-foreground) / 0.4);
+        background-color: hsl(var(--muted-foreground) / 0.5);
     }
 
     .draglayer {

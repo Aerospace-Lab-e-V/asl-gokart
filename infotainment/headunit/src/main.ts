@@ -5,6 +5,7 @@ import path from "path";
 import { stopSeroAdapter } from "./main/adapters/sero";
 import { stopAgentStream } from "./main/adapters/kart-agent";
 import { stopKartAgent } from "./main/kart-agent";
+import { enableTouchEmulation } from "./main/touch-emulation";
 import { getFullscreenOnStartup, getDevToolsEnabled, getTheme } from "./helpers/ipc/application/system-config";
 
 // Initialize electron-log before anything else
@@ -38,6 +39,9 @@ function createWindow() {
         autoHideMenuBar: true,
     });
     registerListeners(mainWindow);
+    if (app.isPackaged && process.platform === "linux") {
+        enableTouchEmulation(mainWindow.webContents);
+    }
 
     if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
         mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
