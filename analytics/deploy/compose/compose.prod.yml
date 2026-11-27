@@ -11,7 +11,9 @@ services:
   mosquitto:
     restart: unless-stopped
     ports:
-      - "1883:1883" # TODO: bind to the WireGuard interface only; mTLS for karts
+      # TODO (ADR-0004): stop publishing 1883 once devices use the 9002 listener behind the border Nginx;
+      # publish 9002 instead (Proxmox firewall: border Nginx only).
+      - "1883:1883"
     volumes:
       - ../mosquitto/mosquitto.prod.conf:/mosquitto/config/mosquitto.conf:ro
       - ${MOSQUITTO_PASSWD:-/etc/kart-analytics/mosquitto.passwd}:/mosquitto/config/passwd:ro
@@ -28,7 +30,7 @@ services:
   grafana:
     restart: unless-stopped
     ports:
-      - "3000:3000" # TODO: behind reverse proxy + Keycloak OIDC
+      - "3000:3000" # TODO: behind the border Nginx + Keycloak OIDC; lab network/VPN only until then
     environment:
       GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:?set in .env}
       GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:?set in .env}
@@ -65,7 +67,7 @@ services:
       - pit-api
       - mosquitto
     ports:
-      - "8080:8080" # TODO: behind the TLS reverse proxy (wss://) + Keycloak
+      - "8080:8080" # TODO: behind the border Nginx (wss://) + Keycloak; lab network/VPN only until then (ADR-0004)
     volumes:
       # Read-only broker credentials for browsers; see pit-wall.config.example.json.
       - ${PIT_WALL_CONFIG:-/etc/kart-analytics/pit-wall.config.json}:/srv/config.json:ro

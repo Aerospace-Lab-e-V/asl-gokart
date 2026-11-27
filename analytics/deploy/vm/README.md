@@ -117,7 +117,7 @@ policy_out: ACCEPT
 IN SSH(ACCEPT) -source <ADMIN_NET>
 IN ACCEPT -source <TEAM_NET> -p tcp -dport 3000 # Grafana
 IN ACCEPT -source <TEAM_NET> -p tcp -dport 8080 # pit wall
-# later: 1883 for the karts (WireGuard) and the timing device
+# later (ADR-0004): 9002 (device MQTT) and 8082 (enrollment), from the border Nginx only
 ```
 
 The VM firewall only filters if the firewall is also enabled at datacenter level. Check with the admins whether `policy_out` should be restricted to the destinations listed above.
@@ -239,4 +239,4 @@ Roles live outside the database, so `grafana_ro` and `pit_api_ro` survive the re
 
 ## Not done yet
 
-TLS reverse proxy (`wss://` for the pit wall), Keycloak SSO, broker ACLs, mTLS and WireGuard for the karts. See the TODOs in `deploy/compose/compose.prod.yml` and `deploy/mosquitto/mosquitto.prod.conf`.
+Device access through the border Nginx with device certificates, enrollment and per-device broker users ([ADR-0004](../../docs/adr/0004-device-access-to-the-broker.md)); the pit wall behind the border Nginx (`wss://`); Keycloak SSO; broker ACLs. See the TODOs in `deploy/compose/compose.prod.yml` and `deploy/mosquitto/mosquitto.prod.conf`.

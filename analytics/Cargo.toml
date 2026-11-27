@@ -37,7 +37,8 @@ nmea = { version = "0.8", default-features = false, features = ["std", "GGA", "G
 prost = "0.14"
 prost-build = "0.14"
 protox = "0.10"
-# No TLS yet: plain MQTT inside the WireGuard tunnel / dev network. mTLS comes with kart-agent.
+# No TLS yet: plain MQTT on the dev and lab network. Devices move to wss:// with a client
+# certificate (ADR-0004): features websocket + use-rustls-no-provider, ring as the provider.
 sd-notify = "0.5"
 rumqttc = { version = "0.25", default-features = false, features = ["url"] }
 serde = { version = "1", features = ["derive"] }
