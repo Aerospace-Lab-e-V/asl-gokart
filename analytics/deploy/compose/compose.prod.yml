@@ -58,14 +58,24 @@ services:
   grafana:
     restart: unless-stopped
     ports:
-      - "3000:3000" # TODO: behind the border Nginx (https); lab network/VPN only until then
+      # Users reach it at https://<DEVICE_HOST>/grafana/ through the border Nginx; the Proxmox
+      # firewall admits only the border Nginx (deploy/vm/README.md, section 7.3).
+      - "3000:3000"
     environment:
-      # Break-glass local admin; everyone else signs in with the lab SSO.
+      # Break-glass local admin; everyone else signs in with the lab SSO. Its password login
+      # (POST /login) is limited to the lab network and VPN by the border Nginx.
       GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:?set in .env}
       GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:?set in .env}
       GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?set in .env}
+      # No passwords on the HTTP API: it would bypass the /login restriction above.
+      GF_AUTH_BASIC_ENABLED: "false"
       # The URL users open; Keycloak redirects back to <root>/login/generic_oauth.
       GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:?set in .env}
+      # Serve under the root URL's path (/grafana/) on :3000 too, so the border Nginx passes
+      # paths through unchanged. No effect while the root URL has no path.
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      # true once GRAFANA_ROOT_URL is https://; with plain http the browser drops the cookie.
+      GF_SECURITY_COOKIE_SECURE: ${GRAFANA_COOKIE_SECURE:-false}
       # Lab SSO (Keycloak, OIDC). Identity only (ADR-0003): new users are Viewers, and roles
       # are changed in Grafana by an admin, never taken from Keycloak.
       GF_AUTH_GENERIC_OAUTH_ENABLED: "true"

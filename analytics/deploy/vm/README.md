@@ -115,7 +115,7 @@ policy_out: ACCEPT
 
 [RULES]
 IN SSH(ACCEPT) -source <ADMIN_NET>
-IN ACCEPT -source <TEAM_NET> -p tcp -dport 3000 # Grafana
+IN ACCEPT -source <BORDER_NGINX_IP> -p tcp -dport 3000 # Grafana at https://<DEVICE_HOST>/grafana/ (section 7.3)
 IN ACCEPT -source <TEAM_NET> -p tcp -dport 8080 # pit wall
 # Devices (ADR-0004): only the border Nginx, which checks the device certificates.
 IN ACCEPT -source <BORDER_NGINX_IP> -p tcp -dport 9002 # device MQTT (WebSocket)
@@ -123,7 +123,7 @@ IN ACCEPT -source <BORDER_NGINX_IP> -p tcp -dport 8082 # enrollment requests
 IN ACCEPT -source <BORDER_NGINX_IP> -p tcp -dport 8080 # pit wall at https://<DEVICE_HOST>/
 ```
 
-The two device rules are what makes the certificate check work: anything else that reaches 9002 talks to the broker without passing Nginx. The border Nginx serves the pit wall only to the lab network and VPN (section 6.2); keep 3000 and 8080 limited to those networks as well until Keycloak is in front.
+The two device rules are what makes the certificate check work: anything else that reaches 9002 talks to the broker without passing Nginx. The border Nginx serves the pit wall only to the lab network and VPN (section 6.2); keep 8080 limited to those networks as well until Keycloak is in front. Grafana has the lab SSO and is open to the internet through the border Nginx (section 7.3). Until that server block exists, admit `<TEAM_NET>` to 3000 instead.
 
 The VM firewall only filters if the firewall is also enabled at datacenter level. Check with the admins whether `policy_out` should be restricted to the destinations listed above.
 
@@ -200,7 +200,7 @@ journalctl -u kart-analytics-update -f
 docker compose -p kart-analytics ls && docker ps
 ```
 
-Then open Grafana at `http://<HOSTNAME>:3000` and the pit wall at `http://<HOSTNAME>:8080`.
+Then open Grafana at `http://<HOSTNAME>:3000` (`https://<DEVICE_HOST>/grafana/` once section 7.3 is done) and the pit wall at `http://<HOSTNAME>:8080`.
 
 ## 6. Device access: CA, border Nginx, enrollment (ADR-0004)
 
@@ -279,7 +279,7 @@ Grafana signs users in with the lab's Keycloak over OIDC (*Sign in with Lab SSO*
 
 ### 7.1 Keycloak client (lab admins)
 
-Ask the lab admins for an OIDC client in the lab realm (the realm's discovery URL is in the lab wiki). `<GRAFANA_URL>` is the address users open, e.g. `http://<VM_IP>:3000`:
+Ask the lab admins for an OIDC client in the lab realm (the realm's discovery URL is in the lab wiki). `<GRAFANA_URL>` is the address users open: `https://<DEVICE_HOST>/grafana` behind the border Nginx (section 7.3), before that `http://<VM_IP>:3000`:
 
 | Setting | Value |
 |---|---|
@@ -304,9 +304,27 @@ cd /opt/kart-analytics/current/deploy/compose
 docker compose -p kart-analytics exec grafana wget -qO- "$(sudo sed -n 's/^OIDC_ISSUER=//p' /etc/kart-analytics/.env)/.well-known/openid-configuration" | head -c 200
 ```
 
-Then open `<GRAFANA_URL>`, choose *Sign in with Lab SSO*, and promote the first engineers to Editor or Admin as the local admin. `GRAFANA_ROOT_URL` must be exactly the address in the browser; otherwise Keycloak rejects the redirect (`Invalid parameter: redirect_uri`). When Grafana moves behind the border Nginx, change it there and in the Keycloak client.
+Then open `<GRAFANA_URL>`, choose *Sign in with Lab SSO*, and promote the first engineers to Editor or Admin as the local admin. `GRAFANA_ROOT_URL` must be exactly the address in the browser; otherwise Keycloak rejects the redirect (`Invalid parameter: redirect_uri`). SSO sign-in therefore works only at that one address.
 
-While Grafana is reached over plain HTTP, the session cookie crosses the lab network unencrypted. That's acceptable on the lab network and VPN; the move behind the border Nginx brings HTTPS.
+### 7.3 Behind the border Nginx (HTTPS)
+
+Grafana is served at `https://<DEVICE_HOST>/grafana/`, next to the pit wall, under the lab's wildcard certificate. It is open to the internet: everyone signs in with the lab SSO, which the lab exposes to the internet for its login pages. The break-glass admin's password login (`POST /grafana/login`) is admitted only from the lab network and VPN, and Grafana accepts no passwords on its HTTP API.
+
+1. **Lab admins:**
+   - The Grafana locations (`/grafana…`) from [`border-nginx.example.conf`](border-nginx.example.conf), in the existing `<DEVICE_HOST>` server block, plus its `Strict-Transport-Security` header.
+   - Keycloak client: add the new address as in 7.1, with `<GRAFANA_URL>` = `https://<DEVICE_HOST>/grafana`: redirect URI `…/grafana/login/generic_oauth`, post logout `…/grafana/login`, root URL `…/grafana`. Remove the `http://<VM_IP>:3000` URIs once the switch is done.
+   - For access from outside the lab: `<DEVICE_HOST>` in the public DNS zone, pointing at the lab's public address. Without it, Grafana works on the lab network and VPN only.
+2. **Proxmox firewall:** port 3000 only from `<BORDER_NGINX_IP>` (section 1.2).
+3. **VM**, in `/etc/kart-analytics/.env`: `GRAFANA_ROOT_URL=https://<DEVICE_HOST>/grafana` and `GRAFANA_COOKIE_SECURE=true`, then deploy. The break-glass admin signs in at the same address, from the lab network or VPN.
+
+Check from outside the lab network (e.g. a phone without Wi-Fi):
+
+```bash
+curl -s https://<DEVICE_HOST>/grafana/api/health                                 # "database": "ok"
+curl -s -o /dev/null -w '%{http_code}\n' -X POST https://<DEVICE_HOST>/grafana/login  # 403
+```
+
+Then sign in with the lab SSO in the browser. A dashboard that stops updating while the rest works points at the `/grafana/api/live/` WebSocket block.
 
 ---
 
@@ -349,4 +367,4 @@ Roles live outside the database, so `grafana_ro` and `pit_api_ro` survive the re
 
 ## Not done yet
 
-The pit wall outside the lab network and VPN, Keycloak SSO for the pit wall (Grafana has it, section 7), Grafana over HTTPS, the management interface (approving enrollments there, public `/enroll/`), automatic certificate renewal. See the TODOs in `deploy/compose/compose.prod.yml` and `deploy/mosquitto/mosquitto.prod.conf`.
+The pit wall outside the lab network and VPN, Keycloak SSO for the pit wall (Grafana has it, section 7), the management interface (approving enrollments there, public `/enroll/`), automatic certificate renewal. See the TODOs in `deploy/compose/compose.prod.yml` and `deploy/mosquitto/mosquitto.prod.conf`.
