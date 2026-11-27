@@ -5,19 +5,47 @@
 #   KART_VERSION=1.2.3 docker compose --env-file /etc/kart-analytics/.env \
 #       -f compose.yml -f compose.prod.yml up -d
 #
-# Host files (never in Git): /etc/kart-analytics/{.env,mosquitto.passwd,pit-wall.config.json}
+# Host files (never in Git): /etc/kart-analytics/{.env,pit-wall.config.json,device-ca/}
+#
+# Device access (ADR-0004): karts and timing devices reach mosquitto:9002 and enroll:8082
+# only through the border Nginx; the Proxmox firewall admits nothing else on those ports.
 
 services:
   mosquitto:
     restart: unless-stopped
+    # Creates the dynamic security file with the admin user on the first start.
+    command: ["/bin/sh", "/mosquitto/config/start.sh"]
+    environment:
+      MQTT_DYNSEC_ADMIN_PASSWORD: ${MQTT_DYNSEC_ADMIN_PASSWORD:?set in .env}
     ports:
-      # TODO (ADR-0004): stop publishing 1883 once devices use the 9002 listener behind the border Nginx;
-      # publish 9002 instead (Proxmox firewall: border Nginx only).
-      - "1883:1883"
+      # Devices, through the border Nginx only (1883 stays internal).
+      - "9002:9002"
     volumes:
       - ../mosquitto/mosquitto.prod.conf:/mosquitto/config/mosquitto.conf:ro
-      - ${MOSQUITTO_PASSWD:-/etc/kart-analytics/mosquitto.passwd}:/mosquitto/config/passwd:ro
+      - ../mosquitto/start.sh:/mosquitto/config/start.sh:ro
       - mosquitto-data:/mosquitto/data
+
+  # Device enrollment (ADR-0004): device CA, approval by code, broker users. Admin CLI on
+  # the host: `sudo kart-enroll <command>` (installed by deploy/vm/install.sh).
+  enroll:
+    image: ${REGISTRY:-ghcr.io/aerospace-lab-e-v}/kart-enroll:${KART_VERSION:?set by the updater}
+    restart: unless-stopped
+    depends_on:
+      mosquitto:
+        condition: service_started
+    ports:
+      # /enroll/ through the border Nginx only.
+      - "8082:8082"
+    environment:
+      MQTT_URL: mqtt://mosquitto:1883
+      MQTT_DYNSEC_ADMIN_PASSWORD: ${MQTT_DYNSEC_ADMIN_PASSWORD:?set in .env}
+      # The service keeps these internal broker users in sync with .env on every start.
+      INGEST_MQTT_PASSWORD: ${INGEST_MQTT_PASSWORD:?set in .env}
+      PIT_WALL_MQTT_PASSWORD: ${PIT_WALL_MQTT_PASSWORD:?set in .env}
+      RUST_LOG: info
+    volumes:
+      - ${DEVICE_CA_DIR:-/etc/kart-analytics/device-ca}:/device-ca:ro
+      - enroll-data:/data
 
   timescaledb:
     restart: unless-stopped
@@ -46,8 +74,8 @@ services:
         condition: service_started
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb:5432/telemetry
-      # The broker needs a login (allow_anonymous false); user from mosquitto.passwd.
-      MQTT_URL: mqtt://${INGEST_MQTT_USER:?set in .env}:${INGEST_MQTT_PASSWORD:?set in .env}@mosquitto:1883
+      # Broker user `ingest`, kept by the enroll service (pinned to client id `ingest`).
+      MQTT_URL: mqtt://ingest:${INGEST_MQTT_PASSWORD:?set in .env}@mosquitto:1883
       RUST_LOG: info
 
   pit-api:
@@ -69,8 +97,10 @@ services:
     ports:
       - "8080:8080" # TODO: behind the border Nginx (wss://) + Keycloak; lab network/VPN only until then (ADR-0004)
     volumes:
-      # Read-only broker credentials for browsers; see pit-wall.config.example.json.
+      # Read-only broker login for browsers (user pit-wall, PIT_WALL_MQTT_PASSWORD);
+      # see pit-wall.config.example.json.
       - ${PIT_WALL_CONFIG:-/etc/kart-analytics/pit-wall.config.json}:/srv/config.json:ro
 
 volumes:
   mosquitto-data:
+  enroll-data:

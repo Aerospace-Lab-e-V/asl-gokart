@@ -5,6 +5,7 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 
 install -m 755 "$here/kart-analytics-update" /usr/local/sbin/kart-analytics-update
+install -m 755 "$here/kart-enroll" /usr/local/sbin/kart-enroll
 install -m 644 "$here/kart-analytics-update.service" "$here/kart-analytics-update.timer" /etc/systemd/system/
 install -d -m 700 /etc/kart-analytics
 [[ -e /etc/kart-analytics/update.conf ]] || install -m 600 "$here/update.conf.example" /etc/kart-analytics/update.conf

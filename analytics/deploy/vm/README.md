@@ -20,13 +20,13 @@ The deploy bundle (`deploy/bundle.Dockerfile`) carries the compose files, broker
 | Path on the VM | What |
 |---|---|
 | `/etc/kart-analytics/.env` | secrets for compose (from `deploy/compose/.env.example`) |
-| `/etc/kart-analytics/mosquitto.passwd` | broker users (`ingest`, `pit-wall`) |
 | `/etc/kart-analytics/pit-wall.config.json` | read-only broker login for browsers (from `deploy/compose/pit-wall.config.example.json`) |
+| `/etc/kart-analytics/device-ca/` | the device CA (`ca.key`, `ca.pem`), owned by uid 10082 (the enroll container), see section 6 |
 | `/etc/kart-analytics/update.conf` | updater settings (from `update.conf.example`) |
 | `/opt/kart-analytics/releases/<version>` | extracted bundles; `/opt/kart-analytics/current` points at the running one |
 | `/var/lib/kart-analytics/current-version` | the deployed version (`failed-version`: last failed deploy) |
 | `/var/backups/kart-analytics/` | `pg_dump` taken before every deploy |
-| Docker volumes `kart-analytics_*` | database, Grafana and broker data |
+| Docker volumes `kart-analytics_*` | database, Grafana, broker data (incl. `dynamic-security.json`: broker users and ACLs) and the enroll service's issue log |
 
 ---
 
@@ -117,8 +117,12 @@ policy_out: ACCEPT
 IN SSH(ACCEPT) -source <ADMIN_NET>
 IN ACCEPT -source <TEAM_NET> -p tcp -dport 3000 # Grafana
 IN ACCEPT -source <TEAM_NET> -p tcp -dport 8080 # pit wall
-# later (ADR-0004): 9002 (device MQTT) and 8082 (enrollment), from the border Nginx only
+# Devices (ADR-0004): only the border Nginx, which checks the device certificates.
+IN ACCEPT -source <BORDER_NGINX_IP> -p tcp -dport 9002 # device MQTT (WebSocket)
+IN ACCEPT -source <BORDER_NGINX_IP> -p tcp -dport 8082 # enrollment requests
 ```
+
+The two device rules are what makes the certificate check work: anything else that reaches 9002 talks to the broker without passing Nginx. If the pit wall and Grafana are also served through the border Nginx, add that source to their rules and keep them limited to the lab network and VPN until Keycloak is in front.
 
 The VM firewall only filters if the firewall is also enabled at datacenter level. Check with the admins whether `policy_out` should be restricted to the destinations listed above.
 
@@ -177,17 +181,15 @@ cd /etc/kart-analytics
 cp /root/bundle-$V/deploy/compose/.env.example .env              # fill in; generate with: openssl rand -hex 24
 cp /root/bundle-$V/deploy/compose/pit-wall.config.example.json pit-wall.config.json
 
-# Broker users: ingest (same password as INGEST_MQTT_PASSWORD) and pit-wall (read-only, browsers).
-touch mosquitto.passwd
-docker run --rm -it -v /etc/kart-analytics:/c eclipse-mosquitto:2.0.22 mosquitto_passwd /c/mosquitto.passwd ingest
-docker run --rm -it -v /etc/kart-analytics:/c eclipse-mosquitto:2.0.22 mosquitto_passwd /c/mosquitto.passwd pit-wall
-# The broker runs as uid 1883 and must be able to read the file:
-chown 1883:1883 mosquitto.passwd && chmod 600 mosquitto.passwd
-
+# pit-wall.config.json: mqttPassword = PIT_WALL_MQTT_PASSWORD from .env
 chmod 600 .env pit-wall.config.json update.conf
 ```
 
+Broker users live in Mosquitto's dynamic security plugin, not in a file (ADR-0004). On its first start the broker creates the plugin's file with the admin user `dynsec-admin` (`MQTT_DYNSEC_ADMIN_PASSWORD`); the enroll service then creates the `ingest` and `pit-wall` users from `.env` and keeps them in sync on every start. Changing `INGEST_MQTT_PASSWORD` or `PIT_WALL_MQTT_PASSWORD` therefore only needs a redeploy; changing the admin password needs `mosquitto_ctrl` in the broker container as well (`setClientPassword dynsec-admin`).
+
 The database passwords take effect only when the database volume is created on the first start. Changing them later means `ALTER ROLE … PASSWORD` in the database as well.
+
+The device CA (section 6) has to exist before the first deploy of a release with the enroll service; without it the service does not start and the updater rolls back.
 
 ## 5. First deploy
 
@@ -198,6 +200,66 @@ docker compose -p kart-analytics ls && docker ps
 ```
 
 Then open Grafana at `http://<HOSTNAME>:3000` and the pit wall at `http://<HOSTNAME>:8080`.
+
+## 6. Device access: CA, border Nginx, enrollment (ADR-0004)
+
+Karts and timing devices connect to `wss://<DEVICE_HOST>/mqtt` through the lab's border Nginx, which only forwards clients with a certificate from our device CA. Each device also logs in to the broker as its own user. Both come from enrollment: the device asks, an admin approves by the code the device shows.
+
+### 6.1 Create the device CA (once)
+
+```bash
+V=<VERSION>   # the release about to be deployed
+install -d -o 10082 -g 10082 -m 700 /etc/kart-analytics/device-ca
+docker run --rm -v /etc/kart-analytics/device-ca:/device-ca \
+    ghcr.io/aerospace-lab-e-v/kart-enroll:$V init-ca > /root/kart-device-ca.pem
+```
+
+`ca.key` never leaves the VM and is not in any backup outside it; if it is lost or the VM is compromised, create a new CA and re-enroll every device. `kart-device-ca.pem` is public: it goes to the admins for the border Nginx. Later, `sudo kart-enroll ca` prints it again.
+
+### Upgrading a VM set up before ADR-0004
+
+The first release with the enroll service changes the broker's users and ports, so prepare the VM before it deploys:
+
+1. `systemctl stop kart-analytics-update.timer`
+2. In `/etc/kart-analytics/.env`: add `MQTT_DYNSEC_ADMIN_PASSWORD` and `PIT_WALL_MQTT_PASSWORD` (`openssl rand -hex 24`), remove `INGEST_MQTT_USER` (the user is now always `ingest`). Put `PIT_WALL_MQTT_PASSWORD` into `pit-wall.config.json` as `mqttPassword`.
+3. Create the device CA (6.1).
+4. Pin and deploy: `PIN_VERSION=<VERSION>` in `update.conf`, `systemctl start kart-analytics-update.service`, check `journalctl -u kart-analytics-update`. Then run that release's `install.sh` (installs `kart-enroll`), remove the pin and start the timer again.
+5. `mosquitto.passwd` is no longer used; delete it. Port 1883 is no longer published: devices still on an old agent stop sending until they are updated and enrolled.
+
+### 6.2 Border Nginx (lab admins)
+
+Send the admins [`border-nginx.example.conf`](border-nginx.example.conf) with the placeholders filled in, plus `kart-device-ca.pem`. Then add the two device rules to the Proxmox firewall (section 1.2). Check from a machine on the lab network:
+
+```bash
+curl -s https://<DEVICE_HOST>/enroll/v1/health                     # ok
+curl -s -o /dev/null -w '%{http_code}\n' https://<DEVICE_HOST>/mqtt  # 403 without a device certificate
+```
+
+### 6.3 Enroll a device
+
+1. **Kart:** headunit → *Telemetry* → *Configure* (admin mode): broker `wss://<DEVICE_HOST>/mqtt`, save. Then *Enroll* on the Telemetry page. The kart must be on the lab network (phase 1). It shows a code like `K7QM-2XTR`.
+   **Speedcamera:** web UI → lap timer → kart link: server `<DEVICE_HOST>`, device ID, *Enroll*.
+2. **Admin, on the VM:**
+
+   ```bash
+   sudo kart-enroll requests                 # pending requests with their codes
+   sudo kart-enroll approve K7QM-2XTR        # or: --as kart-03 to assign another ID
+   ```
+
+   Compare the code with the device's screen before approving. A device that is already enrolled (new SD card, re-installed Pi) needs `--replace`; its old login stops working.
+3. The device collects its certificate and login within a few seconds and connects. Requests expire after 10 minutes.
+
+| Task | How |
+|---|---|
+| Enrolled devices | `sudo kart-enroll devices` |
+| Block a device (stolen, lost) | `sudo kart-enroll disable <ID>`; takes effect at once, also for a connected device |
+| Unblock | `sudo kart-enroll enable <ID>` |
+| Who was issued what | `docker run --rm -v kart-analytics_enroll-data:/d debian:trixie-slim cat /d/issued.jsonl` |
+| Enroll service log | `docker compose -p kart-analytics logs -f enroll` (from the release's `deploy/compose`) |
+
+Certificates are valid for one year; the Telemetry page shows the expiry. Renewal is not automated yet: re-enroll with `--replace` before it expires.
+
+**Before the vhost exists** (testing in the lab): allow the lab network to 9002 and 8082 in the Proxmox firewall for the duration of the test, and set the kart's broker to `ws://<VM_IP>:9002` and `enroll.url` to `http://<VM_IP>:8082` (in `/etc/kart-agent/agent.toml`; the passwords then cross the lab network unencrypted). Remove both again afterwards.
 
 ---
 
@@ -212,6 +274,7 @@ Then open Grafana at `http://<HOSTNAME>:3000` and the pit wall at `http://<HOSTN
 | Pin / roll back / try a pre-release | set `PIN_VERSION=X.Y.Z` in `update.conf`, then deploy now; remove it to follow the newest release again |
 | Retry a failed version | `kart-analytics-update --force` (a failed version is otherwise skipped until a newer one appears) |
 | Pause deploys | `systemctl stop kart-analytics-update.timer` (`start` to resume) |
+| Approve a device | `sudo kart-enroll requests`, then `sudo kart-enroll approve <CODE>` (section 6.3) |
 
 The updater exports `KART_VERSION`. For manual compose commands, set it yourself: `KART_VERSION=$(cat /var/lib/kart-analytics/current-version) docker compose -p kart-analytics --env-file /etc/kart-analytics/.env -f compose.yml -f compose.prod.yml …`.
 
@@ -239,4 +302,4 @@ Roles live outside the database, so `grafana_ro` and `pit_api_ro` survive the re
 
 ## Not done yet
 
-Device access through the border Nginx with device certificates, enrollment and per-device broker users ([ADR-0004](../../docs/adr/0004-device-access-to-the-broker.md)); the pit wall behind the border Nginx (`wss://`); Keycloak SSO; broker ACLs. See the TODOs in `deploy/compose/compose.prod.yml` and `deploy/mosquitto/mosquitto.prod.conf`.
+The pit wall behind the border Nginx (`wss://`), Keycloak SSO, the management interface (approving enrollments there, public `/enroll/`), automatic certificate renewal. See the TODOs in `deploy/compose/compose.prod.yml` and `deploy/mosquitto/mosquitto.prod.conf`.

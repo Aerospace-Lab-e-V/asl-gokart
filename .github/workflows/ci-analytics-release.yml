@@ -36,6 +36,8 @@ jobs:
                       dockerfile: crates/ingest/Dockerfile
                     - image: kart-pit-api
                       dockerfile: crates/pit-api/Dockerfile
+                    - image: kart-enroll
+                      dockerfile: crates/enroll/Dockerfile
                     - image: kart-pit-wall
                       dockerfile: web/pit-wall/Dockerfile
         steps:
