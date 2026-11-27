@@ -120,9 +120,10 @@ IN ACCEPT -source <TEAM_NET> -p tcp -dport 8080 # pit wall
 # Devices (ADR-0004): only the border Nginx, which checks the device certificates.
 IN ACCEPT -source <BORDER_NGINX_IP> -p tcp -dport 9002 # device MQTT (WebSocket)
 IN ACCEPT -source <BORDER_NGINX_IP> -p tcp -dport 8082 # enrollment requests
+IN ACCEPT -source <BORDER_NGINX_IP> -p tcp -dport 8080 # pit wall at https://<DEVICE_HOST>/
 ```
 
-The two device rules are what makes the certificate check work: anything else that reaches 9002 talks to the broker without passing Nginx. If the pit wall and Grafana are also served through the border Nginx, add that source to their rules and keep them limited to the lab network and VPN until Keycloak is in front.
+The two device rules are what makes the certificate check work: anything else that reaches 9002 talks to the broker without passing Nginx. The border Nginx serves the pit wall only to the lab network and VPN (section 6.2); keep 3000 and 8080 limited to those networks as well until Keycloak is in front.
 
 The VM firewall only filters if the firewall is also enabled at datacenter level. Check with the admins whether `policy_out` should be restricted to the destinations listed above.
 
@@ -228,11 +229,22 @@ The first release with the enroll service changes the broker's users and ports, 
 
 ### 6.2 Border Nginx (lab admins)
 
-Send the admins [`border-nginx.example.conf`](border-nginx.example.conf) with the placeholders filled in, plus `kart-device-ca.pem`. Then add the two device rules to the Proxmox firewall (section 1.2). Check from a machine on the lab network:
+Send the admins [`border-nginx.example.conf`](border-nginx.example.conf) with the placeholders filled in, plus `kart-device-ca.pem`. `ssl_certificate` must be the full chain (certificate plus intermediate, e.g. acme.sh's `fullchain.cer`): karts and devices don't fetch a missing intermediate the way browsers do and fail with `UnknownIssuer`. Then add the border Nginx rules to the Proxmox firewall (section 1.2).
+
+The same host serves the pit wall at `https://<DEVICE_HOST>/` to the lab network and VPN. Its live view can't use `/mqtt` (that is the device listener), so set the path in `/etc/kart-analytics/pit-wall.config.json`:
+
+```json
+"mqttUrl": "wss://<DEVICE_HOST>/pit-wall/mqtt"
+```
+
+The pit wall reads the file on every page load, so no restart is needed. It also applies to `http://<VM_IP>:8080`, which keeps working from the lab network and VPN.
+
+Check from a machine on the lab network:
 
 ```bash
 curl -s https://<DEVICE_HOST>/enroll/v1/health                     # ok
 curl -s -o /dev/null -w '%{http_code}\n' https://<DEVICE_HOST>/mqtt  # 403 without a device certificate
+curl -s -o /dev/null -w '%{http_code}\n' https://<DEVICE_HOST>/      # 200: the pit wall
 ```
 
 ### 6.3 Enroll a device
@@ -302,4 +314,4 @@ Roles live outside the database, so `grafana_ro` and `pit_api_ro` survive the re
 
 ## Not done yet
 
-The pit wall behind the border Nginx (`wss://`), Keycloak SSO, the management interface (approving enrollments there, public `/enroll/`), automatic certificate renewal. See the TODOs in `deploy/compose/compose.prod.yml` and `deploy/mosquitto/mosquitto.prod.conf`.
+The pit wall outside the lab network and VPN, Keycloak SSO, the management interface (approving enrollments there, public `/enroll/`), automatic certificate renewal. See the TODOs in `deploy/compose/compose.prod.yml` and `deploy/mosquitto/mosquitto.prod.conf`.
