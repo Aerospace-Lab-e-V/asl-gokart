@@ -64,8 +64,12 @@ kart-agent / speedcamera
 - **Where users live.** Users and roles move from the password file into Mosquitto's dynamic security plugin. The
   enrollment service creates and disables device users through the plugin's MQTT control topic, without editing files
   or reloading the broker. Each device user is pinned to its client ID (`kart-agent-<kart_id>`,
-  `speedcamera-<device_id>`), so a device cannot take over another client's session, for example ingest's. The
-  internal users move into the plugin too.
+  `speedcamera-<device_id>`), and so is `ingest`. The internal users move into the plugin too.
+- **Pinning only binds the pinned user.** It does not reserve the client ID: tested against Mosquitto 2.0.22, an
+  unpinned user that connects with another client's ID still takes over its session. Every user except `pit-wall` is
+  pinned. `pit-wall` cannot be (browsers choose random client IDs), and its password is in the pit wall's public
+  `/config.json`, so whoever can open the pit wall can disconnect any client. That is one more reason to keep the pit
+  wall on the lab network and VPN until Keycloak is in front; per-user browser logins close it then.
 - **Revocation.** Disabling a device's broker user takes effect immediately. The border Nginx gets no revocation
   list: a revoked device still passes the gate but cannot log in.
 
@@ -84,7 +88,8 @@ Device rights (internal users as in the README's MQTT topic table):
 - **The certificate** carries the ID the admin approved as its common name, not whatever the request asked for. It is
   for client authentication only and valid for one year.
 - **The signer is a small service of our own** in the analytics workspace (`crates/enroll`, Rust and axum like
-  pit-api). It creates the broker user and signs the certificate in one step.
+  pit-api; wire format in `crates/enroll-proto`). It creates the broker user and signs the certificate in one step.
+  Its admin API listens on loopback inside its container only; the VM's `kart-enroll` command runs the CLI there.
 
 ### Enrollment
 1. **Request.** The user taps *Enroll*: on the headunit's Telemetry page (through kart-agent's local API), or in the
@@ -219,9 +224,8 @@ is readable, whatever the device path does.
   CONNECT: about four LTE round trips. The hops from the border Nginx to the broker stay inside the DMZ.
 - **Open with the admins:** whether devices on the lab network reach the border Nginx under `<DEVICE_HOST>`. Phase 1
   assumes they do.
+- **Disabling a device** with the plugin disconnects it at once if it is connected (tested).
 - Follow-ups:
-  - `crates/enroll`, the device listener and the move to the dynamic security plugin, with a test that the broker
-    rejects a pinned user connecting under a different client ID
-  - the client changes in kart-mqtt and the speedcamera
-  - certificate renewal before expiry (design open)
+  - certificate renewal before expiry (design open); until then re-enroll with `--replace`
   - the management interface (planned separately) and Keycloak in front of the pit wall and Grafana
+  - a cross-build of kart-agent with `ring` under `cargo zigbuild` on CI (the first one comes with this change)
