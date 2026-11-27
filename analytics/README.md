@@ -26,7 +26,8 @@ Proxmox VE: Debian 13 VM (Docker Compose)
        └──(MQTT over WebSocket)──► pit wall in the browser (real-time)
   command-api ◄── pit management UI (to be planned): driver profiles, limits
   own user DB: users, profiles, roles and rights
-  Keycloak (OIDC, brokering SAML): SSO for the web services, identity only
+
+Lab Keycloak (UCS SSO, OIDC): sign-in for the web services, identity only
 ```
 
 **Latency target:** aim for ≤ 250 ms from ECU to the pit wall screen; 500 ms is the hard limit. Budget: 25–50 ms batching, 50–150 ms LTE uplink, ~5 ms border proxy and broker, leaving tens of milliseconds for the browser to decode and render. That is why the pit wall reads MQTT directly over WebSocket. Every path through Grafana adds a database poll or a fixed flush timer, which costs 100 ms to 1 s. LTE spikes cause gaps in the live view only; backfill restores them.
@@ -47,7 +48,7 @@ Proxmox VE: Debian 13 VM (Docker Compose)
 | Live view (pit wall) | React + Vite SPA (Bun, TanStack Router/Query, Tailwind + daisyUI, Chart.js), MQTT over WebSocket straight from the broker; `pit-api` (Rust, axum) serves the recent past to seed the charts |
 | Dashboards | Grafana OSS on TimescaleDB (history, near-live overview) |
 | Session deep dive | Lichtblick / PlotJuggler (open MCAP files directly) |
-| Auth | Keycloak SSO for the web services (OIDC; upstream SAML brokered by Keycloak), identity only. Users, driver profiles, roles and rights live in our own DB ([ADR-0003](docs/adr/0003-driver-profiles-and-remote-limits.md)) |
+| Auth | The lab's Keycloak (UCS SSO) for the web services over OIDC, identity only; Grafana uses it already ([runbook, section 7](deploy/vm/README.md#7-grafana-sign-in-with-the-lab-sso)), the pit wall later. Users, driver profiles, roles and rights live in our own DB ([ADR-0003](docs/adr/0003-driver-profiles-and-remote-limits.md)) |
 | Platform | Docker Compose in a Debian 13 VM on Proxmox VE (DMZ); images on GHCR, pulled by a systemd timer |
 | Later | Parquet archive on S3-compatible storage, analysis tooling, MediaMTX for video, LoRa fallback link (ChirpStack if LoRaWAN) |
 
@@ -86,13 +87,12 @@ analytics/
 │   └── provisioning/
 ├── deploy/
 │   ├── compose/     # Docker Compose stacks
-│   │   ├── compose.yml       # shared: broker, TimescaleDB, Grafana, Keycloak
+│   │   ├── compose.yml       # shared: broker, TimescaleDB, Grafana
 │   │   ├── compose.dev.yml   # local overrides (exposed ports, dev credentials)
 │   │   ├── compose.prod.yml  # prod overrides (ingest, command-api, restart policies, volumes)
 │   │   ├── .env.example      # variable names only; the real .env is untracked
 │   │   └── timescaledb-init/ # first-start DB setup (read-only Grafana role)
 │   ├── mosquitto/   # broker config (dev: anonymous, prod: auth)
-│   ├── keycloak/    # realm export
 │   ├── vm/          # production host: runbook, updater script, systemd units
 │   └── bundle.Dockerfile # deploy bundle (compose + config) published next to the images
 └── testdata/sessions/      # small recorded sessions (Git LFS)
@@ -338,7 +338,7 @@ Pre-release tags (`analytics-v1.2.0-rc.1`) are published but only deployed when 
 - **Schema changes go through `schema/`.** CI runs `buf lint` and `buf breaking`. Never change a field's meaning; add a new one.
 - **Version everything together.** Each session records the `kart-agent` version and schema version used, so old logs stay decodable.
 - **CI uses path filters.** A change in `schema/` rebuilds and tests everything; other changes only rebuild what they touch.
-- **Dashboards, Keycloak realm and DB schema are code.** No changes made only in a UI.
+- **Dashboards, Grafana config and DB schema are code.** No changes made only in a UI.
 - **No secrets in Git.** Server secrets live in an untracked `.env` on the host (only `.env.example` is committed). Device private keys, broker passwords and the device CA key never enter the repo.
 - **Safety-relevant code needs a second reviewer.** See `CODEOWNERS` for `command-api/`, `commands.proto` and the command handling in `kart-agent`.
 
@@ -349,5 +349,5 @@ Pre-release tags (`analytics-v1.2.0-rc.1`) are published but only deployed when 
 1. **Live MVP:** kart-agent with local logging (done: Sero, MCAP, live MQTT, packaged with the headunit), time sync, device enrollment and the `wss://` uplink (ADR-0004), MQTT, ingest, TimescaleDB, pit wall live view, basic Grafana dashboards.
 2. **Complete data:** backfill with sequence numbers, lap timing, session and lap-overlay dashboards.
 3. **Driver profiles:** own user DB with demo users, sign-in on the kart, live profile delivery, acknowledgments, audit log ([ADR-0003](docs/adr/0003-driver-profiles-and-remote-limits.md)). Limits are applied once `zc_throttle` is integrated.
-4. **Team access:** Keycloak SSO for the pit wall, pit-api and Grafana; roles and rights model; pit management interface.
+4. **Team access:** Keycloak SSO for the pit wall and pit-api (Grafana: done); roles and rights model; pit management interface.
 5. **More data:** video (MediaMTX), LoRa fallback link, Parquet archive and analysis tooling.

@@ -273,6 +273,41 @@ Certificates are valid for one year; the Telemetry page shows the expiry. Renewa
 
 **Before the vhost exists** (testing in the lab): allow the lab network to 9002 and 8082 in the Proxmox firewall for the duration of the test, and set the kart's broker to `ws://<VM_IP>:9002` and `enroll.url` to `http://<VM_IP>:8082` (in `/etc/kart-agent/agent.toml`; the passwords then cross the lab network unencrypted). Remove both again afterwards.
 
+## 7. Grafana sign-in with the lab SSO
+
+Grafana signs users in with the lab's Keycloak over OIDC (*Sign in with Lab SSO*). Keycloak only says who someone is (ADR-0003): every new user starts as **Viewer**, and an admin changes roles in Grafana (*Administration → Users*). Grafana keeps those roles across logins. The local admin from `.env` stays as a break-glass login in case Keycloak is down.
+
+### 7.1 Keycloak client (lab admins)
+
+Ask the lab admins for an OIDC client in the lab realm (the realm's discovery URL is in the lab wiki). `<GRAFANA_URL>` is the address users open, e.g. `http://<VM_IP>:3000`:
+
+| Setting | Value |
+|---|---|
+| Client type / ID | OpenID Connect, e.g. `kart-grafana` |
+| Client authentication | on (confidential client, gives a secret) |
+| Authentication flow | *Standard flow* only |
+| Root URL | `<GRAFANA_URL>` |
+| Valid redirect URIs | `<GRAFANA_URL>/login/generic_oauth` |
+| Valid post logout redirect URIs | `<GRAFANA_URL>/login` |
+| PKCE method (Advanced) | `S256` |
+
+The default client scopes (`profile`, `email`) are enough; group claims are not needed. Accounts need an e-mail address in LDAP, since Grafana links users by it.
+
+### 7.2 Configure Grafana
+
+In `/etc/kart-analytics/.env`, set `GRAFANA_ROOT_URL` (= `<GRAFANA_URL>`, no trailing slash), `OIDC_ISSUER` (the realm URL, i.e. the discovery URL without `/.well-known/openid-configuration`), `GRAFANA_OIDC_CLIENT_ID` and `GRAFANA_OIDC_CLIENT_SECRET`, then deploy (`systemctl start kart-analytics-update.service`). All four are required: without them a release with SSO fails to start and the updater rolls back to the previous release. When updating a VM set up earlier, add them before that release arrives.
+
+The Grafana container fetches tokens from Keycloak itself, so the VM needs outbound HTTPS to the SSO host. Check:
+
+```bash
+cd /opt/kart-analytics/current/deploy/compose
+docker compose -p kart-analytics exec grafana wget -qO- "$(sudo sed -n 's/^OIDC_ISSUER=//p' /etc/kart-analytics/.env)/.well-known/openid-configuration" | head -c 200
+```
+
+Then open `<GRAFANA_URL>`, choose *Sign in with Lab SSO*, and promote the first engineers to Editor or Admin as the local admin. `GRAFANA_ROOT_URL` must be exactly the address in the browser; otherwise Keycloak rejects the redirect (`Invalid parameter: redirect_uri`). When Grafana moves behind the border Nginx, change it there and in the Keycloak client.
+
+While Grafana is reached over plain HTTP, the session cookie crosses the lab network unencrypted. That's acceptable on the lab network and VPN; the move behind the border Nginx brings HTTPS.
+
 ---
 
 ## Operations
@@ -314,4 +349,4 @@ Roles live outside the database, so `grafana_ro` and `pit_api_ro` survive the re
 
 ## Not done yet
 
-The pit wall outside the lab network and VPN, Keycloak SSO, the management interface (approving enrollments there, public `/enroll/`), automatic certificate renewal. See the TODOs in `deploy/compose/compose.prod.yml` and `deploy/mosquitto/mosquitto.prod.conf`.
+The pit wall outside the lab network and VPN, Keycloak SSO for the pit wall (Grafana has it, section 7), Grafana over HTTPS, the management interface (approving enrollments there, public `/enroll/`), automatic certificate renewal. See the TODOs in `deploy/compose/compose.prod.yml` and `deploy/mosquitto/mosquitto.prod.conf`.
