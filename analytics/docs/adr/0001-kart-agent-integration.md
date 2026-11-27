@@ -2,7 +2,8 @@
 
 ## Status
 Accepted. The phase in which the agent becomes the only ECU gateway is superseded by
-[ADR-0002](0002-kart-agent-as-headunit-data-source.md): the headunit keeps its own Sero client.
+[ADR-0002](0002-kart-agent-as-headunit-data-source.md): the headunit keeps its own Sero client. The "mTLS and WireGuard"
+follow-up is replaced by [ADR-0004](0004-device-access-to-the-broker.md).
 
 ## Date
 2026-10-19
