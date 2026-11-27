@@ -1,6 +1,6 @@
 import { BrowserWindow, ipcMain } from "electron";
 import { CH } from "@/ipc/channels";
-import { getConfig, getStatus, putConfig } from "@/main/kart-agent-client";
+import { cancelEnrollment, getConfig, getStatus, putConfig, startEnrollment } from "@/main/kart-agent-client";
 import type { AgentState, ConfigPatch } from "@/services/kart-agent/schema";
 import { requireAdmin } from "./admin";
 
@@ -26,6 +26,13 @@ export function registerKartAgentListeners(mainWindow: BrowserWindow): void {
     ipcMain.handle(CH.agent.getState, () => state);
     ipcMain.handle(CH.agent.getConfig, () => getConfig());
     ipcMain.handle(CH.agent.putConfig, requireAdmin((_event, patch: ConfigPatch) => putConfig(patch)));
+    ipcMain.handle(
+        CH.agent.enroll,
+        requireAdmin((_event, requestedId?: string) =>
+            startEnrollment(typeof requestedId === "string" ? requestedId : undefined)
+        )
+    );
+    ipcMain.handle(CH.agent.cancelEnroll, requireAdmin(() => cancelEnrollment()));
 
     running = true;
     // Next poll starts after the previous one finished, so a slow agent never stacks requests.
