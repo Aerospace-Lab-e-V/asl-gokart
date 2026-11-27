@@ -8,6 +8,11 @@
 //!   within the same session.
 //! - `GET /v1/stream`: Server-Sent Events with the live samples, see [`crate::stream`].
 //!   A restart ends it; the client reconnects.
+//! - `GET /v1/enroll`: [`crate::status::EnrollmentStatus`] (also part of the status)
+//! - `POST /v1/enroll` `{"requested_id": "kart-03"}` (optional; default the configured
+//!   `kart_id`): requests a certificate and broker login, see [`crate::identity`]. Answers
+//!   once the code to show is known.
+//! - `DELETE /v1/enroll`: cancels a pending request.
 //!
 //! There is no authentication: the API listens on loopback and rejects requests whose
 //! `Host` is not loopback (DNS rebinding). It sends no CORS headers and only accepts
@@ -27,13 +32,14 @@ use axum::{
     },
     routing::get,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::sync::{mpsc, watch};
 use tracing::info;
 
 use crate::{
     config::{self, Loaded, Sources},
+    identity::Enrollment,
     status::Shared,
     stream::{self, Tap},
     systemd,
@@ -57,6 +63,7 @@ pub struct ApiState {
     pub tap: Arc<Tap>,
     /// Set when the API shuts down; ends open streams.
     pub stop: watch::Receiver<bool>,
+    pub enrollment: Arc<Enrollment>,
 }
 
 #[derive(Serialize)]
@@ -72,6 +79,10 @@ pub fn router(state: Arc<ApiState>) -> Router {
         .route("/v1/status", get(status))
         .route("/v1/config", get(get_config).put(put_config))
         .route("/v1/stream", get(live_stream))
+        .route(
+            "/v1/enroll",
+            get(get_enroll).post(start_enroll).delete(cancel_enroll),
+        )
         .layer(middleware::from_fn_with_state(state.clone(), loopback_host))
         .with_state(state)
 }
@@ -131,6 +142,54 @@ async fn put_config(State(s): State<Arc<ApiState>>, Json(patch): Json<Value>) ->
         restart_required: changed && !hot,
     })
     .into_response()
+}
+
+async fn get_enroll(State(s): State<Arc<ApiState>>) -> impl IntoResponse {
+    Json(s.shared.snapshot().enrollment)
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct EnrollBody {
+    requested_id: Option<String>,
+}
+
+async fn start_enroll(State(s): State<Arc<ApiState>>, Json(body): Json<EnrollBody>) -> Response {
+    let cfg = s.config.lock().expect("config lock").effective.clone();
+    let unprocessable = |msg: String| {
+        (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(json!({ "error": msg })),
+        )
+            .into_response()
+    };
+    let Some(origin) = cfg.enroll_origin() else {
+        return unprocessable("set a wss:// broker URL (or enroll.url) first".into());
+    };
+    let requested = body
+        .requested_id
+        .map(|r| r.trim().to_owned())
+        .filter(|r| !r.is_empty())
+        .unwrap_or(cfg.kart_id.clone());
+    if let Err(e) = enroll_proto::validate_device_id(enroll_proto::DeviceKind::Kart, &requested) {
+        return unprocessable(e);
+    }
+    let extra_ca = match cfg.server_ca() {
+        Ok(ca) => ca,
+        Err(e) => return unprocessable(format!("{e:#}")),
+    };
+    match s.enrollment.start(&origin, &requested, extra_ca).await {
+        Ok(()) => (StatusCode::ACCEPTED, Json(s.shared.snapshot().enrollment)).into_response(),
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "error": format!("{e:#}") })),
+        )
+            .into_response(),
+    }
+}
+
+async fn cancel_enroll(State(s): State<Arc<ApiState>>) -> impl IntoResponse {
+    s.enrollment.cancel();
+    Json(s.shared.snapshot().enrollment)
 }
 
 async fn loopback_host(State(s): State<Arc<ApiState>>, req: Request, next: Next) -> Response {

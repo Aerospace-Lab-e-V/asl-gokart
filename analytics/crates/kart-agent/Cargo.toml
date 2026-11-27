@@ -7,6 +7,7 @@ publish.workspace = true
 
 [dependencies]
 ecu-sero.workspace = true
+enroll-proto.workspace = true
 kart-mqtt.workspace = true
 sero-sys.workspace = true
 telemetry-schema.workspace = true
@@ -20,6 +21,9 @@ libc.workspace = true
 mcap.workspace = true
 nmea.workspace = true
 prost.workspace = true
+rcgen.workspace = true
+reqwest.workspace = true
+rustls.workspace = true
 sd-notify.workspace = true
 serde.workspace = true
 serde_json.workspace = true

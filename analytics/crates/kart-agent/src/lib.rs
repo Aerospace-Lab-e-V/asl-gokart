@@ -3,13 +3,14 @@
 //! of truth), publishes live batches over MQTT, and is configured and monitored by the
 //! headunit through a loopback HTTP API, which also streams the live samples to it. Runs
 //! as the systemd service `kart-agent`, shipped in the headunit package. See
-//! `docs/adr/0001-kart-agent-integration.md` and `docs/adr/0002-kart-agent-as-headunit-data-source.md`.
+//! `docs/adr/0001-kart-agent-integration.md` and `docs/adr/0002-kart-agent-as-headunit-data-source.md`; the uplink's identity: ADR-0004.
 
 pub mod agent;
 pub mod api;
 pub mod clock;
 pub mod config;
 pub mod gps;
+pub mod identity;
 pub mod log;
 pub mod pipeline;
 pub mod sero;

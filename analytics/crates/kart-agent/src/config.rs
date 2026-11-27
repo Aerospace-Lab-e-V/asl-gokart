@@ -22,6 +22,7 @@ use serde_json::{Map, Value};
 pub struct Config {
     pub kart_id: String,
     pub live: Live,
+    pub enroll: Enroll,
     pub sero: Sero,
     pub gps: Gps,
     pub log: Log,
@@ -35,10 +36,22 @@ pub struct Config {
 pub struct Live {
     /// Live uplink on/off. Local logging is always on.
     pub enabled: bool,
-    /// `mqtt://host:port`; empty means no uplink.
+    /// `wss://host/path` (through the border Nginx, needs enrollment), `mqtt://host:port`
+    /// (lab, dev) or `ws://host:port/path` (tests); empty means no uplink.
     pub broker_url: String,
     pub batch_ms: u64,
     pub max_samples_per_batch: usize,
+    /// PEM file with an extra CA for the server certificates (tests, private proxies).
+    /// The public roots are always trusted.
+    pub server_ca_file: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct Enroll {
+    /// Origin of the enrollment service, e.g. `https://kart.example.org`; empty means the
+    /// origin of a `wss://` broker URL.
+    pub url: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -98,6 +111,7 @@ impl Default for Config {
         Self {
             kart_id: "kart-01".into(),
             live: Live::default(),
+            enroll: Enroll::default(),
             sero: Sero::default(),
             gps: Gps::default(),
             log: Log::default(),
@@ -115,6 +129,7 @@ impl Default for Live {
             broker_url: String::new(),
             batch_ms: 50,
             max_samples_per_batch: 400,
+            server_ca_file: String::new(),
         }
     }
 }
@@ -265,8 +280,19 @@ impl Config {
             bail!("kart_id must be 1–64 characters of [A-Za-z0-9_-]");
         }
         let url = &self.live.broker_url;
-        if !url.is_empty() && !url.starts_with("mqtt://") {
-            bail!("live.broker_url must start with mqtt:// (or be empty)");
+        if !url.is_empty()
+            && !["mqtt://", "wss://", "ws://"]
+                .iter()
+                .any(|p| url.starts_with(p))
+        {
+            bail!("live.broker_url must start with wss://, mqtt:// or ws:// (or be empty)");
+        }
+        let enroll = &self.enroll.url;
+        if !enroll.is_empty()
+            && (!(enroll.starts_with("https://") || enroll.starts_with("http://"))
+                || enroll.ends_with('/'))
+        {
+            bail!("enroll.url must be an origin like https://host (no trailing slash), or empty");
         }
         if !(10..=1000).contains(&self.live.batch_ms) {
             bail!("live.batch_ms must be between 10 and 1000");
@@ -297,6 +323,25 @@ impl Config {
             bail!("vehicle.wheel_circumference_m must be between 0.1 and 10");
         }
         Ok(())
+    }
+
+    /// Where enrollment requests go: `enroll.url`, else the origin of a `wss://` broker URL.
+    pub fn enroll_origin(&self) -> Option<String> {
+        if !self.enroll.url.is_empty() {
+            return Some(self.enroll.url.clone());
+        }
+        crate::identity::origin_of(&self.live.broker_url)
+    }
+
+    /// The extra server CA (`live.server_ca_file`), if set.
+    pub fn server_ca(&self) -> Result<Option<String>> {
+        let path = &self.live.server_ca_file;
+        if path.is_empty() {
+            return Ok(None);
+        }
+        fs::read_to_string(path)
+            .map(Some)
+            .with_context(|| format!("reading live.server_ca_file {path}"))
     }
 
     /// Settings that a running agent can switch without restarting.

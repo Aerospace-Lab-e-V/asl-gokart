@@ -22,6 +22,7 @@ use crate::{
     clock,
     config::{Loaded, Sources},
     gps,
+    identity::{Enrollment, Identity},
     log::{LogWriter, SessionInfo},
     pipeline::Pipeline,
     sero,
@@ -44,6 +45,7 @@ pub struct Context {
     pub session: Arc<Mutex<Session>>,
     pub started: Instant,
     pub allow_remote_api: bool,
+    pub enrollment: Arc<Enrollment>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,7 +55,23 @@ pub enum Exit {
 }
 
 pub async fn run(ctx: &Context, loaded: Loaded) -> Result<Exit> {
-    let cfg = loaded.effective.clone();
+    let mut cfg = loaded.effective.clone();
+    // An enrolled kart is who its certificate says (ADR-0004), whatever kart_id is set.
+    let identity = match Identity::load(ctx.enrollment.dir()) {
+        Ok(id) => id,
+        Err(e) => {
+            tracing::warn!("ignoring the stored identity: {e:#}");
+            None
+        }
+    };
+    if let Some(id) = &identity {
+        cfg.kart_id = id.device_id.clone();
+    }
+    let extra_ca = cfg.server_ca().unwrap_or_else(|e| {
+        tracing::warn!("{e:#}");
+        None
+    });
+    let mut enrolled = ctx.enrollment.subscribe();
     let listen: SocketAddr = cfg
         .api
         .listen
@@ -84,6 +102,7 @@ pub async fn run(ctx: &Context, loaded: Loaded) -> Result<Exit> {
         allow_remote: ctx.allow_remote_api,
         tap: tap.clone(),
         stop: api_stopped.clone(),
+        enrollment: ctx.enrollment.clone(),
     });
     let listener = TcpListener::bind(listen)
         .await
@@ -154,6 +173,8 @@ pub async fn run(ctx: &Context, loaded: Loaded) -> Result<Exit> {
             shared: ctx.shared.clone(),
             log: log.clone(),
             tap,
+            identity,
+            extra_ca,
         }
         .run(samples_rx, live_rx),
     );
@@ -167,6 +188,10 @@ pub async fn run(ctx: &Context, loaded: Loaded) -> Result<Exit> {
     let exit = loop {
         tokio::select! {
             _ = &mut shutdown => break Exit::Stop,
+            Ok(()) = enrolled.changed() => {
+                info!("new identity, restarting the pipeline");
+                break Exit::Restart;
+            }
             Some(control) = control_rx.recv() => match control {
                 Control::Restart => break Exit::Restart,
                 Control::Live(enabled) => {

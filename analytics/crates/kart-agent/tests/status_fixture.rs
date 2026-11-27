@@ -7,8 +7,8 @@
 use std::collections::BTreeMap;
 
 use kart_agent::status::{
-    AgentStatus, ClockStatus, EventStatus, GpsStatus, LiveStatus, LogStatus, SeroStatus,
-    ServiceStatus, SessionStatus, Status,
+    AgentStatus, ClockStatus, EnrollmentStatus, EventStatus, GpsStatus, LiveStatus, LogStatus,
+    SeroStatus, ServiceStatus, SessionStatus, Status,
 };
 
 fn sample() -> Status {
@@ -86,11 +86,12 @@ fn sample() -> Status {
         live: LiveStatus {
             enabled: true,
             configured: true,
-            broker_url: "mqtt://10.0.0.1:1883".into(),
+            broker_url: "wss://kart.example.org/mqtt".into(),
             connected: true,
             published: 71_990,
             dropped: 10,
             last_connack_us: Some(1_792_396_400_000_000),
+            error: None,
         },
         log: LogStatus {
             dir: "/var/lib/kart-agent/log".into(),
@@ -102,6 +103,15 @@ fn sample() -> Status {
             write_errors: 0,
             last_error: None,
             dropped: 0,
+        },
+        enrollment: EnrollmentStatus {
+            state: "enrolled".into(),
+            device_id: Some("kart-01".into()),
+            not_after_s: Some(1_823_932_800),
+            code: None,
+            expires_at_s: None,
+            requested_id: None,
+            error: None,
         },
     }
 }
