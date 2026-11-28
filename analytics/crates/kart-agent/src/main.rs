@@ -11,6 +11,7 @@ use clap::Parser;
 use kart_agent::{
     agent::{self, Context, Exit},
     config::{self, Sources},
+    identity::Enrollment,
     session::{self, Session},
     status::Shared,
     systemd,
@@ -73,13 +74,19 @@ async fn main() -> Result<()> {
 
     let shared = Arc::new(Shared::default());
     systemd::spawn_watchdog(shared.clone());
+    let sources = Sources::new(&args.config_dir, &args.state_dir, args.config.clone());
+    let extra_ca = config::load(&sources)
+        .ok()
+        .and_then(|l| l.effective.server_ca().ok().flatten());
+    let enrollment = Enrollment::open(&args.state_dir, shared.clone(), extra_ca)?;
     let ctx = Context {
-        sources: Sources::new(&args.config_dir, &args.state_dir, args.config.clone()),
+        sources,
         state_dir: args.state_dir.clone(),
         shared,
         session: Arc::new(Mutex::new(session)),
         started: Instant::now(),
         allow_remote_api: args.api_allow_remote,
+        enrollment,
     };
 
     loop {

@@ -5,13 +5,24 @@
 # MQTT topics are kart/<kart_id>/...
 kart_id = "kart-01"
 
+# Once enrolled (ADR-0004), the ID in the kart's certificate replaces kart_id.
+
 [live]
 # Live uplink on/off. Local logging is always on.
 enabled = true
-# mqtt://host:port; empty disables the uplink.
+# wss://<DEVICE_HOST>/mqtt through the lab's border Nginx (needs enrollment), mqtt://host:port
+# in the lab or for development, ws://host:port for tests; empty disables the uplink.
 broker_url = ""
 batch_ms = 50
 max_samples_per_batch = 400
+# PEM file with an extra CA for server certificates (tests, private proxies); the public
+# roots are always trusted.
+server_ca_file = ""
+
+[enroll]
+# Origin of the enrollment service, e.g. https://<DEVICE_HOST>; empty: the origin of a
+# wss:// broker_url. Enrollment is started from the headunit's Telemetry page.
+url = ""
 
 [sero]
 # Car network interface; the agent waits until it has an IPv4 address.

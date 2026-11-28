@@ -20,6 +20,7 @@ use futures_util::StreamExt;
 use kart_agent::{
     api::{self, ApiState, Control},
     config::{self, Sources},
+    identity::Enrollment,
     status::Shared,
     stream::Tap,
 };
@@ -54,13 +55,14 @@ fn setup_stream(
     Shared::beat(&shared.pipeline_heartbeat_ms);
     Shared::beat(&shared.log_heartbeat_ms);
     let state = Arc::new(ApiState {
-        shared,
+        shared: shared.clone(),
         config: Mutex::new(config::load(&sources).unwrap()),
         sources,
         control: tx,
         allow_remote: false,
         tap: tap.clone(),
         stop: stopped,
+        enrollment: Enrollment::open(&dir.join("state"), shared.clone(), None).unwrap(),
     });
     (api::router(state), rx, tap, stop)
 }
@@ -71,9 +73,19 @@ async fn call(
     host: &str,
     body: Option<Value>,
 ) -> (StatusCode, Value) {
+    call_at(app, method, "/v1/config", host, body).await
+}
+
+async fn call_at(
+    app: &axum::Router,
+    method: &str,
+    uri: &str,
+    host: &str,
+    body: Option<Value>,
+) -> (StatusCode, Value) {
     let mut req = Request::builder()
         .method(method)
-        .uri("/v1/config")
+        .uri(uri)
         .header(header::HOST, host);
     if body.is_some() {
         req = req.header(header::CONTENT_TYPE, "application/json");
@@ -223,4 +235,31 @@ async fn stream_sends_the_snapshot_then_live_samples_until_stopped() {
     );
     stop.send(true).unwrap();
     assert_eq!(next_event(&mut body).await, None);
+}
+
+#[tokio::test]
+async fn enroll_needs_a_server() {
+    let (app, _) = setup("enroll-no-url");
+    let (status, body) = call_at(&app, "POST", "/v1/enroll", HOST, Some(json!({}))).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(body["error"].as_str().unwrap().contains("wss://"), "{body}");
+    let (status, body) = call_at(&app, "GET", "/v1/enroll", HOST, None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["state"], "none");
+}
+
+#[tokio::test]
+async fn enroll_checks_the_id_and_reports_unreachable_services() {
+    let (app, _) = setup("enroll-checks");
+    let patch = json!({"live": {"broker_url": "wss://127.0.0.1:9/mqtt"}});
+    assert_eq!(call(&app, "PUT", HOST, Some(patch)).await.0, StatusCode::OK);
+    let bad = json!({"requested_id": "speedcamera-x"});
+    let (status, _) = call_at(&app, "POST", "/v1/enroll", HOST, Some(bad)).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let (status, body) = call_at(&app, "POST", "/v1/enroll", HOST, Some(json!({}))).await;
+    assert_eq!(status, StatusCode::BAD_GATEWAY);
+    assert!(
+        body["error"].as_str().unwrap().contains("not reachable"),
+        "{body}"
+    );
 }

@@ -79,11 +79,12 @@
   "live": {
     "enabled": true,
     "configured": true,
-    "broker_url": "mqtt://10.0.0.1:1883",
+    "broker_url": "wss://kart.example.org/mqtt",
     "connected": true,
     "published": 71990,
     "dropped": 10,
-    "last_connack_us": 1792396400000000
+    "last_connack_us": 1792396400000000,
+    "error": null
   },
   "log": {
     "dir": "/var/lib/kart-agent/log",
@@ -95,5 +96,14 @@
     "write_errors": 0,
     "last_error": null,
     "dropped": 0
+  },
+  "enrollment": {
+    "state": "enrolled",
+    "device_id": "kart-01",
+    "not_after_s": 1823932800,
+    "code": null,
+    "expires_at_s": null,
+    "requested_id": null,
+    "error": null
   }
 }

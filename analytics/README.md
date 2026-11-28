@@ -17,7 +17,8 @@ ECUs ──Sero/UDP──► Raspberry Pi: kart-agent (systemd service, ships wi
                  ├─ commands: subscribe, validate, apply, ack        │
                  └─ local API for the headunit: status, config, live │
                                                                      ▼
-                         WireGuard tunnel over LTE/5G hotspot
+              LTE/5G hotspot → wss:// (443) → lab's border Nginx (DMZ):
+              device certificate required, then a per-device broker login (ADR-0004)
                                                                      ▼
 Proxmox VE: Debian 13 VM (Docker Compose)
   MQTT broker ──► ingest ──► TimescaleDB ──► Grafana (history, near-live overview)
@@ -25,10 +26,11 @@ Proxmox VE: Debian 13 VM (Docker Compose)
        └──(MQTT over WebSocket)──► pit wall in the browser (real-time)
   command-api ◄── pit management UI (to be planned): driver profiles, limits
   own user DB: users, profiles, roles and rights
-  Keycloak (OIDC, brokering SAML): SSO for the web services, identity only
+
+Lab Keycloak (UCS SSO, OIDC): sign-in for the web services, identity only
 ```
 
-**Latency target:** aim for ≤ 250 ms from ECU to the pit wall screen; 500 ms is the hard limit. Budget: 25–50 ms batching, 50–150 ms LTE uplink, ~5 ms WireGuard and broker, leaving tens of milliseconds for the browser to decode and render. That is why the pit wall reads MQTT directly over WebSocket. Every path through Grafana adds a database poll or a fixed flush timer, which costs 100 ms to 1 s. LTE spikes cause gaps in the live view only; backfill restores them.
+**Latency target:** aim for ≤ 250 ms from ECU to the pit wall screen; 500 ms is the hard limit. Budget: 25–50 ms batching, 50–150 ms LTE uplink, ~5 ms border proxy and broker, leaving tens of milliseconds for the browser to decode and render. That is why the pit wall reads MQTT directly over WebSocket. Every path through Grafana adds a database poll or a fixed flush timer, which costs 100 ms to 1 s. LTE spikes cause gaps in the live view only; backfill restores them.
 
 ---
 
@@ -39,14 +41,14 @@ Proxmox VE: Debian 13 VM (Docker Compose)
 | Onboard agent | Rust (Tokio, rumqttc) on Raspberry Pi, systemd service in the headunit `.deb`; Sero via the C++ sero library (`sero-sys`) |
 | Local log | MCAP session segments (zstd); an upload index comes with backfill |
 | Time sync | chrony with GPS + PPS; Pi is time source for ECUs |
-| Network | WireGuard (kart dials out; no open ports on the kart) |
+| Network | MQTT over WebSocket and TLS on 443 through the lab's border Nginx; device certificates from our own CA open the gate, a per-device broker login is the identity ([ADR-0004](docs/adr/0004-device-access-to-the-broker.md)). The kart dials out; no open ports on the kart |
 | Transport | MQTT 5, Protobuf payloads, zstd-compressed batches |
 | Broker | Mosquitto (or NanoMQ) |
 | Time-series DB | TimescaleDB |
 | Live view (pit wall) | React + Vite SPA (Bun, TanStack Router/Query, Tailwind + daisyUI, Chart.js), MQTT over WebSocket straight from the broker; `pit-api` (Rust, axum) serves the recent past to seed the charts |
 | Dashboards | Grafana OSS on TimescaleDB (history, near-live overview) |
 | Session deep dive | Lichtblick / PlotJuggler (open MCAP files directly) |
-| Auth | Keycloak SSO for the web services (OIDC; upstream SAML brokered by Keycloak), identity only. Users, driver profiles, roles and rights live in our own DB ([ADR-0003](docs/adr/0003-driver-profiles-and-remote-limits.md)) |
+| Auth | The lab's Keycloak (UCS SSO) for the web services over OIDC, identity only; Grafana uses it already ([runbook, section 7](deploy/vm/README.md#7-grafana-sign-in-with-the-lab-sso)), the pit wall later. Users, driver profiles, roles and rights live in our own DB ([ADR-0003](docs/adr/0003-driver-profiles-and-remote-limits.md)) |
 | Platform | Docker Compose in a Debian 13 VM on Proxmox VE (DMZ); images on GHCR, pulled by a systemd timer |
 | Later | Parquet archive on S3-compatible storage, analysis tooling, MediaMTX for video, LoRa fallback link (ChirpStack if LoRaWAN) |
 
@@ -72,6 +74,8 @@ analytics/
 │   ├── ingest/            # MQTT → TimescaleDB, idempotent by (session, seq)
 │   ├── pit-api/           # read-only HTTP: recent samples for the pit wall charts
 │   ├── command-api/       # audited writes: driver profiles, parameters
+│   ├── enroll/            # device enrollment: device CA, approval by code, per-device broker users (ADR-0004)
+│   ├── enroll-proto/      # enrollment wire format, shared by enroll and kart-agent
 │   ├── lap-timing/        # (planned) GPS geofence → lap_crossings
 │   └── kart-sim/          # fake kart; replays recorded sessions
 ├── web/
@@ -83,14 +87,12 @@ analytics/
 │   └── provisioning/
 ├── deploy/
 │   ├── compose/     # Docker Compose stacks
-│   │   ├── compose.yml       # shared: broker, TimescaleDB, Grafana, Keycloak
+│   │   ├── compose.yml       # shared: broker, TimescaleDB, Grafana
 │   │   ├── compose.dev.yml   # local overrides (exposed ports, dev credentials)
 │   │   ├── compose.prod.yml  # prod overrides (ingest, command-api, restart policies, volumes)
 │   │   ├── .env.example      # variable names only; the real .env is untracked
 │   │   └── timescaledb-init/ # first-start DB setup (read-only Grafana role)
 │   ├── mosquitto/   # broker config (dev: anonymous, prod: auth)
-│   ├── kart/        # WireGuard templates (planned); the agent itself ships with the headunit
-│   ├── keycloak/    # realm export
 │   ├── vm/          # production host: runbook, updater script, systemd units
 │   └── bundle.Dockerfile # deploy bundle (compose + config) published next to the images
 └── testdata/sessions/      # small recorded sessions (Git LFS)
@@ -220,8 +222,9 @@ The vehicle-data gateway on the Pi. It subscribes to the zone controllers' Sero 
 
 - **Deployment.** The agent ships inside the headunit `.deb` (`/usr/lib/headunit/resources/kart-agent/`) and runs as the systemd service `kart-agent`, independent of the app: it keeps logging when the app is closed, crashed or updating. The package's maintainer scripts link, enable and restart the unit; the in-app updater updates both. CI cross-builds it with `cargo zigbuild` for x86_64 and aarch64 (glibc ≥ 2.31, no C++ runtime) and tests the package lifecycle on the runner (`infotainment/headunit/packaging/test/`).
 - **Configuration.** Built-in defaults, then `/etc/kart-agent/agent.toml` (optional, see `crates/kart-agent/dist/agent.toml.example`), then what the headunit's Telemetry page set (`/var/lib/kart-agent/config.override.json`). `live.enabled` switches the uplink only; local logging is always on.
+- **Uplink and enrollment** ([ADR-0004](docs/adr/0004-device-access-to-the-broker.md)). In production the broker URL is `wss://<DEVICE_HOST>/mqtt` through the lab's border Nginx, which needs a client certificate; the agent also logs in to the broker as the kart's own user. Both come from enrollment: *Enroll* on the Telemetry page (admin mode) generates a key on the Pi, sends a signing request to `https://<DEVICE_HOST>/enroll/` (or `[enroll] url`) and shows the returned code until an admin approves it with `kart-enroll approve <CODE>` on the VM (see `deploy/vm/README.md`). Certificate, key and login land in `/var/lib/kart-agent/identity/`; from then on the certificate's ID replaces `kart_id`. A pending request survives restarts. The status reports the enrollment and, under `live.error`, why the uplink is not connected (not enrolled, certificate refused, login refused, clock not set). `mqtt://` still works for development and in the lab; `ws://` for tests.
 - **GPS.** A u-blox 6 receiver on USB (Navilock NL-602U), found at `/dev/serial/by-id/usb-u-blox*` or the path in `[gps] device`. On every open the agent configures the receiver's RAM (nothing is saved to it): `rate_hz` solutions per second (default 5, the u-blox 6 maximum), the automotive dynamic model, and only RMC, GGA and GSA sentences. Each solution becomes `gps.fix` and `gps.satellites`, plus position, speed, altitude and HDOP when there is a fix (`gps.heading` only above 3 km/h). All samples of one solution share a timestamp: the Pi's receive time, like Sero samples; GPS time is not used for the clock yet. Unplugging is fine: the agent waits and reopens. The systemd unit allows USB serial ports (`DeviceAllow=char-ttyACM`, group `dialout`) and nothing else. On a dev machine: `cargo run -p kart-agent -- --config crates/kart-agent/dev/agent.gps.toml` (see the file for the directories).
-- **Local API** (loopback only): `GET /v1/status`, `GET /v1/health`, `GET`/`PUT /v1/config` (JSON merge patch) on `127.0.0.1:7411`. The headunit polls it for the cloud icon in its header bar (red: not recording) and the Telemetry page (Settings → Telemetry, or tap the icon). Anyone can switch the uplink; kart id, broker, car network interface and the GPS (on/off, device) need admin mode, the other settings only the TOML. `tests/fixtures/status.json` is the contract both sides test against. `GET /v1/stream` streams the live samples to the headunit as Server-Sent Events (snapshot on connect, then every sample as it arrives, JSON by catalog name; `curl -N 127.0.0.1:7411/v1/stream`). The headunit takes only the signals no zone controller measures (today `gps.*`) and keeps its own Sero client for the rest, see [ADR-0002](docs/adr/0002-kart-agent-as-headunit-data-source.md); `tests/fixtures/stream.sse` is that contract.
+- **Local API** (loopback only): `GET /v1/status`, `GET /v1/health`, `GET`/`PUT /v1/config` (JSON merge patch), `GET`/`POST`/`DELETE /v1/enroll` on `127.0.0.1:7411`. The headunit polls it for the cloud icon in its header bar (red: not recording) and the Telemetry page (Settings → Telemetry, or tap the icon). Anyone can switch the uplink; kart id, broker, car network interface and the GPS (on/off, device) need admin mode, the other settings only the TOML. `tests/fixtures/status.json` is the contract both sides test against. `GET /v1/stream` streams the live samples to the headunit as Server-Sent Events (snapshot on connect, then every sample as it arrives, JSON by catalog name; `curl -N 127.0.0.1:7411/v1/stream`). The headunit takes only the signals no zone controller measures (today `gps.*`) and keeps its own Sero client for the rest, see [ADR-0002](docs/adr/0002-kart-agent-as-headunit-data-source.md); `tests/fixtures/stream.sse` is that contract.
 - **Sessions.** One session per power cycle of the Pi (kernel boot id). Agent restarts and updates continue the session and its `seq`.
 - **Log.** `/var/lib/kart-agent/log/<session>/seg-<first_seq>-<utc>.mcap`: the same `Batch` bytes as published, plus the schema, session metadata, `signals.yaml` and agent events. Chunks are synced every second; an unfinished `.mcap.active` file after a power cut is readable up to the last sync (`mcap recover`). The oldest segments are deleted above 4 GiB or below 1 GiB free.
 - **Clock.** The Pi has no RTC; the status reports whether the clock is synchronised. GPS/PPS time sync comes later.
@@ -248,6 +251,9 @@ The only path for changing what a kart is allowed to do. Admins change **driver 
 - **Not enforced yet:** `zc_throttle` still runs hard-coded limits. Until it is integrated, limits are delivered, shown and logged only. What the Pi can enforce today, such as unlocking admin or engineering mode for users with that right, works from the start.
 - Roles and rights and the management interface are planned separately. Details: [ADR-0003](docs/adr/0003-driver-profiles-and-remote-limits.md).
 
+### `enroll`
+Device enrollment ([ADR-0004](docs/adr/0004-device-access-to-the-broker.md)). Holds the device CA, takes certificate signing requests from karts and timing devices behind the border Nginx (`/enroll/v1/requests`, lab network and VPN only for now), and answers each with a code the device shows. An admin approves by that code (`sudo kart-enroll approve <CODE>` on the VM); the service then creates the device's broker user and role in Mosquitto's dynamic security plugin (pinned to the device's client ID, only its own `kart/<id>/` topics) and signs a one-year client certificate for the approved ID. On every start it also keeps the internal broker users (`ingest`, `pit-wall`) and the roles in sync with this version. `kart-enroll disable <ID>` blocks a device at once.
+
 ### `pit-api`
 Read-only HTTP for the pit wall, connected as the `pit_api_ro` role. `GET /api/karts/{kart}/sessions/{session}/samples?since_us=…&signals=101,204` returns the session's samples since `since_us` (at most 15 min back, default 5 min) as columns per signal: `{"signals": {"101": {"t_us": […], "v": […]}}}`. `GET /api/karts/{kart}/sessions/{session}/laps` returns every timing-device crossing of the session in time order: `{"crossings": [{"crossing_id", "time" (Unix µs), "lap_number", "lap_us", "verdict", …}]}`. `GET /api/health` for probes.
 
@@ -273,7 +279,7 @@ The real-time view for the pit area (`web/pit-wall`). The crew watches one kart 
 
 This is the contract the implementation follows:
 
-- **Connect** to the broker over MQTT on WebSocket. Dev: `ws://localhost:9001`, anonymous. Prod: `wss://` behind the reverse proxy with read-only credentials (TBD together with Keycloak). The pit wall never publishes.
+- **Connect** to the broker over MQTT on WebSocket. Dev: `ws://localhost:9001`, anonymous. Prod: `wss://` behind the reverse proxy with read-only credentials (TBD together with Keycloak). Until Keycloak is in front, the border Nginx admits the pit wall only from the lab network and the VPN, because `/config.json` hands the read-only broker login to anyone who opens the page ([ADR-0004](docs/adr/0004-device-access-to-the-broker.md)). The pit wall never publishes.
 - **Subscribe**
   - `kart/+/status`: retained, so you immediately learn every kart's online state, `session_id` and schema version.
   - `kart/+/live`: QoS 0.
@@ -312,7 +318,7 @@ Historical dashboards, track maps (Geomap) and speed-vs-distance overlays (XY ch
 | `kart/{id}/driver` | kart → cloud | 1 | driver sign-in request, sign-out |
 | `kart/{id}/profile` | cloud → kart | 1, retained | signed-in driver's effective profile (limits, rights) |
 
-Only `command-api` may publish to `cmd` and `profile`. The kart authenticates to the broker with an mTLS client certificate. The timing device may only publish to `laps`. Browser clients (pit wall) connect through the WebSocket listener and may only subscribe to `live`, `status` and `laps`.
+Only `command-api` may publish to `cmd` and `profile`. Karts and timing devices connect over `wss://` through the lab's border Nginx, which only lets clients with a certificate from our device CA through. Each device then logs in to the broker as its own user, and the ACLs check that user, so a kart can only use its own topics ([ADR-0004](docs/adr/0004-device-access-to-the-broker.md)). The timing device may only publish to `laps`. Browser clients (pit wall) connect through the WebSocket listener and may only subscribe to `live`, `status` and `laps`.
 
 ---
 
@@ -320,7 +326,7 @@ Only `command-api` may publish to `cmd` and `profile`. The kart authenticates to
 
 Production runs in a Debian 13 VM on a Proxmox VE node in the DMZ, with Docker Compose inside it. Docker runs in a VM rather than an LXC container because a container shares the host kernel, so an escape from it reaches the Proxmox host itself. Deploys are pull-based.
 
-1. Push a tag `analytics-vX.Y.Z`. `ci-analytics-release.yml` runs the checks, then pushes `kart-ingest`, `kart-pit-api` and `kart-pit-wall` to GHCR, and last the deploy bundle `kart-analytics-deploy` (compose files, Grafana dashboards, broker config).
+1. Push a tag `analytics-vX.Y.Z`. `ci-analytics-release.yml` runs the checks, then pushes `kart-ingest`, `kart-pit-api`, `kart-pit-wall` and `kart-enroll` to GHCR, and last the deploy bundle `kart-analytics-deploy` (compose files, Grafana dashboards, broker config).
 2. On the VM, `kart-analytics-update.timer` checks GHCR every 5 minutes for the highest stable version, takes a `pg_dump`, pulls and restarts the stack, and goes back to the previous version if it doesn't come up healthy.
 
 Pre-release tags (`analytics-v1.2.0-rc.1`) are published but only deployed when pinned. Setting up the VM, secrets, pinning and rollback: [deploy/vm/README.md](deploy/vm/README.md).
@@ -332,16 +338,16 @@ Pre-release tags (`analytics-v1.2.0-rc.1`) are published but only deployed when 
 - **Schema changes go through `schema/`.** CI runs `buf lint` and `buf breaking`. Never change a field's meaning; add a new one.
 - **Version everything together.** Each session records the `kart-agent` version and schema version used, so old logs stay decodable.
 - **CI uses path filters.** A change in `schema/` rebuilds and tests everything; other changes only rebuild what they touch.
-- **Dashboards, Keycloak realm and DB schema are code.** No changes made only in a UI.
-- **No secrets in Git.** Server secrets live in an untracked `.env` on the host (only `.env.example` is committed). WireGuard keys and kart certificates never enter the repo.
+- **Dashboards, Grafana config and DB schema are code.** No changes made only in a UI.
+- **No secrets in Git.** Server secrets live in an untracked `.env` on the host (only `.env.example` is committed). Device private keys, broker passwords and the device CA key never enter the repo.
 - **Safety-relevant code needs a second reviewer.** See `CODEOWNERS` for `command-api/`, `commands.proto` and the command handling in `kart-agent`.
 
 ---
 
 ## Roadmap
 
-1. **Live MVP:** kart-agent with local logging (done: Sero, MCAP, live MQTT, packaged with the headunit), time sync, WireGuard, MQTT, ingest, TimescaleDB, pit wall live view, basic Grafana dashboards.
+1. **Live MVP:** kart-agent with local logging (done: Sero, MCAP, live MQTT, packaged with the headunit), time sync, device enrollment and the `wss://` uplink (ADR-0004), MQTT, ingest, TimescaleDB, pit wall live view, basic Grafana dashboards.
 2. **Complete data:** backfill with sequence numbers, lap timing, session and lap-overlay dashboards.
 3. **Driver profiles:** own user DB with demo users, sign-in on the kart, live profile delivery, acknowledgments, audit log ([ADR-0003](docs/adr/0003-driver-profiles-and-remote-limits.md)). Limits are applied once `zc_throttle` is integrated.
-4. **Team access:** Keycloak SSO for the pit wall, pit-api and Grafana; roles and rights model; pit management interface.
+4. **Team access:** Keycloak SSO for the pit wall and pit-api (Grafana: done); roles and rights model; pit management interface.
 5. **More data:** video (MediaMTX), LoRa fallback link, Parquet archive and analysis tooling.

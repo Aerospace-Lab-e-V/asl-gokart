@@ -4,6 +4,8 @@ import {
     ConfigPatch,
     ConfigReply,
     ConfigReplySchema,
+    Enrollment,
+    EnrollmentSchema,
 } from "@/services/kart-agent/schema";
 
 /**
@@ -15,15 +17,17 @@ import {
 export const KART_AGENT_URL = "http://127.0.0.1:7411";
 
 const TIMEOUT_MS = 1500;
+/** Starting an enrollment waits for the enrollment service over the uplink. */
+const ENROLL_TIMEOUT_MS = 15_000;
 
 export class KartAgentError extends Error {}
 
-async function request(path: string, init?: RequestInit): Promise<unknown> {
+async function request(path: string, init?: RequestInit, timeoutMs = TIMEOUT_MS): Promise<unknown> {
     let res: Response;
     try {
         res = await fetch(`${KART_AGENT_URL}${path}`, {
             ...init,
-            signal: AbortSignal.timeout?.(TIMEOUT_MS),
+            signal: AbortSignal.timeout?.(timeoutMs),
         });
     } catch {
         throw new KartAgentError(`kart-agent is not reachable at ${KART_AGENT_URL}`);
@@ -53,4 +57,27 @@ export async function putConfig(patch: ConfigPatch): Promise<ConfigReply> {
             body: JSON.stringify(patch),
         })
     );
+}
+
+/**
+ * Requests a certificate and broker login for the uplink (analytics ADR-0004). Resolves once
+ * the agent has the code to show; an admin approves it on the analytics VM.
+ */
+export async function startEnrollment(requestedId?: string): Promise<Enrollment> {
+    return EnrollmentSchema.parse(
+        await request(
+            "/v1/enroll",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(requestedId ? { requested_id: requestedId } : {}),
+            },
+            ENROLL_TIMEOUT_MS
+        )
+    );
+}
+
+/** Cancels a pending enrollment request. */
+export async function cancelEnrollment(): Promise<Enrollment> {
+    return EnrollmentSchema.parse(await request("/v1/enroll", { method: "DELETE" }));
 }

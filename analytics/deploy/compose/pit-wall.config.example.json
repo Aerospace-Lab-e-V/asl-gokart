@@ -1,4 +1,4 @@
 {
     "mqttUsername": "pit-wall",
-    "mqttPassword": "read-only password from the broker passwd file"
+    "mqttPassword": "PIT_WALL_MQTT_PASSWORD from /etc/kart-analytics/.env"
 }

@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { agent } from "@/services/agent";
+import { useAgent } from "@/stores/agent";
 import { hardware } from "@/services/hardware";
 import { AgentConfig, ConfigPatch } from "@/services/kart-agent/schema";
 import { NetworkInterfaceFamily, parseNetworkInterfaces } from "@/lib/types/hardware";
@@ -50,6 +51,10 @@ export const TelemetryConfigDialog = ({ trigger }: { trigger: React.ReactNode })
     const [form, setForm] = useState<Form | null>(null);
     const [interfaces, setInterfaces] = useState<string[]>([]);
     const [saving, setSaving] = useState(false);
+    // An enrolled kart is the ID in its certificate (analytics ADR-0004).
+    const enrolledAs = useAgent((state) =>
+        state.status?.enrollment?.state === "enrolled" ? state.status.enrollment.device_id : null
+    );
 
     useEffect(() => {
         if (!open) {
@@ -111,16 +116,20 @@ export const TelemetryConfigDialog = ({ trigger }: { trigger: React.ReactNode })
                             <Input
                                 id="cfg-kart-id"
                                 className="h-12 text-lg"
-                                value={form.kart_id}
+                                value={enrolledAs ?? form.kart_id}
+                                disabled={enrolledAs !== null}
                                 onChange={(e) => setForm({ ...form, kart_id: e.target.value })}
                             />
+                            {enrolledAs !== null && (
+                                <p className="text-muted-foreground text-base">Set by the kart&apos;s certificate</p>
+                            )}
                         </div>
                         <div className="flex flex-col gap-2">
                             <Label htmlFor="cfg-broker" className="text-base">Pit wall broker</Label>
                             <Input
                                 id="cfg-broker"
                                 className="h-12 text-lg"
-                                placeholder="mqtt://host:1883"
+                                placeholder="wss://host/mqtt"
                                 value={form.broker_url}
                                 onChange={(e) => setForm({ ...form, broker_url: e.target.value })}
                             />

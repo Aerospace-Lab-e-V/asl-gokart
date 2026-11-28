@@ -33,10 +33,39 @@ export function uplink(status: AgentStatus): Line {
     const live = status.live;
     if (!live.enabled) return { tone: "off", state: "Off" };
     if (!live.configured) return { tone: "warn", state: "No broker set" };
-    const detail = brokerHost(live.broker_url);
-    return live.connected
-        ? { tone: "ok", state: "Connected", detail }
-        : { tone: "warn", state: "Connecting", detail };
+    const host = brokerHost(live.broker_url);
+    if (live.connected) return { tone: "ok", state: "Connected", detail: host };
+    if (live.error === "not enrolled") return { tone: "warn", state: "Not enrolled", detail: "Enroll below" };
+    return { tone: "warn", state: "Connecting", detail: live.error ?? host };
+}
+
+const DAY_S = 86_400;
+
+const formatDate = (unixS: number) =>
+    new Date(unixS * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+
+/**
+ * The kart's identity for the uplink (analytics ADR-0004): a certificate and broker login from
+ * enrollment. `null` for agents without enrollment.
+ */
+export function identity(status: AgentStatus, nowS = Date.now() / 1000): Line | null {
+    const e = status.enrollment;
+    if (!e) return null;
+    if (e.state === "pending") {
+        return { tone: "warn", state: "Waiting for approval", detail: e.error ?? undefined };
+    }
+    if (e.state === "enrolled" && e.device_id) {
+        const left = e.not_after_s !== null ? Math.floor((e.not_after_s - nowS) / DAY_S) : null;
+        if (left !== null && left < 0) return { tone: "fault", state: "Expired", detail: `${e.device_id} · enroll again` };
+        if (left !== null && left < 30) {
+            return { tone: "warn", state: "Expires soon", detail: `${e.device_id} · in ${left} days, enroll again` };
+        }
+        const until = e.not_after_s !== null ? ` · until ${formatDate(e.not_after_s)}` : "";
+        return { tone: "ok", state: "Enrolled", detail: `${e.device_id}${until}` };
+    }
+    // Only a wss:// uplink needs the certificate; mqtt:// in the lab works without.
+    const needed = status.live.broker_url.startsWith("wss://");
+    return { tone: needed ? "warn" : "off", state: "Not enrolled", detail: e.error ?? undefined };
 }
 
 export function ecus(status: AgentStatus): Ecu[] {

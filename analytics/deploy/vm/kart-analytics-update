@@ -27,7 +27,7 @@ BACKUP_DIR=/var/backups/kart-analytics
 [[ -f $CONF ]] && . "$CONF"
 
 PROJECT=kart-analytics
-APP_IMAGES=(kart-ingest kart-pit-api kart-pit-wall)
+APP_IMAGES=(kart-ingest kart-pit-api kart-pit-wall kart-enroll)
 BUNDLE=kart-analytics-deploy
 RELEASES=$BASE_DIR/releases
 VERSION_FILE=$STATE_DIR/current-version

@@ -5,25 +5,33 @@
 //!   last will and on a clean shutdown
 //! - `kart/{id}/live`: encoded [`telemetry_schema::v1::Batch`]es at QoS 0, dropped
 //!   rather than queued while the link is down
+//!
+//! Transports: `mqtt://` (dev, lab) and `wss://` through the border Nginx with a client
+//! certificate and the device's broker login (ADR-0004); `ws://` for local tests.
 
 use std::{
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering},
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use prost::Message;
-use rumqttc::{AsyncClient, Event, LastWill, MqttOptions, NetworkOptions, Outgoing, Packet, QoS};
+use rumqttc::{
+    AsyncClient, Event, LastWill, MqttOptions, NetworkOptions, Outgoing, Packet, QoS,
+    TlsConfiguration, Transport,
+};
 use telemetry_schema::v1::Status;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
+pub mod tls;
+
 #[derive(Debug, Clone)]
 pub struct LinkOptions {
-    /// `mqtt://host:port`
+    /// `mqtt://host:port`, `wss://host/path` or `ws://host:port/path`
     pub broker_url: String,
     pub client_id: String,
     pub kart_id: String,
@@ -31,6 +39,10 @@ pub struct LinkOptions {
     pub agent_version: String,
     pub session_id: String,
     pub keep_alive: Duration,
+    /// Broker login (user, password).
+    pub credentials: Option<(String, String)>,
+    /// Required for `wss://`: server roots and the client certificate, see [`tls`].
+    pub tls: Option<Arc<rustls::ClientConfig>>,
 }
 
 impl LinkOptions {
@@ -48,6 +60,8 @@ impl LinkOptions {
             agent_version: agent_version.into(),
             session_id: session_id.into(),
             keep_alive: Duration::from_secs(5),
+            credentials: None,
+            tls: None,
         }
     }
 }
@@ -58,6 +72,7 @@ struct Counters {
     published: AtomicU64,
     dropped: AtomicU64,
     last_connack_us: AtomicI64,
+    last_error: Mutex<Option<String>>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -99,9 +114,7 @@ impl Link {
         let online = status(true, &opts.agent_version, &opts.session_id);
         let offline = status(false, &opts.agent_version, &opts.session_id);
 
-        let mut mqtt =
-            MqttOptions::parse_url(format!("{}?client_id={}", opts.broker_url, opts.client_id))
-                .context("parsing broker URL")?;
+        let mut mqtt = mqtt_options(&opts)?;
         mqtt.set_keep_alive(opts.keep_alive);
         mqtt.set_last_will(LastWill::new(
             &status_topic,
@@ -128,6 +141,7 @@ impl Link {
                             info!("connected to broker");
                             counters.connected.store(true, Ordering::Relaxed);
                             counters.last_connack_us.store(now_us(), Ordering::Relaxed);
+                            *counters.last_error.lock().expect("last_error") = None;
                             let _ = client.try_publish(
                                 &status_topic,
                                 QoS::AtLeastOnce,
@@ -139,7 +153,9 @@ impl Link {
                         Ok(_) => {}
                         Err(e) => {
                             counters.connected.store(false, Ordering::Relaxed);
-                            warn!("MQTT connection error: {e}; retrying in 1s");
+                            let reason = describe(&e);
+                            warn!("MQTT connection error: {reason}; retrying in 1s");
+                            *counters.last_error.lock().expect("last_error") = Some(reason);
                             tokio::time::sleep(Duration::from_secs(1)).await;
                         }
                     }
@@ -186,6 +202,11 @@ impl Link {
         }
     }
 
+    /// Why the last connection attempt failed; `None` once connected.
+    pub fn last_error(&self) -> Option<String> {
+        self.counters.last_error.lock().expect("last_error").clone()
+    }
+
     /// Reports offline and disconnects. A clean disconnect suppresses the last will,
     /// so the offline status is published explicitly first.
     pub async fn shutdown(self, timeout: Duration) {
@@ -207,6 +228,52 @@ impl Link {
         }
         if tokio::time::timeout(timeout, conn).await.is_err() {
             warn!("MQTT connection did not close within {timeout:?}");
+        }
+    }
+}
+
+fn mqtt_options(opts: &LinkOptions) -> Result<MqttOptions> {
+    let url = opts.broker_url.as_str();
+    let mut mqtt = if url.starts_with("wss://") || url.starts_with("ws://") {
+        // Websockets take the whole URL as the address; the port argument is unused.
+        let mut o = MqttOptions::new(&opts.client_id, url, 0);
+        if url.starts_with("wss://") {
+            let Some(tls) = &opts.tls else {
+                bail!("wss:// needs a client certificate (enroll the device first)");
+            };
+            o.set_transport(Transport::Wss(TlsConfiguration::Rustls(tls.clone())));
+        } else {
+            o.set_transport(Transport::Ws);
+        }
+        o
+    } else if url.starts_with("mqtt://") {
+        MqttOptions::parse_url(format!("{url}?client_id={}", opts.client_id))
+            .context("parsing broker URL")?
+    } else {
+        bail!("unsupported broker URL {url:?} (mqtt://, wss:// or ws://)");
+    };
+    if let Some((user, password)) = &opts.credentials {
+        mqtt.set_credentials(user, password);
+    }
+    Ok(mqtt)
+}
+
+/// A connection error in words someone at the kart can act on.
+fn describe(e: &rumqttc::ConnectionError) -> String {
+    use rumqttc::{ConnectReturnCode, ConnectionError};
+    match e {
+        ConnectionError::ConnectionRefused(
+            ConnectReturnCode::NotAuthorized | ConnectReturnCode::BadUserNamePassword,
+        ) => "broker refused the login (device disabled or re-enrolled elsewhere?)".into(),
+        other => {
+            let text = other.to_string();
+            if text.contains("403") {
+                "proxy refused the client certificate (HTTP 403)".into()
+            } else if text.contains("NotValidYet") || text.contains("Expired") {
+                format!("{text} (is the clock synchronised?)")
+            } else {
+                text
+            }
         }
     }
 }

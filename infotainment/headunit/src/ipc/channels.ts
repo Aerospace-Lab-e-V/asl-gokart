@@ -71,6 +71,10 @@ export const CH = {
         state: "agent:state",
         getConfig: "agent:get-config",
         putConfig: "agent:put-config",
+        /** invoke(requestedId?) -> Enrollment; admin only */
+        enroll: "agent:enroll",
+        /** invoke -> Enrollment; admin only */
+        cancelEnroll: "agent:cancel-enroll",
     },
     admin: {
         /** invoke(pin) -> boolean */

@@ -11,5 +11,7 @@ telemetry-schema.workspace = true
 anyhow.workspace = true
 prost.workspace = true
 rumqttc.workspace = true
+rustls.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+webpki-roots.workspace = true

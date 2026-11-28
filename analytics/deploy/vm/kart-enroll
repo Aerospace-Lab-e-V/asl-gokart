@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Admin CLI of the enroll service (ADR-0004), run inside its container, where the admin
+# API listens on loopback. Root only (Docker socket).
+#   sudo kart-enroll requests | approve <CODE> [--as <ID>] [--replace] | reject <CODE>
+#   sudo kart-enroll devices | disable <ID> | enable <ID> | ca
+set -euo pipefail
+cid=$(docker ps -q --filter label=com.docker.compose.project=kart-analytics \
+    --filter label=com.docker.compose.service=enroll)
+[[ -n $cid ]] || { echo "kart-enroll: the enroll container is not running" >&2; exit 1; }
+exec docker exec "$cid" enroll "$@"

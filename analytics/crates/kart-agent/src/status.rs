@@ -21,6 +21,7 @@ pub struct Status {
     pub gps: GpsStatus,
     pub live: LiveStatus,
     pub log: LogStatus,
+    pub enrollment: EnrollmentStatus,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
@@ -119,6 +120,25 @@ pub struct LiveStatus {
     pub published: u64,
     pub dropped: u64,
     pub last_connack_us: Option<i64>,
+    /// Why the uplink is not connected: the last connection error, or e.g. not enrolled.
+    pub error: Option<String>,
+}
+
+/// The kart's identity for the uplink (ADR-0004), see [`crate::identity`].
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct EnrollmentStatus {
+    /// `none`, `pending` (waiting for an admin) or `enrolled`
+    pub state: String,
+    /// The enrolled ID; it replaces the configured `kart_id`.
+    pub device_id: Option<String>,
+    /// Certificate expiry, Unix seconds.
+    pub not_after_s: Option<i64>,
+    /// While pending: the code to show, and until when it is valid (Unix seconds).
+    pub code: Option<String>,
+    pub expires_at_s: Option<i64>,
+    pub requested_id: Option<String>,
+    /// The last enrollment problem (rejected, expired, unreachable, …).
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]

@@ -1,14 +1,15 @@
 import React, { useState } from "react";
-import { Check, ChevronDown, CloudOff, HardDrive, LucideIcon, Network, RadioTower, Satellite, SlidersHorizontal, X } from "lucide-react";
+import { Check, ChevronDown, CloudOff, HardDrive, KeyRound, LucideIcon, Network, RadioTower, Satellite, SlidersHorizontal, X } from "lucide-react";
 import { Subpage } from "@/components/shared/subpage";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { TelemetryConfigDialog } from "@/components/telemetry/telemetry-config-dialog";
 import { UplinkSwitch } from "@/components/telemetry/uplink-switch";
+import { EnrollDialog, PendingCode } from "@/components/telemetry/enrollment";
 import { useSession } from "@/stores/session";
 import { useAgent } from "@/stores/agent";
 import { AgentStatus } from "@/services/kart-agent/schema";
-import { carNetwork, ecus, gps, Line, recording, Tone, uplink } from "@/services/kart-agent/health";
+import { carNetwork, ecus, gps, identity, Line, recording, Tone, uplink } from "@/services/kart-agent/health";
 import { cn } from "@/lib/utils";
 
 /**
@@ -45,15 +46,17 @@ const TelemetryPage = () => {
             ) : !status ? (
                 <p className="text-muted-foreground flex flex-1 items-center justify-center pb-12 text-xl">Connecting…</p>
             ) : (
-                <StatusList status={status} />
+                <StatusList status={status} admin={adminMode} />
             )}
         </Subpage>
     );
 };
 
-const StatusList = ({ status }: { status: AgentStatus }) => {
+const StatusList = ({ status, admin }: { status: AgentStatus; admin: boolean }) => {
     const [showEcus, setShowEcus] = useState(false);
     const gpsLine = gps(status);
+    const identityLine = identity(status);
+    const enrollment = status.enrollment;
 
     return (
         <div>
@@ -66,6 +69,23 @@ const StatusList = ({ status }: { status: AgentStatus }) => {
                     <UplinkSwitch />
                 </label>
             </StatusRow>
+            {identityLine && enrollment && (
+                <>
+                    <Separator />
+                    <StatusRow icon={KeyRound} title="Identity" line={identityLine}>
+                        {admin && enrollment.state !== "pending" && (
+                            <EnrollDialog
+                                trigger={
+                                    <Button variant="outline" className="h-12 px-6 text-base">
+                                        {enrollment.state === "enrolled" ? "Enroll again" : "Enroll"}
+                                    </Button>
+                                }
+                            />
+                        )}
+                    </StatusRow>
+                    <PendingCode enrollment={enrollment} admin={admin} />
+                </>
+            )}
             <Separator />
             <button
                 type="button"

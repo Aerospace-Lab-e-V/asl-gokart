@@ -20,13 +20,13 @@ The deploy bundle (`deploy/bundle.Dockerfile`) carries the compose files, broker
 | Path on the VM | What |
 |---|---|
 | `/etc/kart-analytics/.env` | secrets for compose (from `deploy/compose/.env.example`) |
-| `/etc/kart-analytics/mosquitto.passwd` | broker users (`ingest`, `pit-wall`) |
 | `/etc/kart-analytics/pit-wall.config.json` | read-only broker login for browsers (from `deploy/compose/pit-wall.config.example.json`) |
+| `/etc/kart-analytics/device-ca/` | the device CA (`ca.key`, `ca.pem`), owned by uid 10082 (the enroll container), see section 6 |
 | `/etc/kart-analytics/update.conf` | updater settings (from `update.conf.example`) |
 | `/opt/kart-analytics/releases/<version>` | extracted bundles; `/opt/kart-analytics/current` points at the running one |
 | `/var/lib/kart-analytics/current-version` | the deployed version (`failed-version`: last failed deploy) |
 | `/var/backups/kart-analytics/` | `pg_dump` taken before every deploy |
-| Docker volumes `kart-analytics_*` | database, Grafana and broker data |
+| Docker volumes `kart-analytics_*` | database, Grafana, broker data (incl. `dynamic-security.json`: broker users and ACLs) and the enroll service's issue log |
 
 ---
 
@@ -115,10 +115,15 @@ policy_out: ACCEPT
 
 [RULES]
 IN SSH(ACCEPT) -source <ADMIN_NET>
-IN ACCEPT -source <TEAM_NET> -p tcp -dport 3000 # Grafana
+IN ACCEPT -source <BORDER_NGINX_IP> -p tcp -dport 3000 # Grafana at https://<DEVICE_HOST>/grafana/ (section 7.3)
 IN ACCEPT -source <TEAM_NET> -p tcp -dport 8080 # pit wall
-# later: 1883 for the karts (WireGuard) and the timing device
+# Devices (ADR-0004): only the border Nginx, which checks the device certificates.
+IN ACCEPT -source <BORDER_NGINX_IP> -p tcp -dport 9002 # device MQTT (WebSocket)
+IN ACCEPT -source <BORDER_NGINX_IP> -p tcp -dport 8082 # enrollment requests
+IN ACCEPT -source <BORDER_NGINX_IP> -p tcp -dport 8080 # pit wall at https://<DEVICE_HOST>/
 ```
+
+The two device rules are what makes the certificate check work: anything else that reaches 9002 talks to the broker without passing Nginx. The border Nginx serves the pit wall only to the lab network and VPN (section 6.2); keep 8080 limited to those networks as well until Keycloak is in front. Grafana has the lab SSO and is open to the internet through the border Nginx (section 7.3). Until that server block exists, admit `<TEAM_NET>` to 3000 instead.
 
 The VM firewall only filters if the firewall is also enabled at datacenter level. Check with the admins whether `policy_out` should be restricted to the destinations listed above.
 
@@ -177,17 +182,15 @@ cd /etc/kart-analytics
 cp /root/bundle-$V/deploy/compose/.env.example .env              # fill in; generate with: openssl rand -hex 24
 cp /root/bundle-$V/deploy/compose/pit-wall.config.example.json pit-wall.config.json
 
-# Broker users: ingest (same password as INGEST_MQTT_PASSWORD) and pit-wall (read-only, browsers).
-touch mosquitto.passwd
-docker run --rm -it -v /etc/kart-analytics:/c eclipse-mosquitto:2.0.22 mosquitto_passwd /c/mosquitto.passwd ingest
-docker run --rm -it -v /etc/kart-analytics:/c eclipse-mosquitto:2.0.22 mosquitto_passwd /c/mosquitto.passwd pit-wall
-# The broker runs as uid 1883 and must be able to read the file:
-chown 1883:1883 mosquitto.passwd && chmod 600 mosquitto.passwd
-
+# pit-wall.config.json: mqttPassword = PIT_WALL_MQTT_PASSWORD from .env
 chmod 600 .env pit-wall.config.json update.conf
 ```
 
+Broker users live in Mosquitto's dynamic security plugin, not in a file (ADR-0004). On its first start the broker creates the plugin's file with the admin user `dynsec-admin` (`MQTT_DYNSEC_ADMIN_PASSWORD`); the enroll service then creates the `ingest` and `pit-wall` users from `.env` and keeps them in sync on every start. Changing `INGEST_MQTT_PASSWORD` or `PIT_WALL_MQTT_PASSWORD` therefore only needs a redeploy; changing the admin password needs `mosquitto_ctrl` in the broker container as well (`setClientPassword dynsec-admin`).
+
 The database passwords take effect only when the database volume is created on the first start. Changing them later means `ALTER ROLE … PASSWORD` in the database as well.
+
+The device CA (section 6) has to exist before the first deploy of a release with the enroll service; without it the service does not start and the updater rolls back.
 
 ## 5. First deploy
 
@@ -197,7 +200,131 @@ journalctl -u kart-analytics-update -f
 docker compose -p kart-analytics ls && docker ps
 ```
 
-Then open Grafana at `http://<HOSTNAME>:3000` and the pit wall at `http://<HOSTNAME>:8080`.
+Then open Grafana at `http://<HOSTNAME>:3000` (`https://<DEVICE_HOST>/grafana/` once section 7.3 is done) and the pit wall at `http://<HOSTNAME>:8080`.
+
+## 6. Device access: CA, border Nginx, enrollment (ADR-0004)
+
+Karts and timing devices connect to `wss://<DEVICE_HOST>/mqtt` through the lab's border Nginx, which only forwards clients with a certificate from our device CA. Each device also logs in to the broker as its own user. Both come from enrollment: the device asks, an admin approves by the code the device shows.
+
+### 6.1 Create the device CA (once)
+
+```bash
+V=<VERSION>   # the release about to be deployed
+install -d -o 10082 -g 10082 -m 700 /etc/kart-analytics/device-ca
+docker run --rm -v /etc/kart-analytics/device-ca:/device-ca \
+    ghcr.io/aerospace-lab-e-v/kart-enroll:$V init-ca > /root/kart-device-ca.pem
+```
+
+`ca.key` never leaves the VM and is not in any backup outside it; if it is lost or the VM is compromised, create a new CA and re-enroll every device. `kart-device-ca.pem` is public: it goes to the admins for the border Nginx. Later, `sudo kart-enroll ca` prints it again.
+
+### Upgrading a VM set up before ADR-0004
+
+The first release with the enroll service changes the broker's users and ports, so prepare the VM before it deploys:
+
+1. `systemctl stop kart-analytics-update.timer`
+2. In `/etc/kart-analytics/.env`: add `MQTT_DYNSEC_ADMIN_PASSWORD` and `PIT_WALL_MQTT_PASSWORD` (`openssl rand -hex 24`), remove `INGEST_MQTT_USER` (the user is now always `ingest`). Put `PIT_WALL_MQTT_PASSWORD` into `pit-wall.config.json` as `mqttPassword`.
+3. Create the device CA (6.1).
+4. Pin and deploy: `PIN_VERSION=<VERSION>` in `update.conf`, `systemctl start kart-analytics-update.service`, check `journalctl -u kart-analytics-update`. Then run that release's `install.sh` (installs `kart-enroll`), remove the pin and start the timer again.
+5. `mosquitto.passwd` is no longer used; delete it. Port 1883 is no longer published: devices still on an old agent stop sending until they are updated and enrolled.
+
+### 6.2 Border Nginx (lab admins)
+
+Send the admins [`border-nginx.example.conf`](border-nginx.example.conf) with the placeholders filled in, plus `kart-device-ca.pem`. `ssl_certificate` must be the full chain (certificate plus intermediate, e.g. acme.sh's `fullchain.cer`): karts and devices don't fetch a missing intermediate the way browsers do and fail with `UnknownIssuer`. Then add the border Nginx rules to the Proxmox firewall (section 1.2).
+
+The same host serves the pit wall at `https://<DEVICE_HOST>/` to the lab network and VPN. Its live view can't use `/mqtt` (that is the device listener), so set the path in `/etc/kart-analytics/pit-wall.config.json`:
+
+```json
+"mqttUrl": "wss://<DEVICE_HOST>/pit-wall/mqtt"
+```
+
+The pit wall reads the file on every page load, so no restart is needed. It also applies to `http://<VM_IP>:8080`, which keeps working from the lab network and VPN.
+
+Check from a machine on the lab network:
+
+```bash
+curl -s https://<DEVICE_HOST>/enroll/v1/health                     # ok
+curl -s -o /dev/null -w '%{http_code}\n' https://<DEVICE_HOST>/mqtt  # 403 without a device certificate
+curl -s -o /dev/null -w '%{http_code}\n' https://<DEVICE_HOST>/      # 200: the pit wall
+```
+
+### 6.3 Enroll a device
+
+1. **Kart:** headunit → *Telemetry* → *Configure* (admin mode): broker `wss://<DEVICE_HOST>/mqtt`, save. Then *Enroll* on the Telemetry page. The kart must be on the lab network (phase 1). It shows a code like `K7QM-2XTR`.
+   **Speedcamera:** web UI → lap timer → kart link: server `<DEVICE_HOST>`, device ID, *Enroll*.
+2. **Admin, on the VM:**
+
+   ```bash
+   sudo kart-enroll requests                 # pending requests with their codes
+   sudo kart-enroll approve K7QM-2XTR        # or: --as kart-03 to assign another ID
+   ```
+
+   Compare the code with the device's screen before approving. A device that is already enrolled (new SD card, re-installed Pi) needs `--replace`; its old login stops working.
+3. The device collects its certificate and login within a few seconds and connects. Requests expire after 10 minutes.
+
+| Task | How |
+|---|---|
+| Enrolled devices | `sudo kart-enroll devices` |
+| Block a device (stolen, lost) | `sudo kart-enroll disable <ID>`; takes effect at once, also for a connected device |
+| Unblock | `sudo kart-enroll enable <ID>` |
+| Who was issued what | `docker run --rm -v kart-analytics_enroll-data:/d debian:trixie-slim cat /d/issued.jsonl` |
+| Enroll service log | `docker compose -p kart-analytics logs -f enroll` (from the release's `deploy/compose`) |
+
+Certificates are valid for one year; the Telemetry page shows the expiry. Renewal is not automated yet: re-enroll with `--replace` before it expires.
+
+**Before the vhost exists** (testing in the lab): allow the lab network to 9002 and 8082 in the Proxmox firewall for the duration of the test, and set the kart's broker to `ws://<VM_IP>:9002` and `enroll.url` to `http://<VM_IP>:8082` (in `/etc/kart-agent/agent.toml`; the passwords then cross the lab network unencrypted). Remove both again afterwards.
+
+## 7. Grafana sign-in with the lab SSO
+
+Grafana signs users in with the lab's Keycloak over OIDC (*Sign in with Lab SSO*). Keycloak only says who someone is (ADR-0003): every new user starts as **Viewer**, and an admin changes roles in Grafana (*Administration → Users*). Grafana keeps those roles across logins. The local admin from `.env` stays as a break-glass login in case Keycloak is down.
+
+### 7.1 Keycloak client (lab admins)
+
+Ask the lab admins for an OIDC client in the lab realm (the realm's discovery URL is in the lab wiki). `<GRAFANA_URL>` is the address users open: `https://<DEVICE_HOST>/grafana` behind the border Nginx (section 7.3), before that `http://<VM_IP>:3000`:
+
+| Setting | Value |
+|---|---|
+| Client type / ID | OpenID Connect, e.g. `kart-grafana` |
+| Client authentication | on (confidential client, gives a secret) |
+| Authentication flow | *Standard flow* only |
+| Root URL | `<GRAFANA_URL>` |
+| Valid redirect URIs | `<GRAFANA_URL>/login/generic_oauth` |
+| Valid post logout redirect URIs | `<GRAFANA_URL>/login` |
+| PKCE method (Advanced) | `S256` |
+
+The default client scopes (`profile`, `email`) are enough; group claims are not needed. Accounts need an e-mail address in LDAP, since Grafana links users by it.
+
+### 7.2 Configure Grafana
+
+In `/etc/kart-analytics/.env`, set `GRAFANA_ROOT_URL` (= `<GRAFANA_URL>`, no trailing slash), `OIDC_ISSUER` (the realm URL, i.e. the discovery URL without `/.well-known/openid-configuration`), `GRAFANA_OIDC_CLIENT_ID` and `GRAFANA_OIDC_CLIENT_SECRET`, then deploy (`systemctl start kart-analytics-update.service`). All four are required: without them a release with SSO fails to start and the updater rolls back to the previous release. When updating a VM set up earlier, add them before that release arrives.
+
+The Grafana container fetches tokens from Keycloak itself, so the VM needs outbound HTTPS to the SSO host. Check:
+
+```bash
+cd /opt/kart-analytics/current/deploy/compose
+docker compose -p kart-analytics exec grafana wget -qO- "$(sudo sed -n 's/^OIDC_ISSUER=//p' /etc/kart-analytics/.env)/.well-known/openid-configuration" | head -c 200
+```
+
+Then open `<GRAFANA_URL>`, choose *Sign in with Lab SSO*, and promote the first engineers to Editor or Admin as the local admin. `GRAFANA_ROOT_URL` must be exactly the address in the browser; otherwise Keycloak rejects the redirect (`Invalid parameter: redirect_uri`). SSO sign-in therefore works only at that one address.
+
+### 7.3 Behind the border Nginx (HTTPS)
+
+Grafana is served at `https://<DEVICE_HOST>/grafana/`, next to the pit wall, under the lab's wildcard certificate. It is open to the internet: everyone signs in with the lab SSO, which the lab exposes to the internet for its login pages. The break-glass admin's password login (`POST /grafana/login`) is admitted only from the lab network and VPN, and Grafana accepts no passwords on its HTTP API.
+
+1. **Lab admins:**
+   - The Grafana locations (`/grafana…`) from [`border-nginx.example.conf`](border-nginx.example.conf), in the existing `<DEVICE_HOST>` server block, plus its `Strict-Transport-Security` header.
+   - Keycloak client: add the new address as in 7.1, with `<GRAFANA_URL>` = `https://<DEVICE_HOST>/grafana`: redirect URI `…/grafana/login/generic_oauth`, post logout `…/grafana/login`, root URL `…/grafana`. Remove the `http://<VM_IP>:3000` URIs once the switch is done.
+   - For access from outside the lab: `<DEVICE_HOST>` in the public DNS zone, pointing at the lab's public address. Without it, Grafana works on the lab network and VPN only.
+2. **Proxmox firewall:** port 3000 only from `<BORDER_NGINX_IP>` (section 1.2).
+3. **VM**, in `/etc/kart-analytics/.env`: `GRAFANA_ROOT_URL=https://<DEVICE_HOST>/grafana` and `GRAFANA_COOKIE_SECURE=true`, then deploy. The break-glass admin signs in at the same address, from the lab network or VPN.
+
+Check from outside the lab network (e.g. a phone without Wi-Fi):
+
+```bash
+curl -s https://<DEVICE_HOST>/grafana/api/health                                 # "database": "ok"
+curl -s -o /dev/null -w '%{http_code}\n' -X POST https://<DEVICE_HOST>/grafana/login  # 403
+```
+
+Then sign in with the lab SSO in the browser. A dashboard that stops updating while the rest works points at the `/grafana/api/live/` WebSocket block.
 
 ---
 
@@ -212,6 +339,7 @@ Then open Grafana at `http://<HOSTNAME>:3000` and the pit wall at `http://<HOSTN
 | Pin / roll back / try a pre-release | set `PIN_VERSION=X.Y.Z` in `update.conf`, then deploy now; remove it to follow the newest release again |
 | Retry a failed version | `kart-analytics-update --force` (a failed version is otherwise skipped until a newer one appears) |
 | Pause deploys | `systemctl stop kart-analytics-update.timer` (`start` to resume) |
+| Approve a device | `sudo kart-enroll requests`, then `sudo kart-enroll approve <CODE>` (section 6.3) |
 
 The updater exports `KART_VERSION`. For manual compose commands, set it yourself: `KART_VERSION=$(cat /var/lib/kart-analytics/current-version) docker compose -p kart-analytics --env-file /etc/kart-analytics/.env -f compose.yml -f compose.prod.yml …`.
 
@@ -239,4 +367,4 @@ Roles live outside the database, so `grafana_ro` and `pit_api_ro` survive the re
 
 ## Not done yet
 
-TLS reverse proxy (`wss://` for the pit wall), Keycloak SSO, broker ACLs, mTLS and WireGuard for the karts. See the TODOs in `deploy/compose/compose.prod.yml` and `deploy/mosquitto/mosquitto.prod.conf`.
+The pit wall outside the lab network and VPN, Keycloak SSO for the pit wall (Grafana has it, section 7), the management interface (approving enrollments there, public `/enroll/`), automatic certificate renewal. See the TODOs in `deploy/compose/compose.prod.yml` and `deploy/mosquitto/mosquitto.prod.conf`.

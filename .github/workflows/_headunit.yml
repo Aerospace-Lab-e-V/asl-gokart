@@ -68,6 +68,7 @@ jobs:
                           - 'analytics/crates/sero-sys/**'
                           - 'analytics/crates/ecu-sero/**'
                           - 'analytics/crates/kart-mqtt/**'
+                          - 'analytics/crates/enroll-proto/**'
                           - 'analytics/crates/telemetry-schema/**'
                           - 'analytics/schema/**'
                           - 'analytics/Cargo.toml'

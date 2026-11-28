@@ -1,0 +1,12 @@
+[package]
+name = "enroll-proto"
+description = "Wire format of the device enrollment service, shared by enroll and kart-agent (ADR-0004)"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

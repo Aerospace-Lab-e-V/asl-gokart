@@ -23,6 +23,21 @@ const ServiceStatusSchema = z.object({
     events: z.array(EventStatusSchema),
 });
 
+/** The kart's identity for the uplink (analytics ADR-0004); `GET /v1/enroll`. */
+export const EnrollmentSchema = z.object({
+    /** none, pending (waiting for an admin) or enrolled */
+    state: z.string(),
+    device_id: z.string().nullable(),
+    /** Unix seconds */
+    not_after_s: z.number().nullable(),
+    code: z.string().nullable(),
+    expires_at_s: z.number().nullable(),
+    requested_id: z.string().nullable(),
+    error: z.string().nullable(),
+});
+
+export type Enrollment = z.infer<typeof EnrollmentSchema>;
+
 export const AgentStatusSchema = z.object({
     agent: z.object({
         version: z.string(),
@@ -66,6 +81,8 @@ export const AgentStatusSchema = z.object({
         connected: z.boolean(),
         published: z.number(),
         dropped: z.number(),
+        /** Why the uplink is not connected. Missing from agents before ADR-0004. */
+        error: z.string().nullable().optional(),
     }),
     log: z.object({
         active_segment: z.string().nullable(),
@@ -75,6 +92,8 @@ export const AgentStatusSchema = z.object({
         write_errors: z.number(),
         last_error: z.string().nullable(),
     }),
+    /** Missing from agents before ADR-0004. */
+    enrollment: EnrollmentSchema.optional(),
 });
 
 export type AgentStatus = z.infer<typeof AgentStatusSchema>;

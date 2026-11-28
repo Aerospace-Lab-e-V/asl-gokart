@@ -9,6 +9,8 @@ members = [
     "crates/ingest",
     "crates/kart-sim",
     "crates/pit-api",
+    "crates/enroll-proto",
+    "crates/enroll",
 ]
 
 [workspace.package]
@@ -21,6 +23,7 @@ telemetry-schema = { path = "crates/telemetry-schema" }
 ecu-sero = { path = "crates/ecu-sero" }
 sero-sys = { path = "crates/sero-sys" }
 kart-mqtt = { path = "crates/kart-mqtt" }
+enroll-proto = { path = "crates/enroll-proto" }
 
 anyhow = "1"
 axum = "0.8"
@@ -37,9 +40,20 @@ nmea = { version = "0.8", default-features = false, features = ["std", "GGA", "G
 prost = "0.14"
 prost-build = "0.14"
 protox = "0.10"
-# No TLS yet: plain MQTT inside the WireGuard tunnel / dev network. mTLS comes with kart-agent.
+# Device certificates (ADR-0004): keys and CSRs on the devices, signing in enroll. ring
+# rather than aws-lc: no C build to cross-compile with cargo zigbuild.
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "pem", "ring"] }
+# Enrollment requests from kart-agent; ring + bundled public roots (webpki-roots).
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# Devices use wss:// with a client certificate (ADR-0004); the internal services plain mqtt://.
+# The crypto provider is installed by kart-mqtt (ring), not chosen by rumqttc.
+rumqttc = { version = "0.25", default-features = false, features = [
+    "url",
+    "websocket",
+    "use-rustls-no-provider",
+] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 sd-notify = "0.5"
-rumqttc = { version = "0.25", default-features = false, features = ["url"] }
 serde = { version = "1", features = ["derive"] }
 # No libudev: nothing to cross-compile, and the GPS is found via /dev/serial/by-id.
 serialport = { version = "4", default-features = false }
@@ -59,6 +73,7 @@ tower-http = { version = "0.7", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v7"] }
+webpki-roots = "1"
 
 # Shipped binaries (kart-agent in the headunit package).
 [profile.dist]
